@@ -1,0 +1,220 @@
+import { useCallback, useEffect, useState } from 'react'
+import { useParams } from 'react-router-dom'
+import { supabase } from './supabaseClient'
+
+const currency = new Intl.NumberFormat('th-TH', {
+  style: 'currency',
+  currency: 'THB',
+  maximumFractionDigits: 2,
+})
+
+function formatCurrency(value) {
+  const n = Number(value)
+  if (value === undefined || value === null || value === '' || Number.isNaN(n)) return '—'
+  return currency.format(n)
+}
+
+function statusInfo(status) {
+  const s = String(status ?? '').toLowerCase()
+  if (s === 'paid') return { label: 'ชำระแล้ว', cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200' }
+  if (s === 'pending_review' || s === 'pending') return { label: 'รอการตรวจสอบ', cls: 'bg-amber-50 text-amber-700 ring-amber-200' }
+  return { label: 'รอการชำระเงิน', cls: 'bg-rose-50 text-rose-700 ring-rose-200' }
+}
+
+function isSettled(status) {
+  const s = String(status ?? '').toLowerCase()
+  return s === 'paid' || s === 'pending_review' || s === 'pending'
+}
+
+function BillPage() {
+  const { secure_token } = useParams()
+  const [bill, setBill] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [notFound, setNotFound] = useState(false)
+  const [qrError, setQrError] = useState(false)
+  const [marking, setMarking] = useState(false)
+
+  const fetchBill = useCallback(async () => {
+    setLoading(true)
+    setNotFound(false)
+    try {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*, rentals(cust_name, item_details)')
+        .eq('secure_token', secure_token)
+        .maybeSingle()
+      if (error) throw error
+      if (!data) {
+        setNotFound(true)
+      } else {
+        setBill(data)
+      }
+    } catch (err) {
+      console.error('Bill fetch error:', err)
+      setNotFound(true)
+    } finally {
+      setLoading(false)
+    }
+  }, [secure_token])
+
+  useEffect(() => {
+    fetchBill()
+  }, [fetchBill])
+
+  const handleMarkPaid = async () => {
+    if (!bill) return
+    setMarking(true)
+    try {
+      const { error } = await supabase
+        .from('transactions')
+        .update({ status: 'pending_review' })
+        .eq('id', bill.id)
+      if (error) throw error
+      setBill((prev) => ({ ...prev, status: 'pending_review' }))
+    } catch (err) {
+      console.error('Update status error:', err)
+    } finally {
+      setMarking(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-4">
+        <div className="mx-auto max-w-md animate-pulse space-y-4">
+          <div className="h-40 rounded-2xl bg-gray-200" />
+          <div className="h-64 rounded-2xl bg-gray-200" />
+        </div>
+      </div>
+    )
+  }
+
+  if (notFound || !bill) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
+        <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+            <svg className="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+            </svg>
+          </div>
+          <h1 className="mt-4 text-lg font-bold text-gray-900">ไม่พบข้อมูลบิล</h1>
+          <p className="mt-2 text-sm text-gray-500">ลิงก์บิลไม่ถูกต้อง หรือบิลนี้ไม่มีอยู่ในระบบ</p>
+        </div>
+      </div>
+    )
+  }
+
+  const rental = Array.isArray(bill.rentals) ? bill.rentals[0] : bill.rentals
+  const custName = rental?.cust_name ?? 'ไม่ระบุ'
+  const itemDetails = rental?.item_details ?? 'ไม่ระบุ'
+  const total = Number(bill.base_amount)
+  const qrUrl = `https://promptpay.io/0812345678/${total}.png`
+  const info = statusInfo(bill.status)
+  const settled = isSettled(bill.status)
+
+  return (
+    <div className="min-h-screen bg-gray-50 text-gray-900">
+      <div className="bg-gradient-to-br from-indigo-600 to-violet-600 px-5 pb-10 pt-6 text-white">
+        <div className="mx-auto max-w-md">
+          <p className="text-sm font-medium text-indigo-100">PayRentPro</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight">ใบแจ้งค่าเช่า</h1>
+          <p className="mt-1 text-sm text-indigo-100">กรุณาชำระเงินตามยอดที่แสดงด้านล่าง</p>
+        </div>
+      </div>
+
+      <div className="mx-auto -mt-5 max-w-md px-4 pb-8">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset ${info.cls}`}>
+            <span className="h-1.5 w-1.5 rounded-full bg-current" />
+            {info.label}
+          </span>
+
+          <dl className="mt-5 space-y-3">
+            <div className="flex items-start justify-between gap-4">
+              <dt className="text-sm text-gray-500">ชื่อผู้เช่า</dt>
+              <dd className="text-right text-sm font-semibold text-gray-900">{custName}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-4">
+              <dt className="text-sm text-gray-500">รายละเอียดสินทรัพย์</dt>
+              <dd className="text-right text-sm font-semibold text-gray-900">{itemDetails}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-4">
+              <dt className="text-sm text-gray-500">รอบบิล</dt>
+              <dd className="text-right text-sm font-semibold text-gray-900">{bill.period ?? '—'}</dd>
+            </div>
+          </dl>
+
+          <div className="my-5 border-t border-dashed border-gray-200" />
+
+          <div className="rounded-2xl bg-gray-50 px-4 py-3 text-center">
+            <p className="text-xs font-medium text-gray-500">ยอดรวมที่ต้องจ่าย</p>
+            <p className="mt-1 text-4xl font-bold tracking-tight text-rose-600">{formatCurrency(total)}</p>
+          </div>
+
+          <div className="mt-5 flex flex-col items-center">
+            <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+              {qrError ? (
+                <div className="flex h-52 w-52 items-center justify-center rounded-xl bg-gray-100 p-4 text-center text-xs text-gray-400">
+                  ไม่สามารถโหลด QR Code ได้
+                </div>
+              ) : (
+                <img
+                  src={qrUrl}
+                  alt="QR Code พร้อมเพย์"
+                  width={208}
+                  height={208}
+                  className="h-52 w-52 object-contain"
+                  onError={() => setQrError(true)}
+                />
+              )}
+            </div>
+            <p className="mt-3 text-sm text-gray-600">
+              สแกนจ่ายผ่าน <span className="font-semibold text-gray-900">พร้อมเพย์</span>
+            </p>
+            <p className="font-mono text-sm text-gray-500">081-234-5678</p>
+          </div>
+        </div>
+
+        <div className="mt-4 space-y-3">
+          <a
+            href={qrUrl}
+            download="promptpay-qr.png"
+            target="_blank"
+            rel="noreferrer"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h2.25M3 7.5V5.25A2.25 2.25 0 0 1 5.25 3h2.25M21 16.5v2.25A2.25 2.25 0 0 1 18.75 21h-2.25M21 7.5V5.25A2.25 2.25 0 0 0 18.75 3h-2.25M12 7.5v9m0 0-3-3m3 3 3-3" />
+            </svg>
+            บันทึกรูป QR Code
+          </a>
+          <button
+            type="button"
+            onClick={handleMarkPaid}
+            disabled={settled || marking}
+            className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
+              settled ? 'bg-emerald-500' : 'bg-blue-600 hover:bg-blue-500'
+            }`}
+          >
+            {marking ? (
+              <>
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
+                </svg>
+                กำลังส่งข้อมูล...
+              </>
+            ) : settled ? (
+              'ส่งหลักฐานการชำระเงินแล้ว'
+            ) : (
+              'ฉันจ่ายเงินแล้ว'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default BillPage
