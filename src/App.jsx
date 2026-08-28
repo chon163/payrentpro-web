@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from './supabaseClient'
+import { BANKS, bankName } from './payment'
 
 const ICONS = {
   building:
@@ -20,6 +21,8 @@ const ICONS = {
     'M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z',
   refresh:
     'M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99',
+  cog:
+    'M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 0 1 0 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 0 1 0-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281Z',
 }
 
 function Icon({ name, className = 'h-6 w-6' }) {
@@ -146,6 +149,10 @@ function generateSecureToken() {
     return crypto.randomUUID().replace(/-/g, '')
   }
   return Math.random().toString(36).slice(2) + Date.now().toString(36) + Math.random().toString(36).slice(2)
+}
+
+function generateBindingCode() {
+  return String(Math.floor(100000000 + Math.random() * 900000000))
 }
 
 function normalizeStatus(value) {
@@ -483,6 +490,7 @@ function AddRentalModal({ open, onClose, onCreated }) {
     setSaving(true)
     setError(null)
     try {
+      const bindingCode = generateBindingCode()
       const { error: insertError } = await supabase.from('rentals').insert([
         {
           biz_type: form.biz_type,
@@ -492,10 +500,11 @@ function AddRentalModal({ open, onClose, onCreated }) {
           cycle: form.cycle,
           due_date: Number(form.due_date),
           penalty_per_day: form.penalty_per_day === '' ? 0 : Number(form.penalty_per_day),
+          binding_code: bindingCode,
         },
       ])
       if (insertError) throw insertError
-      onCreated()
+      onCreated({ bindingCode, custName: form.cust_name.trim() })
       onClose()
     } catch (err) {
       setError(err?.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล')
@@ -676,8 +685,383 @@ function AddRentalModal({ open, onClose, onCreated }) {
   )
 }
 
-function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink }) {
+function LineBindingModal({ code, custName, onClose }) {
+  const [copied, setCopied] = useState(false)
+
+  if (!code) return null
+
+  const copyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(code)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const steps = [
+    { title: 'สร้างกลุ่มไลน์ระหว่างคุณกับผู้เช่า', desc: 'เปิดแอป LINE แล้วสร้างกลุ่มใหม่ร่วมกับผู้เช่าของคุณ' },
+    { title: 'เชิญบอท "เลขาทวงเงิน PayRentPro" เข้ากลุ่ม', desc: 'เพิ่มบอทเข้าเป็นสมาชิกในกลุ่มที่เพิ่งสร้าง' },
+    { title: 'พิมพ์รหัส 9 หลักลงในกลุ่มไลน์', desc: `พิมพ์รหัส ${code} ในกลุ่ม แล้วระบบจะผูกกลุ่มกับบิลนี้ให้อัตโนมัติ` },
+  ]
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+
+      <div className="relative w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="relative bg-gradient-to-br from-emerald-600 to-teal-600 px-6 py-6 text-white">
+          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-100">เพิ่มสินทรัพย์สำเร็จ</p>
+          <h2 className="mt-1 text-xl font-bold tracking-tight">ผูกกลุ่มไลน์สำหรับทวงหนี้อัตโนมัติ</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute right-4 top-4 rounded-lg p-1.5 text-emerald-100 transition-colors hover:bg-white/10 hover:text-white"
+            aria-label="ปิด"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="px-6 py-6">
+          {custName && (
+            <p className="text-sm text-gray-500">
+              ผู้เช่า: <span className="font-semibold text-gray-900">{custName}</span>
+            </p>
+          )}
+
+          <div className="mt-4 rounded-2xl border-2 border-dashed border-emerald-300 bg-emerald-50 px-4 py-5 text-center">
+            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600">รหัสผูกกลุ่มของคุณ</p>
+            <p className="mt-2 font-mono text-4xl font-bold tracking-[0.2em] text-gray-900">{code}</p>
+            <button
+              type="button"
+              onClick={copyCode}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500"
+            >
+              {copied ? '✓ คัดลอกแล้ว' : 'คัดลอกรหัส'}
+            </button>
+          </div>
+
+          <ol className="mt-6 space-y-4">
+            {steps.map((step, i) => (
+              <li key={i} className="flex gap-3">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-sm font-bold text-white shadow-sm shadow-indigo-600/30">
+                  {i + 1}
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">{step.title}</p>
+                  <p className="mt-0.5 text-sm text-gray-500">{step.desc}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500"
+          >
+            เข้าใจแล้ว
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SettingsModal({ open, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    payment_type: 'promptpay',
+    promptpay: '',
+    promptpay_name: '',
+    bank_code: '',
+    bank_account: '',
+  })
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+
+  const updateField = (field) => (e) => {
+    setForm((prev) => ({ ...prev, [field]: e.target.value }))
+  }
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    async function load() {
+      setError(null)
+      setLoading(true)
+      try {
+        const { data, error: fetchError } = await supabase
+          .from('admins')
+          .select('id, payment_type, promptpay_name, promptpay, bank_code, bank_account')
+          .limit(1)
+          .maybeSingle()
+        if (fetchError) throw fetchError
+        if (cancelled) return
+        setForm({
+          payment_type: data?.payment_type || 'promptpay',
+          promptpay: data?.promptpay ?? '',
+          promptpay_name: data?.promptpay_name ?? '',
+          bank_code: data?.bank_code ?? '',
+          bank_account: data?.bank_account ?? '',
+        })
+      } catch (err) {
+        if (cancelled) return
+        console.error('Settings load error:', err)
+        // fallback: กรณียังไม่ migrate คอลัมน์ใหม่ใน Supabase
+        try {
+          const { data, error: fallbackError } = await supabase
+            .from('admins')
+            .select('id, promptpay_name, promptpay')
+            .limit(1)
+            .maybeSingle()
+          if (fallbackError) throw fallbackError
+          if (cancelled) return
+          setForm((prev) => ({
+            ...prev,
+            payment_type: 'promptpay',
+            promptpay: data?.promptpay ?? '',
+            promptpay_name: data?.promptpay_name ?? '',
+          }))
+          setError(null)
+        } catch (err2) {
+          if (!cancelled) setError(err2?.message || 'ดึงข้อมูลไม่สำเร็จ')
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [open])
+
+  if (!open) return null
+
+  const isBank = form.payment_type === 'bank'
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setSaving(true)
+    setError(null)
+    try {
+      const payload = {
+        payment_type: form.payment_type,
+        promptpay: form.promptpay.trim(),
+        promptpay_name: form.promptpay_name.trim(),
+        bank_code: isBank ? form.bank_code : '',
+        bank_account: isBank ? form.bank_account.trim() : '',
+      }
+      if (isBank) {
+        if (!form.bank_code || !form.bank_account.trim() || !form.promptpay_name.trim()) {
+          throw new Error('กรุณากรอก ธนาคาร เลขบัญชี และชื่อบัญชี ให้ครบถ้วน')
+        }
+      } else if (!form.promptpay.trim() || !form.promptpay_name.trim()) {
+        throw new Error('กรุณากรอก เลขพร้อมเพย์ และชื่อบัญชี ให้ครบถ้วน')
+      }
+
+      const { data: existing } = await supabase.from('admins').select('id').limit(1).maybeSingle()
+      let resultError = null
+      if (existing) {
+        const { error: updateError } = await supabase.from('admins').update(payload).eq('id', existing.id)
+        resultError = updateError
+      } else {
+        const { error: insertError } = await supabase
+          .from('admins')
+          .insert([{ ...payload, email: 'admin@payrentpro.com' }])
+        resultError = insertError
+      }
+      if (resultError) throw resultError
+
+      await onSaved()
+      onClose()
+    } catch (err) {
+      setError(err?.message || 'บันทึกไม่สำเร็จ')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+
+      <div className="relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-start justify-between border-b border-gray-100 px-6 py-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/30">
+              <Icon name="cog" className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">ตั้งค่าบัญชีรับเงิน</h2>
+              <p className="mt-0.5 text-sm text-gray-500">กำหนดช่องทางที่ผู้เช่าใช้โอนเงินให้คุณ</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+            aria-label="ปิด"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
+            {error && (
+              <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                <Icon name="warning" className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {loading ? (
+              <div className="flex items-center justify-center gap-2 py-10 text-sm text-gray-400">
+                <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
+                </svg>
+                กำลังโหลดข้อมูล...
+              </div>
+            ) : (
+              <>
+                <div>
+                  <p className="mb-2 text-sm font-medium text-gray-700">ประเภทการรับเงิน</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setForm((prev) => ({ ...prev, payment_type: 'promptpay' }))}
+                      className={`rounded-xl border-2 px-4 py-3 text-left transition-colors ${!isBank ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+                    >
+                      <span className="block text-sm font-semibold text-gray-900">พร้อมเพย์ (PromptPay)</span>
+                      <span className="mt-0.5 block text-xs text-gray-500">เบอร์โทร / เลขบัตรประชาชน</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm((prev) => ({ ...prev, payment_type: 'bank' }))}
+                      className={`rounded-xl border-2 px-4 py-3 text-left transition-colors ${isBank ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+                    >
+                      <span className="block text-sm font-semibold text-gray-900">บัญชีธนาคาร</span>
+                      <span className="mt-0.5 block text-xs text-gray-500">โอนผ่านเลขบัญชีธนาคาร</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="settings_account_name" className="mb-1.5 block text-sm font-medium text-gray-700">
+                    ชื่อบัญชี <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    id="settings_account_name"
+                    type="text"
+                    value={form.promptpay_name}
+                    onChange={updateField('promptpay_name')}
+                    placeholder="เช่น สมชาย ใจดี"
+                    required
+                    className="w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 shadow-sm transition placeholder:text-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  />
+                </div>
+
+                {isBank ? (
+                  <>
+                    <div>
+                      <label htmlFor="settings_bank_code" className="mb-1.5 block text-sm font-medium text-gray-700">
+                        ธนาคาร <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        id="settings_bank_code"
+                        value={form.bank_code}
+                        onChange={updateField('bank_code')}
+                        required
+                        className="w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 shadow-sm transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      >
+                        <option value="" disabled>เลือกธนาคาร</option>
+                        {BANKS.map((b) => (
+                          <option key={b.code} value={b.code}>ธนาคาร{b.name} ({b.short})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="settings_bank_account" className="mb-1.5 block text-sm font-medium text-gray-700">
+                        เลขบัญชีธนาคาร <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        id="settings_bank_account"
+                        type="text"
+                        inputMode="numeric"
+                        value={form.bank_account}
+                        onChange={updateField('bank_account')}
+                        placeholder="เช่น 1234567890"
+                        required
+                        className="w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 shadow-sm transition placeholder:text-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <label htmlFor="settings_promptpay" className="mb-1.5 block text-sm font-medium text-gray-700">
+                      เลขพร้อมเพย์ <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      id="settings_promptpay"
+                      type="text"
+                      inputMode="numeric"
+                      value={form.promptpay}
+                      onChange={updateField('promptpay')}
+                      placeholder="เช่น 0812345678 หรือ 1234567890123"
+                      required
+                      className="w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 shadow-sm transition placeholder:text-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          <div className="flex items-center justify-end gap-3 border-t border-gray-100 bg-gray-50 px-6 py-4">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              ยกเลิก
+            </button>
+            <button
+              type="submit"
+              disabled={saving || loading}
+              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {saving ? (
+                <>
+                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
+                  </svg>
+                  กำลังบันทึก...
+                </>
+              ) : (
+                'บันทึกการตั้งค่า'
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine }) {
   const [marking, setMarking] = useState(false)
+  const [sending, setSending] = useState(false)
   const [qrError, setQrError] = useState(false)
 
   useEffect(() => {
@@ -703,6 +1087,15 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink }) {
       await onMarkPaid()
     } finally {
       setMarking(false)
+    }
+  }
+
+  const handleSendToLine = async () => {
+    setSending(true)
+    try {
+      await onSendToLine()
+    } finally {
+      setSending(false)
     }
   }
 
@@ -759,42 +1152,81 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink }) {
           </div>
 
           <div className="mt-5 flex flex-col items-center">
-            <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
-              {qrError ? (
-                <div className="flex h-44 w-44 items-center justify-center rounded-xl bg-gray-100 p-4 text-center text-xs text-gray-400">
-                  ไม่สามารถโหลด QR Code ได้
+            {invoice.paymentType === 'bank' ? (
+              <div className="w-full rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-slate-50 p-5 text-center shadow-sm">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/30">
+                  <Icon name="banknotes" className="h-6 w-6" />
                 </div>
-              ) : (
-                <img
-                  src={invoice.qrUrl}
-                  alt="QR Code พร้อมเพย์"
-                  width={176}
-                  height={176}
-                  className="h-44 w-44 object-contain"
-                  onError={() => setQrError(true)}
-                />
-              )}
-            </div>
-            <p className="mt-3 text-sm text-gray-600">
-              สแกนจ่ายผ่าน <span className="font-semibold text-gray-900">พร้อมเพย์</span>
-            </p>
-            <p className="font-mono text-sm text-gray-500">081-234-5678</p>
+                <p className="mt-3 text-sm font-semibold text-gray-900">โอนเข้าบัญชีธนาคาร</p>
+                <p className="mt-2 text-sm leading-relaxed text-gray-700">{invoice.paymentText}</p>
+              </div>
+            ) : (
+              <>
+                <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+                  {qrError ? (
+                    <div className="flex h-44 w-44 items-center justify-center rounded-xl bg-gray-100 p-4 text-center text-xs text-gray-400">
+                      ไม่สามารถโหลด QR Code ได้
+                    </div>
+                  ) : (
+                    <img
+                      src={invoice.qrUrl}
+                      alt="QR Code พร้อมเพย์"
+                      width={176}
+                      height={176}
+                      className="h-44 w-44 object-contain"
+                      onError={() => setQrError(true)}
+                    />
+                  )}
+                </div>
+                <p className="mt-3 text-sm text-gray-600">
+                  สแกนจ่ายผ่าน <span className="font-semibold text-gray-900">พร้อมเพย์</span>
+                </p>
+                <p className="font-mono text-sm text-gray-500">{invoice.promptpayNumber || '0812345678'}</p>
+                {invoice.promptpayName && (
+                  <p className="mt-1 text-sm font-semibold text-gray-700">โอนเข้าบัญชี: {invoice.promptpayName}</p>
+                )}
+              </>
+            )}
           </div>
         </div>
         <div className="space-y-3 border-t border-gray-100 bg-gray-50 px-6 py-4">
-          <div className="grid grid-cols-2 gap-3">
-            <a
-              href={invoice.qrUrl}
-              download="promptpay-qr.png"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
-            >
-              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h2.25M3 7.5V5.25A2.25 2.25 0 0 1 5.25 3h2.25M21 16.5v2.25A2.25 2.25 0 0 1 18.75 21h-2.25M21 7.5V5.25A2.25 2.25 0 0 0 18.75 3h-2.25M12 7.5v9m0 0-3-3m3 3 3-3" />
-              </svg>
-              บันทึกรูป QR Code
-            </a>
+          <button
+            type="button"
+            onClick={handleSendToLine}
+            disabled={invoice.sent || sending}
+            className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+              invoice.sent ? 'bg-emerald-500' : 'bg-green-600 hover:bg-green-500'
+            }`}
+          >
+            {sending ? (
+              <>
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
+                </svg>
+                กำลังส่ง...
+              </>
+            ) : invoice.sent ? (
+              '✅ ส่งสำเร็จแล้ว'
+            ) : (
+              '📤 ส่งบิลเข้าไลน์'
+            )}
+          </button>
+          <div className={`grid gap-3 ${invoice.paymentType === 'bank' ? 'grid-cols-1' : 'grid-cols-2'}`}>
+            {invoice.paymentType !== 'bank' && (
+              <a
+                href={invoice.qrUrl}
+                download="promptpay-qr.png"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h2.25M3 7.5V5.25A2.25 2.25 0 0 1 5.25 3h2.25M21 16.5v2.25A2.25 2.25 0 0 1 18.75 21h-2.25M21 7.5V5.25A2.25 2.25 0 0 0 18.75 3h-2.25M12 7.5v9m0 0-3-3m3 3 3-3" />
+                </svg>
+                บันทึกรูป QR Code
+              </a>
+            )}
             <button
               type="button"
               onClick={onCopyLink}
@@ -866,9 +1298,18 @@ function App() {
   const [error, setError] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [isAddOpen, setIsAddOpen] = useState(false)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [bindingModal, setBindingModal] = useState(null)
   const [generatingId, setGeneratingId] = useState(null)
   const [invoice, setInvoice] = useState(null)
   const [toast, setToast] = useState(null)
+  const [paymentInfo, setPaymentInfo] = useState({
+    payment_type: 'promptpay',
+    promptpay: '',
+    promptpay_name: '',
+    bank_code: '',
+    bank_account: '',
+  })
 
   const fetchRentals = useCallback(async () => {
     setLoading(true)
@@ -891,6 +1332,50 @@ function App() {
 
   const closeToast = useCallback(() => setToast(null), [])
 
+  const fetchPaymentInfo = useCallback(async () => {
+    try {
+      const { data, error: ppError } = await supabase
+        .from('admins')
+        .select('payment_type, promptpay_name, promptpay, bank_code, bank_account')
+        .limit(1)
+        .maybeSingle()
+      if (ppError) throw ppError
+      if (data) {
+        setPaymentInfo({
+          payment_type: data.payment_type || 'promptpay',
+          promptpay: data.promptpay ?? '',
+          promptpay_name: data.promptpay_name ?? '',
+          bank_code: data.bank_code ?? '',
+          bank_account: data.bank_account ?? '',
+        })
+      }
+    } catch (err) {
+      console.error('Fetch payment info error:', err)
+      // fallback: กรณียังไม่ migrate คอลัมน์ใหม่ใน Supabase
+      try {
+        const { data, error } = await supabase
+          .from('admins')
+          .select('promptpay_name, promptpay')
+          .limit(1)
+          .maybeSingle()
+        if (error) throw error
+        if (data) {
+          setPaymentInfo((prev) => ({
+            ...prev,
+            promptpay: data.promptpay ?? '',
+            promptpay_name: data.promptpay_name ?? '',
+          }))
+        }
+      } catch (err2) {
+        console.error('Fetch payment info fallback error:', err2)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchPaymentInfo()
+  }, [fetchPaymentInfo])
+
   const handleGenerateBill = async (row) => {
     setGeneratingId(row.id)
     setToast(null)
@@ -900,6 +1385,12 @@ function App() {
       const secureToken = generateSecureToken()
       const custName = getValue(row, ['cust_name', 'tenant_name', 'customer', 'customer_name', 'name']) ?? 'ไม่ระบุ'
       const itemDetails = getValue(row, ['item_details', 'property_name', 'property', 'unit', 'room']) ?? 'ไม่ระบุ'
+      const { data: rentalGroup } = await supabase
+        .from('rentals')
+        .select('group_id')
+        .eq('id', row.id)
+        .maybeSingle()
+      const lineGroupId = rentalGroup?.group_id || ''
       const { data: tx, error: insertError } = await supabase
         .from('transactions')
         .insert([{ base_amount: amount, status: 'unpaid', period, secure_token: secureToken, rental_id: row.id }])
@@ -908,36 +1399,35 @@ function App() {
       if (insertError) throw insertError
 
       const billLink = `http://localhost:5173/bill/${secureToken}`
+      const isBank = paymentInfo.payment_type === 'bank'
+      const ppNumber = (paymentInfo.promptpay || '0812345678').replace(/[^0-9]/g, '')
+      const accountName = paymentInfo.promptpay_name || ''
+      const bankCode = paymentInfo.bank_code || ''
+      const bankAccount = paymentInfo.bank_account || ''
+      const paymentText = isBank
+        ? `โอนเข้าบัญชี ${bankName(bankCode)} เลขที่ ${bankAccount} ชื่อบัญชี ${accountName}`
+        : ''
 
       setInvoice({
         transactionId: tx.id,
         secureToken,
+        rentalId: row.id,
+        lineGroupId,
         custName,
         itemDetails,
         total: amount,
         period,
-        qrUrl: `https://promptpay.io/0812345678/${amount}.png`,
+        paymentType: paymentInfo.payment_type || 'promptpay',
+        promptpayName: accountName,
+        promptpayNumber: paymentInfo.promptpay || '0812345678',
+        bankCode,
+        bankAccount,
+        paymentText,
+        qrUrl: isBank ? '' : `https://promptpay.io/${ppNumber}/${amount}.png`,
+        billLink,
         status: 'unpaid',
+        sent: false,
       })
-
-      // ส่ง Webhook แบบ background (เงียบ ๆ ไม่แสดงผลกับผู้ใช้)
-      const webhookUrl = import.meta.env.VITE_WEBHOOK_URL
-      if (webhookUrl) {
-        fetch(webhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'generate_bill',
-            rental_id: row.id,
-            cust_name: custName,
-            item_details: itemDetails,
-            total_amount: amount,
-            bill_link: billLink,
-          }),
-        }).catch((err) => {
-          console.error('Webhook request failed:', err)
-        })
-      }
     } catch (err) {
       setToast({ type: 'error', message: err?.message || 'สร้างบิลไม่สำเร็จ' })
     } finally {
@@ -972,6 +1462,43 @@ function App() {
       setToast({ type: 'success', message: 'คัดลอกลิงก์บิลแล้ว' })
     } catch {
       setToast({ type: 'error', message: 'คัดลอกลิงก์ไม่สำเร็จ' })
+    }
+  }
+
+  const handleSendBillToLine = async () => {
+    if (!invoice) return
+    const webhookUrl = import.meta.env.VITE_WEBHOOK_URL
+    if (!webhookUrl) {
+      setToast({ type: 'error', message: 'ไม่พบ Webhook URL (VITE_WEBHOOK_URL)' })
+      return
+    }
+    const billLink = invoice.billLink || `http://localhost:5173/bill/${invoice.secureToken}`
+    try {
+      const res = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'generate_bill',
+          rental_id: invoice.rentalId,
+          line_group_id: invoice.lineGroupId || '',
+          cust_name: invoice.custName,
+          item_details: invoice.itemDetails,
+          total_amount: invoice.total,
+          bill_link: billLink,
+          payment_type: invoice.paymentType || 'promptpay',
+          promptpay_name: invoice.promptpayName || '',
+          qr_url: invoice.qrUrl || '',
+          bank_code: invoice.bankCode || '',
+          bank_account: invoice.bankAccount || '',
+          payment_text: invoice.paymentText || '',
+        }),
+      })
+      if (!res.ok) throw new Error(`Webhook HTTP ${res.status}`)
+      setInvoice((prev) => ({ ...prev, sent: true }))
+      setToast({ type: 'success', message: 'ส่งบิลเข้าไลน์เรียบร้อยแล้ว' })
+    } catch (err) {
+      console.error('Webhook request failed:', err)
+      setToast({ type: 'error', message: 'ส่งบิลเข้าไลน์ไม่สำเร็จ' })
     }
   }
 
@@ -1013,6 +1540,14 @@ function App() {
                   อัปเดตล่าสุด {lastUpdated.toLocaleTimeString('th-TH')}
                 </p>
               )}
+              <button
+                type="button"
+                onClick={() => setIsSettingsOpen(true)}
+                className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+              >
+                <Icon name="cog" className="h-4 w-4" />
+                <span className="hidden sm:inline">ตั้งค่าบัญชี</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setIsAddOpen(true)}
@@ -1058,7 +1593,10 @@ function App() {
       <AddRentalModal
         open={isAddOpen}
         onClose={() => setIsAddOpen(false)}
-        onCreated={fetchRentals}
+        onCreated={({ bindingCode, custName }) => {
+          fetchRentals()
+          setBindingModal({ code: bindingCode, custName })
+        }}
       />
 
       <InvoiceModal
@@ -1066,6 +1604,19 @@ function App() {
         onClose={() => setInvoice(null)}
         onMarkPaid={handleMarkPaid}
         onCopyLink={handleCopyBillLink}
+        onSendToLine={handleSendBillToLine}
+      />
+
+      <SettingsModal
+        open={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        onSaved={fetchPaymentInfo}
+      />
+
+      <LineBindingModal
+        code={bindingModal?.code}
+        custName={bindingModal?.custName}
+        onClose={() => setBindingModal(null)}
       />
 
       <Toast toast={toast} onClose={closeToast} />

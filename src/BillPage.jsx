@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from './supabaseClient'
+import { bankName } from './payment'
 
 const currency = new Intl.NumberFormat('th-TH', {
   style: 'currency',
@@ -33,6 +34,13 @@ function BillPage() {
   const [notFound, setNotFound] = useState(false)
   const [qrError, setQrError] = useState(false)
   const [marking, setMarking] = useState(false)
+  const [paymentInfo, setPaymentInfo] = useState({
+    payment_type: 'promptpay',
+    promptpay: '',
+    promptpay_name: '',
+    bank_code: '',
+    bank_account: '',
+  })
 
   const fetchBill = useCallback(async () => {
     setLoading(true)
@@ -60,6 +68,49 @@ function BillPage() {
   useEffect(() => {
     fetchBill()
   }, [fetchBill])
+
+  const fetchPayment = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('admins')
+        .select('payment_type, promptpay_name, promptpay, bank_code, bank_account')
+        .limit(1)
+        .maybeSingle()
+      if (error) throw error
+      if (data) {
+        setPaymentInfo({
+          payment_type: data.payment_type || 'promptpay',
+          promptpay: data.promptpay ?? '',
+          promptpay_name: data.promptpay_name ?? '',
+          bank_code: data.bank_code ?? '',
+          bank_account: data.bank_account ?? '',
+        })
+      }
+    } catch (err) {
+      console.error('Fetch payment error:', err)
+      try {
+        const { data, error } = await supabase
+          .from('admins')
+          .select('promptpay_name, promptpay')
+          .limit(1)
+          .maybeSingle()
+        if (error) throw error
+        if (data) {
+          setPaymentInfo((prev) => ({
+            ...prev,
+            promptpay: data.promptpay ?? '',
+            promptpay_name: data.promptpay_name ?? '',
+          }))
+        }
+      } catch (err2) {
+        console.error('Fetch payment fallback error:', err2)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchPayment()
+  }, [fetchPayment])
 
   const handleMarkPaid = async () => {
     if (!bill) return
@@ -109,7 +160,13 @@ function BillPage() {
   const custName = rental?.cust_name ?? 'ไม่ระบุ'
   const itemDetails = rental?.item_details ?? 'ไม่ระบุ'
   const total = Number(bill.base_amount)
-  const qrUrl = `https://promptpay.io/0812345678/${total}.png`
+  const isBank = paymentInfo.payment_type === 'bank'
+  const ppNumber = (paymentInfo.promptpay || '0812345678').replace(/[^0-9]/g, '')
+  const qrUrl = isBank ? '' : `https://promptpay.io/${ppNumber}/${total}.png`
+  const accountName = paymentInfo.promptpay_name || ''
+  const paymentText = isBank
+    ? `โอนเข้าบัญชี ${bankName(paymentInfo.bank_code)} เลขที่ ${paymentInfo.bank_account} ชื่อบัญชี ${accountName}`
+    : ''
   const info = statusInfo(bill.status)
   const settled = isSettled(bill.status)
 
@@ -153,42 +210,61 @@ function BillPage() {
           </div>
 
           <div className="mt-5 flex flex-col items-center">
-            <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
-              {qrError ? (
-                <div className="flex h-52 w-52 items-center justify-center rounded-xl bg-gray-100 p-4 text-center text-xs text-gray-400">
-                  ไม่สามารถโหลด QR Code ได้
+            {isBank ? (
+              <div className="w-full rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-slate-50 p-5 text-center shadow-sm">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/30">
+                  <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z" />
+                  </svg>
                 </div>
-              ) : (
-                <img
-                  src={qrUrl}
-                  alt="QR Code พร้อมเพย์"
-                  width={208}
-                  height={208}
-                  className="h-52 w-52 object-contain"
-                  onError={() => setQrError(true)}
-                />
-              )}
-            </div>
-            <p className="mt-3 text-sm text-gray-600">
-              สแกนจ่ายผ่าน <span className="font-semibold text-gray-900">พร้อมเพย์</span>
-            </p>
-            <p className="font-mono text-sm text-gray-500">081-234-5678</p>
+                <p className="mt-3 text-sm font-semibold text-gray-900">โอนเข้าบัญชีธนาคาร</p>
+                <p className="mt-2 text-sm leading-relaxed text-gray-700">{paymentText}</p>
+              </div>
+            ) : (
+              <>
+                <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+                  {qrError ? (
+                    <div className="flex h-52 w-52 items-center justify-center rounded-xl bg-gray-100 p-4 text-center text-xs text-gray-400">
+                      ไม่สามารถโหลด QR Code ได้
+                    </div>
+                  ) : (
+                    <img
+                      src={qrUrl}
+                      alt="QR Code พร้อมเพย์"
+                      width={208}
+                      height={208}
+                      className="h-52 w-52 object-contain"
+                      onError={() => setQrError(true)}
+                    />
+                  )}
+                </div>
+                <p className="mt-3 text-sm text-gray-600">
+                  สแกนจ่ายผ่าน <span className="font-semibold text-gray-900">พร้อมเพย์</span>
+                </p>
+                <p className="font-mono text-sm text-gray-500">{paymentInfo.promptpay || '0812345678'}</p>
+                {accountName && (
+                  <p className="mt-1 text-sm font-semibold text-gray-700">โอนเข้าบัญชี: {accountName}</p>
+                )}
+              </>
+            )}
           </div>
         </div>
 
         <div className="mt-4 space-y-3">
-          <a
-            href={qrUrl}
-            download="promptpay-qr.png"
-            target="_blank"
-            rel="noreferrer"
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
-          >
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h2.25M3 7.5V5.25A2.25 2.25 0 0 1 5.25 3h2.25M21 16.5v2.25A2.25 2.25 0 0 1 18.75 21h-2.25M21 7.5V5.25A2.25 2.25 0 0 0 18.75 3h-2.25M12 7.5v9m0 0-3-3m3 3 3-3" />
-            </svg>
-            บันทึกรูป QR Code
-          </a>
+          {!isBank && (
+            <a
+              href={qrUrl}
+              download="promptpay-qr.png"
+              target="_blank"
+              rel="noreferrer"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+            >
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h2.25M3 7.5V5.25A2.25 2.25 0 0 1 5.25 3h2.25M21 16.5v2.25A2.25 2.25 0 0 1 18.75 21h-2.25M21 7.5V5.25A2.25 2.25 0 0 0 18.75 3h-2.25M12 7.5v9m0 0-3-3m3 3 3-3" />
+              </svg>
+              บันทึกรูป QR Code
+            </a>
+          )}
           <button
             type="button"
             onClick={handleMarkPaid}
