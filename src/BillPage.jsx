@@ -9,6 +9,13 @@ function formatCurrency(value) {
   return `฿${n.toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
 }
 
+function formatDate(value) {
+  if (!value) return '—'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return String(value)
+  return new Intl.DateTimeFormat('th-TH', { day: '2-digit', month: 'short', year: 'numeric' }).format(d)
+}
+
 function statusInfo(status) {
   const s = String(status ?? '').toLowerCase()
   if (s === 'paid') return { label: 'ชำระแล้ว', cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200' }
@@ -198,138 +205,186 @@ function BillPage() {
   const settled = isSettled(bill.status)
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
-      <div className="bg-gradient-to-br from-indigo-600 to-violet-600 px-5 pb-10 pt-6 text-white">
-        <div className="mx-auto max-w-md">
-          <p className="text-sm font-medium text-indigo-100">PayRentPro</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight">ใบแจ้งค่าเช่า</h1>
-          <p className="mt-1 text-sm text-indigo-100">กรุณาชำระเงินตามยอดที่แสดงด้านล่าง</p>
-        </div>
-      </div>
-
-      <div className="mx-auto -mt-5 max-w-md px-4 pb-8">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset ${info.cls}`}>
-            <span className="h-1.5 w-1.5 rounded-full bg-current" />
-            {info.label}
-          </span>
-
-          <dl className="mt-5 space-y-3">
-            <div className="flex items-start justify-between gap-4">
-              <dt className="text-sm text-gray-500">ชื่อผู้เช่า</dt>
-              <dd className="text-right text-sm font-semibold text-gray-900">{custName}</dd>
+    <div className="min-h-screen bg-gray-100 py-6 text-gray-900">
+      <div className="mx-auto max-w-2xl px-4">
+        <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-4 border-b border-gray-200 bg-gray-50 px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-xl font-bold text-indigo-600">PayRentPro</p>
+              <p className="mt-0.5 text-sm text-gray-600">{paymentInfo.promptpay_name || 'เจ้าของห้อง'}</p>
             </div>
-            <div className="flex items-start justify-between gap-4">
-              <dt className="text-sm text-gray-500">รายละเอียดสินทรัพย์</dt>
-              <dd className="text-right text-sm font-semibold text-gray-900">{itemDetails}</dd>
+            <div className="text-right">
+              <p className="text-lg font-bold text-gray-900">ใบแจ้งหนี้ / INVOICE</p>
+              <p className="mt-0.5 text-sm text-gray-500">เลขที่บิล: INV-{(bill.id || '').slice(0, 8).toUpperCase()}</p>
+              <p className="text-sm text-gray-500">วันที่ออกบิล: {formatDate(bill.created_at)}</p>
             </div>
-            <div className="flex items-start justify-between gap-4">
-              <dt className="text-sm text-gray-500">รอบบิล</dt>
-              <dd className="text-right text-sm font-semibold text-gray-900">{bill.period ?? '—'}</dd>
-            </div>
-          </dl>
-
-          <div className="my-5 border-t border-dashed border-gray-200" />
-
-          <div className="rounded-2xl bg-gray-50 px-4 py-3 text-center">
-            <p className="text-xs font-medium text-gray-500">ยอดรวมที่ต้องจ่าย</p>
-            <p className="mt-1 text-4xl font-bold tracking-tight text-rose-600">{formatCurrency(total)}</p>
           </div>
+
+          <div className="px-6 py-5">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">ลูกค้า</p>
+                <p className="mt-1 text-sm font-semibold text-gray-900">{custName}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">รายการ</p>
+                <p className="mt-1 text-sm font-semibold text-gray-900">{itemDetails}</p>
+              </div>
+            </div>
+            <p className="mt-2 text-xs text-gray-400">รอบบิล: {bill.period || '—'}</p>
+          </div>
+
+          <div className="px-6">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-y border-gray-200 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  <th className="py-2.5 pr-2 font-medium">รายการ</th>
+                  <th className="py-2.5 pr-2 text-right font-medium">จำนวน</th>
+                  <th className="py-2.5 pr-2 text-right font-medium">ราคา/หน่วย</th>
+                  <th className="py-2.5 text-right font-medium">ยอดรวม</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                <tr>
+                  <td className="py-2.5 text-gray-700">ค่าเช่าห้องพัก</td>
+                  <td className="py-2.5 text-right tabular-nums text-gray-600">1</td>
+                  <td className="py-2.5 text-right tabular-nums text-gray-600">{formatCurrency(bill.base_amount)}</td>
+                  <td className="py-2.5 text-right font-semibold tabular-nums text-gray-900">{formatCurrency(bill.base_amount)}</td>
+                </tr>
+                {Number(bill.water_units) > 0 && (
+                  <tr>
+                    <td className="py-2.5 text-gray-700">ค่าน้ำประปา</td>
+                    <td className="py-2.5 text-right tabular-nums text-gray-600">{bill.water_units} หน่วย</td>
+                    <td className="py-2.5 text-right tabular-nums text-gray-600">{formatCurrency(Number(bill.water_cost) / Math.max(1, Number(bill.water_units)))}</td>
+                    <td className="py-2.5 text-right font-semibold tabular-nums text-gray-900">{formatCurrency(bill.water_cost)}</td>
+                  </tr>
+                )}
+                {Number(bill.elec_units) > 0 && (
+                  <tr>
+                    <td className="py-2.5 text-gray-700">ค่าไฟฟ้า</td>
+                    <td className="py-2.5 text-right tabular-nums text-gray-600">{bill.elec_units} หน่วย</td>
+                    <td className="py-2.5 text-right tabular-nums text-gray-600">{formatCurrency(Number(bill.elec_cost) / Math.max(1, Number(bill.elec_units)))}</td>
+                    <td className="py-2.5 text-right font-semibold tabular-nums text-gray-900">{formatCurrency(bill.elec_cost)}</td>
+                  </tr>
+                )}
+                {Number(bill.penalty_amount) > 0 && (
+                  <tr>
+                    <td className="py-2.5 text-gray-700">ค่าปรับชำระล่าช้า</td>
+                    <td className="py-2.5 text-right tabular-nums text-gray-600">{bill.penalty_days || 0} วัน</td>
+                    <td className="py-2.5 text-right tabular-nums text-gray-600">{formatCurrency(Number(bill.penalty_amount) / Math.max(1, Number(bill.penalty_days)))}</td>
+                    <td className="py-2.5 text-right font-semibold tabular-nums text-gray-900">{formatCurrency(bill.penalty_amount)}</td>
+                  </tr>
+                )}
+                {Number(bill.extra_charges) > 0 && (
+                  <tr>
+                    <td className="py-2.5 text-gray-700">ค่าอื่นๆ</td>
+                    <td className="py-2.5 text-right tabular-nums text-gray-600">—</td>
+                    <td className="py-2.5 text-right tabular-nums text-gray-600">—</td>
+                    <td className="py-2.5 text-right font-semibold tabular-nums text-gray-900">{formatCurrency(bill.extra_charges)}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex items-center justify-between gap-4 border-t border-gray-200 px-6 py-5">
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset ${info.cls}`}>
+              <span className="h-1.5 w-1.5 rounded-full bg-current" />
+              {info.label}
+            </span>
+            <div className="text-right">
+              <p className="text-xs text-gray-500">ยอดรวมทั้งสิ้น</p>
+              <p className="mt-0.5 text-3xl font-bold tracking-tight text-rose-600">{formatCurrency(total)}</p>
+            </div>
+          </div>
+
+          {bill.status === 'paid' && (
+            <div className="pointer-events-none absolute right-6 top-32 rotate-12 rounded-lg border-4 border-emerald-500 px-4 py-1 text-3xl font-black tracking-widest text-emerald-500/60">
+              PAID
+            </div>
+          )}
 
           {!settled && (
-            <div className="mt-5 rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4">
-              <label htmlFor="custom_amount" className="mb-1.5 block text-sm font-medium text-gray-700">ระบุยอดที่ต้องการชำระ (บาท)</label>
-              <input
-                id="custom_amount"
-                type="number"
-                min="0"
-                step="0.01"
-                value={customAmount}
-                onChange={(e) => setCustomAmount(e.target.value)}
-                className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-right text-lg font-semibold tabular-nums text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              />
-              <p className="mt-1.5 text-xs text-gray-500">QR Code จะอัปเดตตามยอดที่คุณกรอกทันที</p>
+            <div className="border-t border-gray-200 bg-gray-50 px-6 py-5">
+              <div className="rounded-xl border border-indigo-100 bg-white p-4">
+                <label htmlFor="custom_amount" className="mb-1.5 block text-sm font-medium text-gray-700">ระบุยอดที่ต้องการชำระ (บาท)</label>
+                <input
+                  id="custom_amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={customAmount}
+                  onChange={(e) => setCustomAmount(e.target.value)}
+                  className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-right text-lg font-semibold tabular-nums text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+                <p className="mt-1.5 text-xs text-gray-500">QR Code จะอัปเดตตามยอดที่คุณกรอกทันที</p>
+              </div>
+
+              <div className="mt-4 flex flex-col items-center">
+                {isBank ? (
+                  <div className="w-full rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-slate-50 p-5 text-center shadow-sm">
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/30">
+                      <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z" />
+                      </svg>
+                    </div>
+                    <p className="mt-3 text-sm font-semibold text-gray-900">โอนเข้าบัญชีธนาคาร</p>
+                    <p className="mt-2 text-sm leading-relaxed text-gray-700">{paymentText}</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+                      {qrError ? (
+                        <div className="flex h-52 w-52 items-center justify-center rounded-xl bg-gray-100 p-4 text-center text-xs text-gray-400">
+                          ไม่สามารถโหลด QR Code ได้
+                        </div>
+                      ) : (
+                        <img
+                          src={qrUrl}
+                          alt="QR Code พร้อมเพย์"
+                          width={208}
+                          height={208}
+                          className="h-52 w-52 object-contain"
+                          onError={() => setQrError(true)}
+                        />
+                      )}
+                    </div>
+                    <p className="mt-3 text-sm text-gray-600">
+                      สแกนจ่ายผ่าน <span className="font-semibold text-gray-900">พร้อมเพย์</span>
+                    </p>
+                    <p className="font-mono text-sm text-gray-500">{paymentInfo.promptpay || '0812345678'}</p>
+                    {accountName && (
+                      <p className="mt-1 text-sm font-semibold text-gray-700">โอนเข้าบัญชี: {accountName}</p>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {!isBank && (
+                  <a
+                    href={qrUrl}
+                    download="promptpay-qr.png"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+                  >
+                    ⬇️ บันทึกรูป QR Code
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={handleMarkPaid}
+                  disabled={settled || marking}
+                  className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
+                    settled ? 'bg-emerald-500' : 'bg-blue-600 hover:bg-blue-500'
+                  }`}
+                >
+                  {marking ? 'กำลังส่งข้อมูล...' : settled ? 'ส่งหลักฐานการชำระเงินแล้ว' : '✅ ฉันจ่ายเงินแล้ว'}
+                </button>
+              </div>
             </div>
           )}
-
-          <div className="mt-5 flex flex-col items-center">
-            {isBank ? (
-              <div className="w-full rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-slate-50 p-5 text-center shadow-sm">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/30">
-                  <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z" />
-                  </svg>
-                </div>
-                <p className="mt-3 text-sm font-semibold text-gray-900">โอนเข้าบัญชีธนาคาร</p>
-                <p className="mt-2 text-sm leading-relaxed text-gray-700">{paymentText}</p>
-              </div>
-            ) : (
-              <>
-                <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
-                  {qrError ? (
-                    <div className="flex h-52 w-52 items-center justify-center rounded-xl bg-gray-100 p-4 text-center text-xs text-gray-400">
-                      ไม่สามารถโหลด QR Code ได้
-                    </div>
-                  ) : (
-                    <img
-                      src={qrUrl}
-                      alt="QR Code พร้อมเพย์"
-                      width={208}
-                      height={208}
-                      className="h-52 w-52 object-contain"
-                      onError={() => setQrError(true)}
-                    />
-                  )}
-                </div>
-                <p className="mt-3 text-sm text-gray-600">
-                  สแกนจ่ายผ่าน <span className="font-semibold text-gray-900">พร้อมเพย์</span>
-                </p>
-                <p className="font-mono text-sm text-gray-500">{paymentInfo.promptpay || '0812345678'}</p>
-                {accountName && (
-                  <p className="mt-1 text-sm font-semibold text-gray-700">โอนเข้าบัญชี: {accountName}</p>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-4 space-y-3">
-          {!isBank && (
-            <a
-              href={qrUrl}
-              download="promptpay-qr.png"
-              target="_blank"
-              rel="noreferrer"
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-3 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
-            >
-              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h2.25M3 7.5V5.25A2.25 2.25 0 0 1 5.25 3h2.25M21 16.5v2.25A2.25 2.25 0 0 1 18.75 21h-2.25M21 7.5V5.25A2.25 2.25 0 0 0 18.75 3h-2.25M12 7.5v9m0 0-3-3m3 3 3-3" />
-              </svg>
-              บันทึกรูป QR Code
-            </a>
-          )}
-          <button
-            type="button"
-            onClick={handleMarkPaid}
-            disabled={settled || marking}
-            className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
-              settled ? 'bg-emerald-500' : 'bg-blue-600 hover:bg-blue-500'
-            }`}
-          >
-            {marking ? (
-              <>
-                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
-                </svg>
-                กำลังส่งข้อมูล...
-              </>
-            ) : settled ? (
-              'ส่งหลักฐานการชำระเงินแล้ว'
-            ) : (
-              'ฉันจ่ายเงินแล้ว'
-            )}
-          </button>
         </div>
       </div>
     </div>
