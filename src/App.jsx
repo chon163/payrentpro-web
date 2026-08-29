@@ -316,7 +316,7 @@ function isExpiringSoon(dateValue, withinDays = 30) {
 }
 
 function txAmount(tx) {
-  return Number(tx?.total_amount ?? tx?.base_amount ?? tx?.amount ?? 0)
+  return Number(tx?.total_amount ?? tx?.base_amount ?? 0)
 }
 
 async function sendLineWebhook(inv) {
@@ -2639,7 +2639,7 @@ function App() {
 
   const fetchSummary = useCallback(async () => {
     try {
-      const { data, error } = await supabase.from('transactions').select('status, total_amount, base_amount, amount, period, created_at')
+      const { data, error } = await supabase.from('transactions').select('status, total_amount, base_amount, period, created_at')
       if (error) throw error
       const pad = (n) => String(n).padStart(2, '0')
       const rows = Array.isArray(data) ? data : []
@@ -2679,7 +2679,7 @@ function App() {
       }
 
       for (const tx of rows) {
-        const amt = Number(tx.total_amount ?? tx.base_amount ?? tx.amount ?? 0) || 0
+        const amt = Number(tx.total_amount ?? tx.base_amount ?? 0) || 0
         const s = String(tx.status ?? '').toLowerCase()
         const mk = txMonth(tx)
         if (s === 'paid') {
