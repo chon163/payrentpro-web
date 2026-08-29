@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { NavLink, useLocation } from 'react-router-dom'
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { supabase } from './supabaseClient'
 import { BANKS, bankName } from './payment'
 
@@ -117,7 +119,32 @@ const COLUMN_LABELS = {
   penalty_per_day: 'ค่าปรับต่อวัน',
 }
 
-const TABLE_COLUMNS = ['biz_type', 'cust_name', 'item_details', 'amount', 'cycle', 'due_date', 'created_at']
+const TABLE_COLUMNS = ['biz_type', 'cust_name', 'item_details', 'amount', 'cycle', 'due_date', 'room_status']
+
+// responsive: ซ่อนคอลัมน์รองบนจอมือถือ/แท็บเล็ต
+const COLUMN_RESPONSIVE = {
+  biz_type: '',
+  cust_name: '',
+  item_details: 'hidden sm:table-cell',
+  amount: '',
+  cycle: 'hidden md:table-cell',
+  due_date: 'hidden md:table-cell',
+  room_status: 'hidden lg:table-cell',
+}
+
+// ความกว้างคอลัมน์ (table-fixed): กำหนดให้พอดีจอเดสก์ท็อปโดยไม่ต้องเลื่อน
+const COLUMN_WIDTH = {
+  biz_type: 'w-[15%]',
+  cust_name: 'w-[15%]',
+  amount: 'w-[12%]',
+  cycle: 'w-[10%]',
+  due_date: 'w-[10%]',
+  room_status: 'w-[10%]',
+  // item_details (รายละเอียดสินทรัพย์) รับความกว้างส่วนที่เหลือ
+}
+
+// คอลัมน์ข้อความยาว ให้ตัดเป็นจุดไข่ปลาแทนการดันตาราง
+const TRUNCATE_COLUMNS = new Set(['item_details', 'cust_name'])
 
 function getValue(row, keys) {
   if (!row) return undefined
@@ -128,16 +155,10 @@ function getValue(row, keys) {
   return undefined
 }
 
-const currency = new Intl.NumberFormat('th-TH', {
-  style: 'currency',
-  currency: 'THB',
-  maximumFractionDigits: 2,
-})
-
 function formatCurrency(value) {
   const n = Number(value)
   if (value === undefined || value === null || value === '' || Number.isNaN(n)) return '—'
-  return currency.format(n)
+  return `฿${n.toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
 }
 
 function formatDate(value) {
@@ -278,11 +299,60 @@ function isPaid(row) {
   return /(paid|ชำระแล้ว)/.test(statusKey(row))
 }
 
+function daysUntil(dateValue) {
+  if (!dateValue) return null
+  const d = new Date(dateValue)
+  if (Number.isNaN(d.getTime())) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const target = new Date(d)
+  target.setHours(0, 0, 0, 0)
+  return Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+}
+
+function isExpiringSoon(dateValue, withinDays = 30) {
+  const days = daysUntil(dateValue)
+  return days !== null && days >= 0 && days <= withinDays
+}
+
+function txAmount(tx) {
+  return Number(tx?.total_amount ?? tx?.base_amount ?? tx?.amount ?? 0)
+}
+
+async function sendLineWebhook(inv) {
+  const webhookUrl = import.meta.env.VITE_WEBHOOK_URL
+  if (!webhookUrl) throw new Error('ไม่พบ Webhook URL (VITE_WEBHOOK_URL)')
+  const billLink = inv.billLink || `http://localhost:5173/bill/${inv.secureToken}`
+  const res = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'generate_bill',
+      rental_id: inv.rentalId,
+      line_group_id: inv.lineGroupId || '',
+      cust_name: inv.custName,
+      item_details: inv.itemDetails,
+      total_amount: inv.total,
+      bill_link: billLink,
+      payment_type: inv.paymentType || 'promptpay',
+      promptpay_name: inv.promptpayName || '',
+      qr_url: inv.qrUrl || '',
+      bank_code: inv.bankCode || '',
+      bank_account: inv.bankAccount || '',
+      payment_text: inv.paymentText || '',
+    }),
+  })
+  if (!res.ok) throw new Error(`Webhook HTTP ${res.status}`)
+}
+
 function computeStats(rows) {
   let totalAmount = 0
   let hasAmount = false
   let overdue = 0
   let paid = 0
+  let vacant = 0
+  let occupied = 0
+  let expiringSoon = 0
   for (const row of rows) {
     const amount = getValue(row, AMOUNT_KEYS)
     const n = Number(amount)
@@ -292,8 +362,12 @@ function computeStats(rows) {
     }
     if (isOverdue(row)) overdue += 1
     if (isPaid(row)) paid += 1
+    const rs = String(row?.room_status ?? '').toLowerCase()
+    if (rs === 'vacant') vacant += 1
+    else if (rs === 'occupied') occupied += 1
+    if (row?.lease_end_date && rs !== 'vacant' && isExpiringSoon(row.lease_end_date)) expiringSoon += 1
   }
-  return { total: rows.length, totalAmount: hasAmount ? totalAmount : null, overdue, paid }
+  return { total: rows.length, totalAmount: hasAmount ? totalAmount : null, overdue, paid, vacant, occupied, expiringSoon }
 }
 
 function titleCase(key) {
@@ -321,6 +395,20 @@ function isStatusColumn(key) {
 function renderCell(key, value) {
   if (value === null || value === undefined || value === '') {
     return <span className="text-gray-400">—</span>
+  }
+  if (key === 'room_status') {
+    const map = { occupied: 'ไม่ว่าง', vacant: 'ว่าง', maintenance: 'ซ่อมบำรุง' }
+    const cls = value === 'vacant' ? 'bg-sky-50 text-sky-700 ring-sky-200' : value === 'maintenance' ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+    return <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${cls}`}>{map[value] ?? String(value)}</span>
+  }
+  if (key === 'lease_end_date') {
+    const expiring = isExpiringSoon(value)
+    return (
+      <span className={`inline-flex items-center gap-1 ${expiring ? 'font-semibold text-rose-600' : 'text-gray-600'}`}>
+        {expiring && <Icon name="warning" className="h-3.5 w-3.5" />}
+        {formatDate(value)}
+      </span>
+    )
   }
   if (isStatusColumn(key)) return getStatusBadge(value)
   if (key === 'due_date') {
@@ -366,11 +454,208 @@ function StatCard({ icon, label, value, iconClass, valueClass = 'text-gray-900' 
 }
 
 const NAV_ITEMS = [
-  { label: 'แดชบอร์ด', icon: 'home', active: true },
-  { label: 'สัญญาเช่า', icon: 'document', active: false },
-  { label: 'การแจ้งเตือน', icon: 'bell', active: false },
-  { label: 'รายงาน', icon: 'chart', active: false },
+  { to: '/', label: 'แดชบอร์ด', icon: 'home' },
+  { to: '/assets', label: 'รายการสินทรัพย์', icon: 'building' },
+  { to: '/settings', label: 'ตั้งค่าบัญชี', icon: 'cog' },
+  { to: '/audit', label: 'ประวัติแก้ไข', icon: 'document' },
 ]
+
+function OccupancyDonut({ occupied, vacant }) {
+  const data = [
+    { name: 'มีผู้เช่า', value: occupied },
+    { name: 'ห้องว่าง', value: vacant },
+  ]
+  const total = occupied + vacant
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="mb-3 flex items-center justify-between">
+        <div>
+          <h3 className="text-base font-bold text-gray-900">อัตราการเต็ม (Occupancy)</h3>
+          <p className="text-xs text-gray-500">ห้องมีผู้เช่าเทียบกับห้องว่าง</p>
+        </div>
+        <span className="text-lg font-bold text-indigo-600">{total ? Math.round((occupied / total) * 100) : 0}%</span>
+      </div>
+      <div className="h-56">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie data={data} dataKey="value" nameKey="name" innerRadius={60} outerRadius={85} paddingAngle={3}>
+              <Cell fill="#4f46e5" />
+              <Cell fill="#0ea5e9" />
+            </Pie>
+            <Tooltip />
+            <Legend />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  )
+}
+
+function RevenueBar({ monthly }) {
+  const data = Array.isArray(monthly) && monthly.length ? monthly : []
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="mb-3">
+        <h3 className="text-base font-bold text-gray-900">รายได้ vs ค้างชำระ</h3>
+        <p className="text-xs text-gray-500">เปรียบเทียบยอดชำระแล้วกับยอดค้างชำระ (ย้อนหลัง 6 เดือน)</p>
+      </div>
+      <div className="h-64">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+            <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+            <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `฿${Number(v).toLocaleString('th-TH')}`} />
+            <Tooltip formatter={(v) => formatCurrency(v)} />
+            <Legend />
+            <Bar dataKey="paid" name="รายได้" fill="#10b981" radius={[6, 6, 0, 0]} />
+            <Bar dataKey="outstanding" name="ค้างชำระ" fill="#f43f5e" radius={[6, 6, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  )
+}
+
+function NotificationsBell({ pendingReviews, expiringLeases }) {
+  const [open, setOpen] = useState(false)
+  const total = pendingReviews.length + expiringLeases.length
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="relative rounded-xl border border-gray-300 bg-white p-2.5 text-gray-600 shadow-sm transition-colors hover:bg-gray-50"
+        aria-label="การแจ้งเตือน"
+      >
+        <Icon name="bell" className="h-5 w-5" />
+        {total > 0 && (
+          <span className="absolute -right-1 -top-1 flex h-3 w-3">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75" />
+            <span className="relative inline-flex h-3 w-3 rounded-full bg-rose-500" />
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} aria-hidden="true" />
+          <div className="absolute right-0 z-20 mt-2 w-80 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
+            <div className="border-b border-gray-100 px-4 py-3">
+              <p className="text-sm font-bold text-gray-900">การแจ้งเตือน</p>
+            </div>
+            <div className="max-h-80 overflow-y-auto">
+              {total === 0 ? (
+                <p className="px-4 py-6 text-center text-sm text-gray-400">ไม่มีการแจ้งเตือน</p>
+              ) : (
+                <>
+                  {pendingReviews.map((item) => {
+                    const rental = Array.isArray(item.rentals) ? item.rentals[0] : item.rentals
+                    const custName = rental?.cust_name || item.cust_name || 'ไม่ระบุ'
+                    return (
+                      <div key={item.id} className="flex items-start gap-3 border-b border-gray-50 px-4 py-3">
+                        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-600"><Icon name="warning" className="h-4 w-4" /></div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-900">มีบิลใหม่รอตรวจสอบ</p>
+                          <p className="truncate text-xs text-gray-500">{custName} · {formatCurrency(txAmount(item))}</p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                  {expiringLeases.map((r) => (
+                    <div key={r.id} className="flex items-start gap-3 border-b border-gray-50 px-4 py-3">
+                      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-orange-100 text-orange-600"><Icon name="warning" className="h-4 w-4" /></div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900">สัญญาใกล้หมดอายุ</p>
+                        <p className="truncate text-xs text-gray-500">{r.cust_name} · {r.item_details} · เหลือ {daysUntil(r.lease_end_date)} วัน</p>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function AuditLogPage() {
+  const [logs, setLogs] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      try {
+        const { data, error } = await supabase.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(100)
+        if (error) throw error
+        setLogs(Array.isArray(data) ? data : [])
+      } catch (err) {
+        console.error('Fetch audit logs error:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="border-b border-gray-100 px-6 py-5">
+        <h2 className="text-lg font-bold text-gray-900">ประวัติแก้ไข (Audit Log)</h2>
+        <p className="text-sm text-gray-500">บันทึกการแก้ไขยอดและเหตุผล</p>
+      </div>
+      {loading ? (
+        <TableSkeleton />
+      ) : logs.length === 0 ? (
+        <div className="p-10 text-center text-sm text-gray-500">ยังไม่มีประวัติการแก้ไข</div>
+      ) : (
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-500">เลขบิล</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-500">ยอดเก่า</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-500">ยอดใหม่</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-500">เหตุผล</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-500">วันที่แก้ไข</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {logs.map((log) => (
+              <tr key={log.id} className="transition-colors hover:bg-gray-50">
+                <td className="px-6 py-3 font-mono text-xs text-gray-700">{log.transaction_id || '—'}</td>
+                <td className="px-6 py-3 text-sm text-gray-500">{formatCurrency(log.old_amount)}</td>
+                <td className="px-6 py-3 text-sm font-semibold text-gray-900">{formatCurrency(log.new_amount)}</td>
+                <td className="px-6 py-3 text-sm text-gray-600">{log.reason || '—'}</td>
+                <td className="px-6 py-3 text-sm text-gray-500">{formatDate(log.created_at)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  )
+}
+
+function PDPAConsentModal({ onAccept }) {
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" />
+      <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/30">
+          <Icon name="building" className="h-6 w-6" />
+        </div>
+        <h2 className="mt-4 text-lg font-bold text-gray-900">การยินยอมข้อมูลส่วนบุคคล (PDPA)</h2>
+        <p className="mt-2 text-sm leading-relaxed text-gray-600">ระบบจะเก็บข้อมูลชื่อ-ที่อยู่-ยอดเงินของผู้เช่าเพื่อการทวงเงินตามกฎหมาย PDPA</p>
+        <button type="button" onClick={onAccept} className="mt-5 w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500">
+          ยินยอม
+        </button>
+      </div>
+    </div>
+  )
+}
 
 function Sidebar() {
   return (
@@ -387,19 +672,29 @@ function Sidebar() {
 
       <nav className="flex-1 space-y-1 px-3 py-5">
         {NAV_ITEMS.map((item) => (
-          <button
-            key={item.label}
-            type="button"
-            className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-              item.active
-                ? 'bg-indigo-50 text-indigo-700'
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-            }`}
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.to === '/'}
+            className={({ isActive }) =>
+              `flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+                isActive ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+              }`
+            }
           >
             <Icon name={item.icon} className="h-5 w-5" />
             {item.label}
-          </button>
+          </NavLink>
         ))}
+
+        <button
+          type="button"
+          onClick={() => console.log('logout')}
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-600 transition-colors hover:bg-rose-50 hover:text-rose-700"
+        >
+          <Icon name="warning" className="h-5 w-5" />
+          ออกจากระบบ
+        </button>
       </nav>
 
       <div className="border-t border-gray-100 p-4">
@@ -412,6 +707,7 @@ function Sidebar() {
             <p className="truncate text-xs text-gray-500">admin@payrentpro.com</p>
           </div>
         </div>
+        <p className="mt-2 text-center text-[10px] font-semibold tracking-wide text-indigo-500">PayRentPro v2.0 · build 2026-08-29</p>
       </div>
     </aside>
   )
@@ -519,18 +815,18 @@ function RentalsTable({ rentals, loading, error, columns, onRetry, onBillRequest
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+          <table className="w-full min-w-[640px] table-fixed divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
                 {columns.map((column) => (
                   <th
                     key={column}
-                    className="whitespace-nowrap px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500"
+                    className={`${COLUMN_RESPONSIVE[column] || ''} ${COLUMN_WIDTH[column] || ''} whitespace-nowrap px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500`}
                   >
                     {labelColumn(column)}
                   </th>
                 ))}
-                <th className="whitespace-nowrap px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                <th className="w-[10%] whitespace-nowrap px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
                   จัดการ
                 </th>
               </tr>
@@ -539,8 +835,12 @@ function RentalsTable({ rentals, loading, error, columns, onRetry, onBillRequest
               {rentals.map((row, index) => (
                 <tr key={row.id ?? index} className="transition-colors hover:bg-gray-50">
                   {columns.map((column) => (
-                    <td key={column} className="whitespace-nowrap px-6 py-4 text-sm">
-                      {renderCell(column, row[column])}
+                    <td key={column} className={`${COLUMN_RESPONSIVE[column] || ''} whitespace-nowrap px-6 py-4 text-sm`}>
+                      {TRUNCATE_COLUMNS.has(column) ? (
+                        <div className="max-w-[200px] truncate">{renderCell(column, row[column])}</div>
+                      ) : (
+                        renderCell(column, row[column])
+                      )}
                     </td>
                   ))}
                   <td className="whitespace-nowrap px-6 py-4 text-right text-sm">
@@ -558,6 +858,183 @@ function RentalsTable({ rentals, loading, error, columns, onRetry, onBillRequest
           </table>
         </div>
       )}
+    </div>
+  )
+}
+
+function LeaseExpirySection({ rentals, onRenew, onMoveOut }) {
+  const expiring = useMemo(() => {
+    return (rentals || [])
+      .filter((r) => r?.lease_end_date && String(r.room_status ?? '').toLowerCase() !== 'vacant' && isExpiringSoon(r.lease_end_date))
+      .sort((a, b) => (daysUntil(a.lease_end_date) ?? 999) - (daysUntil(b.lease_end_date) ?? 999))
+  }, [rentals])
+
+  if (expiring.length === 0) return null
+
+  return (
+    <section className="mt-6 overflow-hidden rounded-2xl border border-orange-200 bg-white shadow-lg shadow-orange-100/60">
+      <div className="flex items-center justify-between gap-4 border-b border-orange-100 bg-gradient-to-r from-orange-50 to-amber-50 px-6 py-5">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-500 text-white shadow-lg shadow-orange-500/40">
+            <Icon name="warning" className="h-6 w-6" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold tracking-tight text-gray-900">สัญญาใกล้หมดอายุ</h2>
+            <p className="text-sm text-orange-700">สัญญาที่จะหมดภายใน 30 วันข้างหน้า</p>
+          </div>
+        </div>
+        <span className="inline-flex items-center rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-800 ring-1 ring-inset ring-orange-200">{expiring.length} รายการ</span>
+      </div>
+      <div className="grid grid-cols-1 gap-4 p-6 sm:grid-cols-2 xl:grid-cols-3">
+        {expiring.map((r) => {
+          const days = daysUntil(r.lease_end_date)
+          return (
+            <div key={r.id} className="flex flex-col rounded-xl border border-orange-200 bg-orange-50/40 p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate text-base font-bold text-gray-900">{r.cust_name}</p>
+                  <p className="mt-0.5 truncate text-sm text-gray-600">{r.item_details}</p>
+                </div>
+                <span className="shrink-0 rounded-full bg-rose-100 px-2.5 py-1 text-xs font-bold text-rose-600 ring-1 ring-inset ring-rose-200">
+                  {days <= 0 ? 'หมดสัญญาแล้ว' : `เหลือ ${days} วัน`}
+                </span>
+              </div>
+              <p className="mt-3 text-sm text-gray-600">สิ้นสุดสัญญา <span className="font-semibold text-gray-900">{formatDate(r.lease_end_date)}</span></p>
+              <div className="mt-4 flex gap-2">
+                <button type="button" onClick={() => onRenew(r)} className="flex-1 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500">ต่อสัญญา</button>
+                <button type="button" onClick={() => onMoveOut(r)} className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50">ทำเครื่องหมายว่าย้ายออก</button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+function SettingsPage({ onSaved }) {
+  const [form, setForm] = useState({ payment_type: 'promptpay', promptpay: '', promptpay_name: '', bank_code: '', bank_account: '' })
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+  const [success, setSuccess] = useState(false)
+
+  const updateField = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }))
+  const setField = (field, value) => setForm((prev) => ({ ...prev, [field]: value }))
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      try {
+        const { data, error: e } = await supabase.from('admins').select('payment_type, promptpay_name, promptpay, bank_code, bank_account').limit(1).maybeSingle()
+        if (e) throw e
+        if (!cancelled && data) {
+          setForm({ payment_type: data.payment_type || 'promptpay', promptpay: data.promptpay ?? '', promptpay_name: data.promptpay_name ?? '', bank_code: data.bank_code ?? '', bank_account: data.bank_account ?? '' })
+        }
+      } catch (err) {
+        if (!cancelled) setError(err?.message || 'ดึงข้อมูลไม่สำเร็จ')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
+
+  const isBank = form.payment_type === 'bank'
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setSaving(true)
+    setError(null)
+    setSuccess(false)
+    try {
+      const payload = { payment_type: form.payment_type, promptpay: form.promptpay.trim(), promptpay_name: form.promptpay_name.trim(), bank_code: isBank ? form.bank_code : '', bank_account: isBank ? form.bank_account.trim() : '' }
+      if (isBank && (!form.bank_code || !form.bank_account.trim() || !form.promptpay_name.trim())) throw new Error('กรุณากรอก ธนาคาร เลขบัญชี และชื่อบัญชี')
+      if (!isBank && (!form.promptpay.trim() || !form.promptpay_name.trim())) throw new Error('กรุณากรอก เลขพร้อมเพย์ และชื่อบัญชี')
+      const { data: existing } = await supabase.from('admins').select('id').limit(1).maybeSingle()
+      if (form.promptpay.trim()) {
+        let q = supabase.from('admins').select('id').eq('promptpay', form.promptpay.trim())
+        if (existing?.id) q = q.neq('id', existing.id)
+        const { data: dupes } = await q
+        if (Array.isArray(dupes) && dupes.length > 0) throw new Error('เลขพร้อมเพย์นี้ถูกใช้สมัครในระบบแล้ว ไม่สามารถใช้สมัครใหม่ได้')
+      }
+      let resultError = null
+      if (existing) { const { error: ue } = await supabase.from('admins').update(payload).eq('id', existing.id); resultError = ue }
+      else { const { error: ie } = await supabase.from('admins').insert([{ ...payload, email: 'admin@payrentpro.com' }]); resultError = ie }
+      if (resultError) throw resultError
+      await onSaved()
+      setSuccess(true)
+    } catch (err) {
+      setError(err?.message || 'บันทึกไม่สำเร็จ')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-2xl">
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="border-b border-gray-100 px-6 py-5">
+          <h2 className="text-lg font-bold text-gray-900">ตั้งค่าบัญชีรับเงิน</h2>
+          <p className="mt-0.5 text-sm text-gray-500">กำหนดช่องทางที่ผู้เช่าใช้โอนเงินให้คุณ</p>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-5 px-6 py-6">
+          {error && <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
+          {success && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">บันทึกการตั้งค่าสำเร็จ</div>}
+
+          {loading ? (
+            <p className="py-8 text-center text-sm text-gray-400">กำลังโหลดข้อมูล...</p>
+          ) : (
+            <>
+              <div>
+                <p className="mb-2 text-sm font-medium text-gray-700">ประเภทการรับเงิน</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button type="button" onClick={() => setField('payment_type', 'promptpay')} className={`rounded-xl border-2 px-4 py-3 text-left ${!isBank ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 bg-white'}`}>
+                    <span className="block text-sm font-semibold text-gray-900">พร้อมเพย์ (PromptPay)</span>
+                    <span className="text-xs text-gray-500">เบอร์โทร / เลขบัตรประชาชน</span>
+                  </button>
+                  <button type="button" onClick={() => setField('payment_type', 'bank')} className={`rounded-xl border-2 px-4 py-3 text-left ${isBank ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 bg-white'}`}>
+                    <span className="block text-sm font-semibold text-gray-900">บัญชีธนาคาร</span>
+                    <span className="text-xs text-gray-500">โอนผ่านเลขบัญชี</span>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-700">ชื่อบัญชี <span className="text-rose-500">*</span></label>
+                <input type="text" value={form.promptpay_name} onChange={updateField('promptpay_name')} placeholder="เช่น สมชาย ใจดี" required className={inputClass} />
+              </div>
+
+              {isBank ? (
+                <>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700">ธนาคาร <span className="text-rose-500">*</span></label>
+                    <select value={form.bank_code} onChange={updateField('bank_code')} required className={inputClass}>
+                      <option value="" disabled>เลือกธนาคาร</option>
+                      {BANKS.map((b) => <option key={b.code} value={b.code}>ธนาคาร{b.name} ({b.short})</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700">เลขบัญชีธนาคาร <span className="text-rose-500">*</span></label>
+                    <input type="text" inputMode="numeric" value={form.bank_account} onChange={updateField('bank_account')} placeholder="เช่น 1234567890" required className={inputClass} />
+                  </div>
+                </>
+              ) : (
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700">เลขพร้อมเพย์ <span className="text-rose-500">*</span></label>
+                  <input type="text" inputMode="numeric" value={form.promptpay} onChange={updateField('promptpay')} placeholder="เช่น 0812345678" required className={inputClass} />
+                </div>
+              )}
+
+              <button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500 disabled:opacity-60">
+                {saving ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}
+              </button>
+            </>
+          )}
+        </form>
+      </div>
     </div>
   )
 }
@@ -1143,12 +1620,14 @@ function LineBindingModal({ code, custName, onClose }) {
 function MeterBillModal({ rental, onClose, onConfirm }) {
   const [waterCurrent, setWaterCurrent] = useState('')
   const [elecCurrent, setElecCurrent] = useState('')
+  const [sendToLine, setSendToLine] = useState(true)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (rental) {
       setWaterCurrent('')
       setElecCurrent('')
+      setSendToLine(true)
       setSaving(false)
     }
   }, [rental])
@@ -1173,7 +1652,7 @@ function MeterBillModal({ rental, onClose, onConfirm }) {
   const handleConfirm = async () => {
     setSaving(true)
     try {
-      await onConfirm(rental, { waterCurrent, elecCurrent })
+      await onConfirm(rental, { waterCurrent, elecCurrent }, sendToLine)
     } finally {
       setSaving(false)
     }
@@ -1237,11 +1716,22 @@ function MeterBillModal({ rental, onClose, onConfirm }) {
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-3 border-t border-gray-100 bg-gray-50 px-6 py-4">
-          <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-60">ยกเลิก</button>
-          <button type="button" onClick={handleConfirm} disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60">
-            {saving ? (<><svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" /></svg>กำลังสร้างบิล...</>) : 'สร้างบิล'}
-          </button>
+        <div className="flex flex-col gap-3 border-t border-gray-100 bg-gray-50 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700">
+            <input
+              type="checkbox"
+              checked={sendToLine}
+              onChange={(e) => setSendToLine(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            📥 ส่งบิลเข้าไลน์อัตโนมัติ
+          </label>
+          <div className="flex items-center justify-end gap-3">
+            <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-60">ยกเลิก</button>
+            <button type="button" onClick={handleConfirm} disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60">
+              {saving ? (<><svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" /></svg>กำลังสร้างบิล...</>) : 'สร้างบิล'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1302,9 +1792,13 @@ function RenewModal({ rental, onClose, onConfirm }) {
 
 function LeaseActionModal({ rental, mode, onClose, onConfirm }) {
   const [saving, setSaving] = useState(false)
+  const [repairCost, setRepairCost] = useState('')
 
   useEffect(() => {
-    if (rental) setSaving(false)
+    if (rental) {
+      setSaving(false)
+      setRepairCost('')
+    }
   }, [rental])
 
   if (!rental) return null
@@ -1319,7 +1813,7 @@ function LeaseActionModal({ rental, mode, onClose, onConfirm }) {
   const handleConfirm = async () => {
     setSaving(true)
     try {
-      await onConfirm(rental)
+      await onConfirm(rental, isDelete ? null : Number(repairCost) || 0)
     } finally {
       setSaving(false)
     }
@@ -1333,8 +1827,19 @@ function LeaseActionModal({ rental, mode, onClose, onConfirm }) {
           <h2 className="text-lg font-bold">{title}</h2>
           <p className="mt-0.5 text-sm opacity-90">{rental.cust_name} · {rental.item_details}</p>
         </div>
-        <div className="px-6 py-6">
+        <div className="space-y-4 px-6 py-6">
           <p className="text-sm leading-relaxed text-gray-600">{message}</p>
+          {!isDelete && (
+            <>
+              <div>
+                <label htmlFor="repair_cost" className="mb-1.5 block text-sm font-medium text-gray-700">ค่าซ่อมแซม/หักค่าเสียหาย (บาท)</label>
+                <input id="repair_cost" type="number" min="0" step="0.01" value={repairCost} onChange={(e) => setRepairCost(e.target.value)} placeholder="0.00" className={inputClass} />
+              </div>
+              <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                ยอดเงินประกันคืน = <span className="font-semibold">{formatCurrency(Math.max(0, (Number(rental.deposit_amount) || 0) - (Number(repairCost) || 0)))}</span>
+              </div>
+            </>
+          )}
         </div>
         <div className="flex items-center justify-end gap-3 border-t border-gray-100 bg-gray-50 px-6 py-4">
           <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-60">ยกเลิก</button>
@@ -1774,6 +2279,12 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine }
             {isPaid ? 'ชำระแล้ว' : 'รอการชำระเงิน'}
           </div>
 
+          {invoice.sent && (
+            <div className="mb-4 rounded-xl bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">
+              ✅ ส่งบิลเข้าไลน์สำเร็จแล้ว
+            </div>
+          )}
+
           <dl className="space-y-3">
             <div className="flex items-start justify-between gap-4">
               <dt className="text-sm text-gray-500">ชื่อผู้เช่า</dt>
@@ -1931,9 +2442,20 @@ function Toast({ toast, onClose }) {
 
   if (!toast) return null
 
+  const styles = {
+    success: { bg: 'bg-emerald-600', icon: 'M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z' },
+    error: { bg: 'bg-rose-600', icon: 'M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z' },
+    warning: { bg: 'bg-amber-500', icon: 'M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0' },
+    info: { bg: 'bg-blue-600', icon: 'M11.25 11.25l.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z' },
+  }
+  const s = styles[toast.type] || styles.info
+
   return (
     <div className="fixed bottom-6 left-1/2 z-[60] w-full max-w-sm -translate-x-1/2 px-4">
-      <div className={`flex items-start gap-2 rounded-xl px-4 py-3 text-sm font-medium text-white shadow-lg ${toast.type === 'error' ? 'bg-rose-600' : 'bg-emerald-600'}`}>
+      <div className={`flex items-start gap-2.5 rounded-xl px-4 py-3 text-sm font-medium text-white shadow-lg ${s.bg}`}>
+        <svg className="mt-0.5 h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d={s.icon} />
+        </svg>
         <span className="flex-1">{toast.message}</span>
         <button type="button" onClick={onClose} className="shrink-0 opacity-80 transition-opacity hover:opacity-100" aria-label="ปิด">
           ✕
@@ -1955,12 +2477,16 @@ function App() {
   const [billRental, setBillRental] = useState(null)
   const [renewRental, setRenewRental] = useState(null)
   const [confirmAction, setConfirmAction] = useState(null)
+  const [pdpAccepted, setPdpAccepted] = useState(() => { try { return localStorage.getItem('payrentpro_pdpa') === '1' } catch { return true } })
   const [invoice, setInvoice] = useState(null)
   const [toast, setToast] = useState(null)
   const [pendingReviews, setPendingReviews] = useState([])
   const [pendingLoading, setPendingLoading] = useState(true)
   const [pendingError, setPendingError] = useState(null)
   const [reviewing, setReviewing] = useState(null)
+  const [seeding, setSeeding] = useState(false)
+  const [summary, setSummary] = useState({ paidIncome: 0, paidThisMonth: 0, outstanding: 0, monthly: [] })
+  const knownPendingIdsRef = useRef(null)
   const [paymentInfo, setPaymentInfo] = useState({
     payment_type: 'promptpay',
     promptpay: '',
@@ -2034,25 +2560,94 @@ function App() {
     fetchPaymentInfo()
   }, [fetchPaymentInfo])
 
-  const fetchPendingReviews = useCallback(async () => {
-    setPendingLoading(true)
-    setPendingError(null)
+  const fetchPendingReviews = useCallback(async (silent = false) => {
+    if (!silent) {
+      setPendingLoading(true)
+      setPendingError(null)
+    }
     try {
       const { data, error: supabaseError } = await supabase
         .from('transactions')
         .select('*, rentals(cust_name, item_details)')
         .eq('status', 'pending_review')
       if (supabaseError) throw supabaseError
-      setPendingReviews(Array.isArray(data) ? data : [])
+      const items = Array.isArray(data) ? data : []
+      setPendingReviews(items)
+      const ids = items.map((x) => x.id)
+      if (knownPendingIdsRef.current !== null) {
+        const newCount = ids.filter((id) => !knownPendingIdsRef.current.includes(id)).length
+        if (newCount > 0) setToast({ type: 'warning', message: `มีบิลใหม่รอตรวจสอบ ${newCount} รายการ` })
+      }
+      knownPendingIdsRef.current = ids
     } catch (err) {
-      setPendingError(err?.message || 'เกิดข้อผิดพลาดในการดึงข้อมูล')
+      if (!silent) setPendingError(err?.message || 'เกิดข้อผิดพลาดในการดึงข้อมูล')
     } finally {
-      setPendingLoading(false)
+      if (!silent) setPendingLoading(false)
+    }
+  }, [])
+
+  const fetchSummary = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.from('transactions').select('status, total_amount, base_amount, amount, period, created_at')
+      if (error) throw error
+      const pad = (n) => String(n).padStart(2, '0')
+      const now = new Date()
+      const currentMonthKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`
+
+      let paidIncome = 0
+      let paidThisMonth = 0
+      let outstanding = 0
+
+      // โครงสร้างเดือนย้อนหลัง 6 เดือน (เดือนปัจจุบัน + 5 เดือนก่อน)
+      const monthly = []
+      const monthMap = {}
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+        const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`
+        const item = { key, label: THAI_MONTHS[d.getMonth()], paid: 0, outstanding: 0 }
+        monthly.push(item)
+        monthMap[key] = item
+      }
+
+      const txMonth = (tx) => {
+        const p = String(tx?.period ?? '').trim()
+        const m = p.slice(0, 7)
+        if (/^\d{4}-\d{2}$/.test(m)) return m
+        const d = tx?.created_at ? new Date(tx.created_at) : null
+        if (d && !Number.isNaN(d.getTime())) return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`
+        return null
+      }
+
+      for (const tx of (Array.isArray(data) ? data : [])) {
+        const amt = Number(tx.total_amount ?? tx.base_amount ?? tx.amount ?? 0) || 0
+        const s = String(tx.status ?? '').toLowerCase()
+        const mk = txMonth(tx)
+        if (s === 'paid') {
+          paidIncome += amt
+          if (mk === currentMonthKey) paidThisMonth += amt
+          if (mk && monthMap[mk]) monthMap[mk].paid += amt
+        } else if (s === 'unpaid' || s === 'pending_review') {
+          outstanding += amt
+          if (mk && monthMap[mk]) monthMap[mk].outstanding += amt
+        }
+      }
+      setSummary({ paidIncome, paidThisMonth, outstanding, monthly })
+    } catch (err) {
+      console.error('Fetch summary error:', err)
     }
   }, [])
 
   useEffect(() => {
     fetchPendingReviews()
+    fetchSummary()
+  }, [fetchPendingReviews, fetchSummary])
+
+  // polling แบบเรียลไทม์ (ทุก 20 วินาที)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      fetchPendingReviews(true)
+    }, 20000)
+    return () => clearInterval(timer)
   }, [fetchPendingReviews])
 
   const handleReviewTransaction = async (id, newStatus) => {
@@ -2065,14 +2660,9 @@ function App() {
         .update({ status: newStatus })
         .eq('id', id)
       if (updateError) throw updateError
-      setToast({
-        type: 'success',
-        message:
-          newStatus === 'paid'
-            ? 'อนุมัติการชำระเงินเรียบร้อยแล้ว'
-            : 'ปฏิเสธการชำระเงินและเปลี่ยนกลับเป็น "รอชำระเงิน" แล้ว',
-      })
+      setToast({ type: 'success', message: newStatus === 'paid' ? 'อนุมัติสำเร็จ' : 'ปฏิเสธสำเร็จ' })
       await fetchPendingReviews()
+      fetchSummary()
     } catch (err) {
       setToast({ type: 'error', message: err?.message || 'อัปเดตสถานะไม่สำเร็จ' })
     } finally {
@@ -2080,7 +2670,7 @@ function App() {
     }
   }
 
-  const handleCreateBill = async (rental, meters) => {
+  const handleCreateBill = async (rental, meters, sendToLine = true) => {
     setToast(null)
     try {
       const amount = Number(getValue(rental, AMOUNT_KEYS))
@@ -2144,7 +2734,7 @@ function App() {
         ? `โอนเข้าบัญชี ${bankName(bankCode)} เลขที่ ${bankAccount} ชื่อบัญชี ${accountName}`
         : ''
 
-      setInvoice({
+      const invoiceObj = {
         transactionId: tx.id,
         secureToken,
         rentalId: rental.id,
@@ -2168,9 +2758,22 @@ function App() {
         billLink,
         status: 'unpaid',
         sent: false,
-      })
+      }
 
+      // ส่งเข้าไลน์อัตโนมัติ (ถ้าเลือก)
+      if (sendToLine) {
+        try {
+          await sendLineWebhook(invoiceObj)
+          invoiceObj.sent = true
+        } catch (err) {
+          console.error('Auto LINE webhook failed:', err)
+          setToast({ type: 'warning', message: 'สร้างบิลแล้ว แต่ส่งเข้าไลน์ไม่สำเร็จ (กดส่งเองได้ในหน้าบิล)' })
+        }
+      }
+
+      setInvoice(invoiceObj)
       setBillRental(null)
+      fetchSummary()
     } catch (err) {
       setToast({ type: 'error', message: err?.message || 'สร้างบิลไม่สำเร็จ' })
     }
@@ -2188,7 +2791,7 @@ function App() {
     }
   }
 
-  const handleConfirmAction = async (rental) => {
+  const handleConfirmAction = async (rental, repairCost) => {
     try {
       if (confirmAction?.type === 'delete') {
         const { error } = await supabase.from('rentals').delete().eq('id', rental.id)
@@ -2203,12 +2806,104 @@ function App() {
           emergency_contact: null,
         }).eq('id', rental.id)
         if (error) throw error
-        setToast({ type: 'success', message: 'ย้ายออกเรียบร้อยแล้ว' })
+        const refund = Math.max(0, (Number(rental.deposit_amount) || 0) - (repairCost || 0))
+        setToast({ type: 'success', message: `ย้ายออกเรียบร้อย (เงินประกันคืน ${formatCurrency(refund)})` })
       }
       setConfirmAction(null)
       fetchRentals()
     } catch (err) {
       setToast({ type: 'error', message: err?.message || 'ดำเนินการไม่สำเร็จ' })
+    }
+  }
+
+  const handleAcceptPDPA = () => {
+    try { localStorage.setItem('payrentpro_pdpa', '1') } catch { /* ignore */ }
+    setPdpAccepted(true)
+  }
+
+  const seedDemoData = async () => {
+    if (seeding) return
+    setSeeding(true)
+    setToast({ type: 'info', message: 'กำลังสร้างข้อมูลตัวอย่าง...' })
+    try {
+      const pad = (n) => String(n).padStart(2, '0')
+      const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+      const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x }
+      const monthKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`
+      const randPhone = () => `08${Math.floor(10000000 + Math.random() * 89999999)}`
+      const now = new Date()
+      const prevMonth = monthKey(new Date(now.getFullYear(), now.getMonth() - 1, 1))
+
+      const { data: existingAdmin } = await supabase.from('admins').select('id').limit(1).maybeSingle()
+      if (!existingAdmin) {
+        const { error: adminError } = await supabase.from('admins').insert([{ email: 'admin@payrentpro.com', payment_type: 'promptpay', promptpay_name: 'บริษัท เพย์เรนท์โปร จำกัด', promptpay: '0812345678', bank_code: '', bank_account: '' }])
+        if (adminError) throw adminError
+      }
+
+      const base = (r) => ({ tenant_phone: randPhone(), tenant_id_card: mockThaiId(), emergency_contact: randPhone(), penalty_per_day: 100, penalty_enabled: true, chase_frequency: 3, stop_chase: false, credit_balance: 0, last_water_meter: 0, water_rate: 18, last_elec_meter: 0, elec_rate: 5, utility_enabled: false, binding_code: generateBindingCode(), ...r })
+
+      const rentals = [
+        base({ biz_type: 'อสังหาริมทรัพย์', cust_name: 'สมชาย ใจดี', item_details: 'ห้อง 401', room_status: 'occupied', amount: 8000, cycle: 'monthly', due_date: 5, deposit_amount: 8000, move_in_date: iso(addDays(now, -300)), lease_end_date: iso(addDays(now, 10)), last_water_meter: 120, last_elec_meter: 4500, utility_enabled: true }),
+        base({ biz_type: 'อสังหาริมทรัพย์', cust_name: 'สมหญิง รุ่งเรือง', item_details: 'คอนโด C-1205', room_status: 'occupied', amount: 12000, cycle: 'monthly', due_date: 15, deposit_amount: 12000, move_in_date: iso(addDays(now, -120)), lease_end_date: iso(addDays(now, 200)), utility_enabled: true }),
+        base({ biz_type: 'ยานพาหนะ', cust_name: 'วีรชน วงศ์สุวรรณ', item_details: 'รถ กก-1234', room_status: 'occupied', amount: 3500, cycle: 'weekly', due_date: 1, deposit_amount: 3000, move_in_date: iso(addDays(now, -60)), lease_end_date: iso(addDays(now, 90)) }),
+        base({ biz_type: 'อุปกรณ์', cust_name: 'อารยา ศรีสุข', item_details: 'กล้อง Sony A7', room_status: 'occupied', amount: 1500, cycle: 'daily', due_date: 10, deposit_amount: 1500, move_in_date: iso(addDays(now, -20)), lease_end_date: iso(addDays(now, 120)) }),
+        base({ biz_type: 'อสังหาริมทรัพย์', cust_name: 'ว่าง', item_details: 'ห้อง 202', room_status: 'vacant', amount: 6000, cycle: 'monthly', due_date: 20, deposit_amount: 6000, move_in_date: null, lease_end_date: null, tenant_phone: null, tenant_id_card: null, emergency_contact: null, utility_enabled: true }),
+        base({ biz_type: 'อสังหาริมทรัพย์', cust_name: '—', item_details: 'ห้อง 303', room_status: 'maintenance', amount: 7000, cycle: 'monthly', due_date: 25, deposit_amount: 0, move_in_date: null, lease_end_date: null, tenant_phone: null, tenant_id_card: null, emergency_contact: null, utility_enabled: true }),
+        base({ biz_type: 'ยานพาหนะ', cust_name: 'ธนกร มั่นคง', item_details: 'แท็กซี่ ทส-5678', room_status: 'occupied', amount: 2500, cycle: 'weekly', due_date: 3, deposit_amount: 2500, move_in_date: iso(addDays(now, -40)), lease_end_date: iso(addDays(now, 5)) }),
+        base({ biz_type: 'อุปกรณ์', cust_name: 'กิตติ ไทยแท้', item_details: 'โดรน DJI Mavic', room_status: 'occupied', amount: 2200, cycle: 'monthly', due_date: 12, deposit_amount: 2200, move_in_date: iso(addDays(now, -90)), lease_end_date: iso(addDays(now, 150)) }),
+      ]
+
+      const { data: insertedRentals, error: rentalsError } = await supabase.from('rentals').insert(rentals).select()
+      if (rentalsError) throw rentalsError
+      const findRental = (name) => (insertedRentals || []).find((r) => r.cust_name === name)
+      const txs = [
+        { rental_id: findRental('สมชาย ใจดี')?.id, period: monthKey(now), base_amount: 8000, water_units: 30, water_cost: 540, elec_units: 92, elec_cost: 460, total_amount: 9000, status: 'paid', secure_token: generateSecureToken() },
+        { rental_id: findRental('สมชาย ใจดี')?.id, period: prevMonth, base_amount: 8000, water_units: 25, water_cost: 450, elec_units: 10, elec_cost: 50, total_amount: 8500, status: 'pending_review', secure_token: generateSecureToken() },
+        { rental_id: findRental('สมหญิง รุ่งเรือง')?.id, period: monthKey(now), base_amount: 12000, water_units: 0, water_cost: 0, elec_units: 0, elec_cost: 0, total_amount: 12000, status: 'unpaid', secure_token: generateSecureToken() },
+        { rental_id: findRental('สมหญิง รุ่งเรือง')?.id, period: prevMonth, base_amount: 12000, water_units: 20, water_cost: 360, elec_units: 60, elec_cost: 300, total_amount: 12660, status: 'paid', secure_token: generateSecureToken() },
+        { rental_id: findRental('วีรชน วงศ์สุวรรณ')?.id, period: monthKey(now), base_amount: 3500, water_units: 0, water_cost: 0, elec_units: 0, elec_cost: 0, total_amount: 3500, status: 'pending_review', secure_token: generateSecureToken() },
+        { rental_id: findRental('อารยา ศรีสุข')?.id, period: monthKey(now), base_amount: 1500, water_units: 0, water_cost: 0, elec_units: 0, elec_cost: 0, total_amount: 1500, status: 'paid', secure_token: generateSecureToken() },
+        { rental_id: findRental('ธนกร มั่นคง')?.id, period: monthKey(now), base_amount: 2500, water_units: 0, water_cost: 0, elec_units: 0, elec_cost: 0, total_amount: 2500, status: 'unpaid', secure_token: generateSecureToken() },
+      ]
+
+      const { data: insertedTxs, error: txsError } = await supabase.from('transactions').insert(txs).select()
+      if (txsError) throw txsError
+      const paidTx = (insertedTxs || []).find((t) => t.status === 'paid')
+      const pendingTx = (insertedTxs || []).find((t) => t.status === 'pending_review')
+      const { error: auditError } = await supabase.from('audit_logs').insert([
+        { transaction_id: paidTx?.id ?? null, old_amount: 9500, new_amount: 9000, reason: 'ลูกค้าขอส่วนลดค่าน้ำ 500 บาท' },
+        { transaction_id: pendingTx?.id ?? null, old_amount: 3600, new_amount: 3500, reason: 'แก้ไขค่าเช่าหลังตรวจสอบสลิป' },
+        { transaction_id: null, old_amount: 0, new_amount: 8000, reason: 'สร้างรายการใหม่ (ข้อมูลตัวอย่าง)' },
+      ])
+      if (auditError) throw auditError
+
+      await Promise.all([fetchRentals(), fetchSummary(), fetchPendingReviews(), fetchPaymentInfo()])
+      setToast({ type: 'success', message: 'สร้างข้อมูลตัวอย่างครบทุกฟีเจอร์แล้ว' })
+    } catch (err) {
+      setToast({ type: 'error', message: err?.message || 'สร้างข้อมูลตัวอย่างไม่สำเร็จ' })
+    } finally {
+      setSeeding(false)
+    }
+  }
+
+  const handleExportCsv = async () => {
+    try {
+      const { data, error } = await supabase.from('transactions').select('*')
+      if (error) throw error
+      const rows = Array.isArray(data) ? data : []
+      if (rows.length === 0) { setToast({ type: 'warning', message: 'ไม่มีข้อมูล transactions' }); return }
+      const headers = ['id', 'rental_id', 'period', 'base_amount', 'water_units', 'water_cost', 'elec_units', 'elec_cost', 'total_amount', 'status', 'created_at']
+      const csv = [headers.join(','), ...rows.map((r) => headers.map((h) => JSON.stringify(r[h] ?? '')).join(','))].join('\n')
+      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `transactions-${new Date().toISOString().slice(0, 10)}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+      setToast({ type: 'success', message: 'ส่งออก CSV เรียบร้อยแล้ว' })
+    } catch (err) {
+      setToast({ type: 'error', message: err?.message || 'ส่งออก CSV ไม่สำเร็จ' })
     }
   }
 
@@ -2244,54 +2939,32 @@ function App() {
 
   const handleSendBillToLine = async () => {
     if (!invoice) return
-    const webhookUrl = import.meta.env.VITE_WEBHOOK_URL
-    if (!webhookUrl) {
-      setToast({ type: 'error', message: 'ไม่พบ Webhook URL (VITE_WEBHOOK_URL)' })
-      return
-    }
-    const billLink = invoice.billLink || `http://localhost:5173/bill/${invoice.secureToken}`
     try {
-      const res = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'generate_bill',
-          rental_id: invoice.rentalId,
-          line_group_id: invoice.lineGroupId || '',
-          cust_name: invoice.custName,
-          item_details: invoice.itemDetails,
-          total_amount: invoice.total,
-          bill_link: billLink,
-          payment_type: invoice.paymentType || 'promptpay',
-          promptpay_name: invoice.promptpayName || '',
-          qr_url: invoice.qrUrl || '',
-          bank_code: invoice.bankCode || '',
-          bank_account: invoice.bankAccount || '',
-          payment_text: invoice.paymentText || '',
-        }),
-      })
-      if (!res.ok) throw new Error(`Webhook HTTP ${res.status}`)
+      await sendLineWebhook(invoice)
       setInvoice((prev) => ({ ...prev, sent: true }))
       setToast({ type: 'success', message: 'ส่งบิลเข้าไลน์เรียบร้อยแล้ว' })
     } catch (err) {
       console.error('Webhook request failed:', err)
-      setToast({ type: 'error', message: 'ส่งบิลเข้าไลน์ไม่สำเร็จ' })
+      setToast({ type: 'error', message: err?.message || 'ส่งบิลเข้าไลน์ไม่สำเร็จ' })
     }
   }
 
+  const location = useLocation()
+  const isAssets = location.pathname === '/assets'
+  const isSettings = location.pathname === '/settings'
+  const isAudit = location.pathname === '/audit'
+
   const stats = useMemo(() => computeStats(rentals), [rentals])
   const columns = TABLE_COLUMNS
+  const expiringLeases = useMemo(() => {
+    return (rentals || []).filter((r) => r?.lease_end_date && String(r.room_status ?? '').toLowerCase() !== 'vacant' && isExpiringSoon(r.lease_end_date))
+  }, [rentals])
 
   const statCards = [
-    { icon: 'document', label: 'สัญญาเช่าทั้งหมด', value: stats.total, iconClass: 'bg-indigo-600 shadow-indigo-600/30' },
-    {
-      icon: 'banknotes',
-      label: 'ยอดค่าเช่ารวม',
-      value: stats.totalAmount === null ? '—' : formatCurrency(stats.totalAmount),
-      iconClass: 'bg-violet-600 shadow-violet-600/30',
-    },
-    { icon: 'warning', label: 'ค้างชำระ / เกินกำหนด', value: stats.overdue, iconClass: 'bg-rose-500 shadow-rose-500/30', valueClass: 'text-rose-600' },
-    { icon: 'check', label: 'ชำระแล้ว', value: stats.paid, iconClass: 'bg-emerald-500 shadow-emerald-500/30', valueClass: 'text-emerald-600' },
+    { icon: 'banknotes', label: 'รายรับเดือนนี้ (ชำระแล้ว)', value: formatCurrency(summary.paidThisMonth), iconClass: 'bg-emerald-500 shadow-emerald-500/30' },
+    { icon: 'warning', label: 'ยอดค้างชำระ', value: formatCurrency(summary.outstanding), iconClass: 'bg-rose-500 shadow-rose-500/30', valueClass: 'text-rose-600' },
+    { icon: 'home', label: 'ห้องว่าง', value: stats.vacant, iconClass: 'bg-sky-500 shadow-sky-500/30' },
+    { icon: 'warning', label: 'สัญญาใกล้หมด (30 วัน)', value: stats.expiringSoon, iconClass: 'bg-amber-500 shadow-amber-500/30', valueClass: stats.expiringSoon ? 'text-amber-600' : 'text-gray-900' },
   ]
 
   return (
@@ -2306,35 +2979,63 @@ function App() {
                 <Icon name="building" className="h-6 w-6" />
               </div>
               <div>
-                <h1 className="text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">แดชบอร์ด</h1>
-                <p className="text-sm text-gray-500">ภาพรวมการเก็บค่าเช่าและการติดตามหนี้</p>
+                <h1 className="text-xl font-bold tracking-tight text-gray-900 sm:text-2xl">
+                  {isAudit ? 'ประวัติแก้ไข' : isSettings ? 'ตั้งค่าบัญชี' : isAssets ? 'รายการสินทรัพย์' : 'แดชบอร์ด'}
+                </h1>
+                <p className="text-sm text-gray-500">
+                  {isAudit ? 'บันทึกการแก้ไขยอดและเหตุผล' : isSettings ? 'ตั้งค่าเลขพร้อมเพย์ / บัญชีธนาคารสำหรับรับเงิน' : isAssets ? 'จัดการสัญญาเช่าและสินทรัพย์ทั้งหมด' : 'ภาพรวมการเก็บค่าเช่าและการติดตามหนี้'}
+                </p>
               </div>
             </div>
 
             <div className="flex items-center gap-3">
+              <NotificationsBell pendingReviews={pendingReviews} expiringLeases={expiringLeases} />
+              {!isAssets && !isSettings && !isAudit && (
+                <button
+                  type="button"
+                  onClick={handleExportCsv}
+                  className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+                >
+                  Export CSV
+                </button>
+              )}
+              {!isSettings && !isAudit && (
+                <button
+                  type="button"
+                  onClick={seedDemoData}
+                  disabled={seeding}
+                  className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-700 shadow-sm transition-colors hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {seeding ? (
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
+                    </svg>
+                  ) : (
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z" />
+                    </svg>
+                  )}
+                  {seeding ? 'กำลังสร้าง...' : 'โหลดข้อมูลตัวอย่าง'}
+                </button>
+              )}
               {lastUpdated && (
                 <p className="hidden text-xs text-gray-400 sm:block">
                   อัปเดตล่าสุด {lastUpdated.toLocaleTimeString('th-TH')}
                 </p>
               )}
-              <button
-                type="button"
-                onClick={() => setIsSettingsOpen(true)}
-                className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
-              >
-                <Icon name="cog" className="h-4 w-4" />
-                <span className="hidden sm:inline">ตั้งค่าบัญชี</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsAddOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-500"
-              >
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
-                เพิ่มสินทรัพย์
-              </button>
+              {isAssets && (
+                <button
+                  type="button"
+                  onClick={() => setIsAddOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-500"
+                >
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                  </svg>
+                  เพิ่มสินทรัพย์
+                </button>
+              )}
               <button
                 type="button"
                 onClick={fetchRentals}
@@ -2349,36 +3050,59 @@ function App() {
         </header>
 
         <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {statCards.map((card) => (
-              <StatCard key={card.label} {...card} />
-            ))}
-          </div>
+          {isAudit ? (
+            <AuditLogPage />
+          ) : isSettings ? (
+            <SettingsPage onSaved={fetchPaymentInfo} />
+          ) : isAssets ? (
+            <>
+              <LeaseExpirySection
+                rentals={rentals}
+                onRenew={setRenewRental}
+                onMoveOut={(rental) => setConfirmAction({ type: 'moveout', rental })}
+              />
 
-          <PendingReviewSection
-            items={pendingReviews}
-            loading={pendingLoading}
-            error={pendingError}
-            reviewing={reviewing}
-            onApprove={(id) => handleReviewTransaction(id, 'paid')}
-            onReject={(id) => handleReviewTransaction(id, 'unpaid')}
-            onRetry={fetchPendingReviews}
-          />
+              <RentalsTable
+                rentals={rentals}
+                loading={loading}
+                error={error}
+                columns={columns}
+                onRetry={fetchRentals}
+                onBillRequest={setBillRental}
+                onViewDetails={setDetailRental}
+                onRenew={setRenewRental}
+                onMoveOut={(rental) => setConfirmAction({ type: 'moveout', rental })}
+                onDelete={(rental) => setConfirmAction({ type: 'delete', rental })}
+              />
+            </>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {statCards.map((card) => (
+                  <StatCard key={card.label} {...card} />
+                ))}
+              </div>
 
-          <RentalsTable
-            rentals={rentals}
-            loading={loading}
-            error={error}
-            columns={columns}
-            onRetry={fetchRentals}
-            onBillRequest={setBillRental}
-            onViewDetails={setDetailRental}
-            onRenew={setRenewRental}
-            onMoveOut={(rental) => setConfirmAction({ type: 'moveout', rental })}
-            onDelete={(rental) => setConfirmAction({ type: 'delete', rental })}
-          />
+              <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <OccupancyDonut occupied={stats.occupied} vacant={stats.vacant} />
+                <RevenueBar monthly={summary.monthly} />
+              </div>
+
+              <PendingReviewSection
+                items={pendingReviews}
+                loading={pendingLoading}
+                error={pendingError}
+                reviewing={reviewing}
+                onApprove={(id) => handleReviewTransaction(id, 'paid')}
+                onReject={(id) => handleReviewTransaction(id, 'unpaid')}
+                onRetry={fetchPendingReviews}
+              />
+            </>
+          )}
         </main>
       </div>
+
+      {!pdpAccepted && <PDPAConsentModal onAccept={handleAcceptPDPA} />}
 
       <AddRentalModal
         open={isAddOpen}

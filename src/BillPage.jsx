@@ -3,16 +3,10 @@ import { useParams } from 'react-router-dom'
 import { supabase } from './supabaseClient'
 import { bankName } from './payment'
 
-const currency = new Intl.NumberFormat('th-TH', {
-  style: 'currency',
-  currency: 'THB',
-  maximumFractionDigits: 2,
-})
-
 function formatCurrency(value) {
   const n = Number(value)
   if (value === undefined || value === null || value === '' || Number.isNaN(n)) return '—'
-  return currency.format(n)
+  return `฿${n.toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
 }
 
 function statusInfo(status) {

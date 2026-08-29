@@ -10,6 +10,9 @@ createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<App />} />
+        <Route path="/assets" element={<App />} />
+        <Route path="/settings" element={<App />} />
+        <Route path="/audit" element={<App />} />
         <Route path="/bill/:secure_token" element={<BillPage />} />
       </Routes>
     </BrowserRouter>
