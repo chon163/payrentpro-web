@@ -437,26 +437,31 @@ function renderDetailValue(key, value) {
   return renderCell(key, value)
 }
 
-function StatCard({ icon, label, value, iconClass, valueClass = 'text-gray-900', onClick }) {
+const CARD_TONES = {
+  blue: { card: 'border-blue-100 bg-blue-50', text: 'text-blue-600', icon: 'bg-blue-100 text-blue-600' },
+  green: { card: 'border-green-100 bg-green-50', text: 'text-green-600', icon: 'bg-green-100 text-green-600' },
+  red: { card: 'border-red-100 bg-red-50', text: 'text-red-600', icon: 'bg-red-100 text-red-600' },
+  orange: { card: 'border-orange-100 bg-orange-50', text: 'text-orange-600', icon: 'bg-orange-100 text-orange-600' },
+}
+
+function StatCard({ icon, label, value, tone = 'blue', onClick }) {
+  const t = CARD_TONES[tone] || CARD_TONES.blue
   const inner = (
     <div className="flex items-center justify-between">
       <div>
-        <p className="text-sm font-medium text-gray-500">{label}</p>
-        <p className={`mt-2 text-2xl font-bold tracking-tight ${valueClass}`}>{value}</p>
+        <p className={`text-sm font-semibold ${t.text}`}>{label}</p>
+        <p className={`mt-2 text-2xl font-bold tracking-tight ${t.text}`}>{value}</p>
       </div>
-      <div className={`flex h-12 w-12 items-center justify-center rounded-xl text-white shadow-lg ${iconClass}`}>
+      <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${t.icon}`}>
         <Icon name={icon} className="h-6 w-6" />
       </div>
     </div>
   )
+  const cls = `w-full rounded-2xl border p-5 text-left shadow-sm transition-shadow hover:shadow-md ${t.card}`
   if (onClick) {
-    return (
-      <button type="button" onClick={onClick} className="w-full rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm transition-shadow hover:shadow-md">
-        {inner}
-      </button>
-    )
+    return <button type="button" onClick={onClick} className={cls}>{inner}</button>
   }
-  return <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">{inner}</div>
+  return <div className={cls}>{inner}</div>
 }
 
 function MonthlyBreakdownModal({ monthly, onClose }) {
@@ -521,17 +526,17 @@ function OccupancyDonut({ occupied, vacant }) {
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <h3 className="text-base font-bold text-gray-900">อัตราการเต็ม (Occupancy)</h3>
+          <h3 className="text-base font-bold text-gray-900">สัดส่วนสินทรัพย์</h3>
           <p className="text-xs text-gray-500">ห้องมีผู้เช่าเทียบกับห้องว่าง</p>
         </div>
-        <span className="text-lg font-bold text-indigo-600">{total ? Math.round((occupied / total) * 100) : 0}%</span>
+        <span className="text-lg font-bold text-blue-600">{total ? Math.round((occupied / total) * 100) : 0}%</span>
       </div>
       <div className="h-56">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie data={data} dataKey="value" nameKey="name" innerRadius={60} outerRadius={85} paddingAngle={3}>
-              <Cell fill="#4f46e5" />
-              <Cell fill="#0ea5e9" />
+              <Cell fill="#3b82f6" />
+              <Cell fill="#9ca3af" />
             </Pie>
             <Tooltip />
             <Legend />
@@ -547,7 +552,7 @@ function RevenueBar({ monthly }) {
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
       <div className="mb-3">
-        <h3 className="text-base font-bold text-gray-900">รายได้ vs ค้างชำระ</h3>
+        <h3 className="text-base font-bold text-gray-900">รายงานรายได้ vs ค้างชำระ (6 เดือนล่าสุด)</h3>
         <p className="text-xs text-gray-500">เปรียบเทียบยอดชำระแล้วกับยอดค้างชำระ (ย้อนหลัง 6 เดือน)</p>
       </div>
       <div className="h-64">
@@ -564,6 +569,53 @@ function RevenueBar({ monthly }) {
         </ResponsiveContainer>
       </div>
     </div>
+  )
+}
+
+function UrgentAlertsPanel({ expiring, overdue }) {
+  const hasData = expiring.length > 0 || overdue.length > 0
+  return (
+    <section className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+      <div className="flex items-center gap-2">
+        <Icon name="warning" className="h-5 w-5 text-amber-600" />
+        <h2 className="text-base font-bold text-amber-800">การแจ้งเตือนด่วน</h2>
+      </div>
+      {!hasData ? (
+        <p className="mt-3 rounded-xl bg-green-50 px-4 py-3 text-sm font-medium text-green-600">ไม่มีรายการด่วนในตอนนี้</p>
+      ) : (
+        <div className="mt-3 space-y-4">
+          {expiring.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">สัญญาเช่าที่จะหมดภายใน 7 วัน</p>
+              <ul className="mt-2 space-y-2">
+                {expiring.map((r) => (
+                  <li key={r.id} className="flex items-center justify-between gap-3 rounded-lg bg-white/70 px-3 py-2.5 text-sm">
+                    <span className="font-medium text-gray-800">{r.cust_name} · {r.item_details}</span>
+                    <span className="shrink-0 font-semibold text-amber-600">เหลือ {daysUntil(r.lease_end_date)} วัน</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {overdue.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">บิลค้างชำระเกิน 15 วัน</p>
+              <ul className="mt-2 space-y-2">
+                {overdue.map((t) => {
+                  const rental = Array.isArray(t.rentals) ? t.rentals[0] : t.rentals
+                  return (
+                    <li key={t.id} className="flex items-center justify-between gap-3 rounded-lg bg-white/70 px-3 py-2.5 text-sm">
+                      <span className="font-medium text-gray-800">{rental?.cust_name || 'ไม่ระบุ'}</span>
+                      <span className="shrink-0 font-semibold text-red-600">{formatCurrency(t.total_amount)}</span>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -2542,6 +2594,7 @@ function App() {
   const [reviewing, setReviewing] = useState(null)
   const [summary, setSummary] = useState({ paidIncome: 0, paidThisMonth: 0, outstanding: 0, monthly: [] })
   const [showMonthly, setShowMonthly] = useState(false)
+  const [overdueBills, setOverdueBills] = useState([])
   const knownPendingIdsRef = useRef(null)
   const [paymentInfo, setPaymentInfo] = useState({
     payment_type: 'promptpay',
@@ -2702,10 +2755,27 @@ function App() {
     }
   }, [])
 
+  const fetchOverdue = useCallback(async () => {
+    try {
+      const cutoff = new Date()
+      cutoff.setDate(cutoff.getDate() - 15)
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('id, total_amount, rentals(cust_name)')
+        .eq('status', 'unpaid')
+        .lt('created_at', cutoff.toISOString())
+      if (error) throw error
+      setOverdueBills(Array.isArray(data) ? data : [])
+    } catch (err) {
+      console.error('Overdue fetch error:', err)
+    }
+  }, [])
+
   useEffect(() => {
     fetchPendingReviews()
     fetchSummary()
-  }, [fetchPendingReviews, fetchSummary])
+    fetchOverdue()
+  }, [fetchPendingReviews, fetchSummary, fetchOverdue])
 
   // polling แบบเรียลไทม์ (ทุก 20 วินาที) — รีเฟรชการ์ดสรุป + สินทรัพย์ด้วย
   useEffect(() => {
@@ -2713,9 +2783,10 @@ function App() {
       fetchPendingReviews(true)
       fetchSummary()
       fetchRentals(true)
+      fetchOverdue()
     }, 20000)
     return () => clearInterval(timer)
-  }, [fetchPendingReviews, fetchSummary, fetchRentals])
+  }, [fetchPendingReviews, fetchSummary, fetchRentals, fetchOverdue])
 
   const handleReviewTransaction = async (id, newStatus) => {
     if (!id) return
@@ -2964,11 +3035,19 @@ function App() {
     return (rentals || []).filter((r) => r?.lease_end_date && String(r.room_status ?? '').toLowerCase() !== 'vacant' && isExpiringSoon(r.lease_end_date))
   }, [rentals])
 
+  const urgentExpiring = useMemo(() => {
+    return (rentals || []).filter((r) => {
+      if (!r?.lease_end_date || String(r.room_status ?? '').toLowerCase() === 'vacant') return false
+      const d = daysUntil(r.lease_end_date)
+      return d !== null && d >= 0 && d <= 7
+    })
+  }, [rentals])
+
   const statCards = [
-    { icon: 'banknotes', label: 'รายได้รวมตั้งแต่เริ่มใช้งาน', value: formatCurrency(summary.paidIncome), iconClass: 'bg-emerald-500 shadow-emerald-500/30', onClick: () => setShowMonthly(true) },
-    { icon: 'banknotes', label: 'รายรับเดือนนี้', value: formatCurrency(summary.paidThisMonth), iconClass: 'bg-indigo-500 shadow-indigo-500/30', onClick: () => setShowMonthly(true) },
-    { icon: 'warning', label: 'ยอดค้างชำระ', value: formatCurrency(summary.outstanding), iconClass: 'bg-rose-500 shadow-rose-500/30', valueClass: 'text-rose-600' },
-    { icon: 'home', label: 'ห้องว่าง', value: stats.vacant, iconClass: 'bg-sky-500 shadow-sky-500/30' },
+    { icon: 'chart', label: 'รายได้รวมตั้งแต่เริ่มใช้งาน', value: formatCurrency(summary.paidIncome), tone: 'blue', onClick: () => setShowMonthly(true) },
+    { icon: 'banknotes', label: 'รายรับเดือนนี้', value: formatCurrency(summary.paidThisMonth), tone: 'green', onClick: () => setShowMonthly(true) },
+    { icon: 'warning', label: 'ยอดค้างชำระ', value: formatCurrency(summary.outstanding), tone: 'red' },
+    { icon: 'home', label: 'ห้องว่าง', value: stats.vacant, tone: 'orange' },
   ]
 
   return (
@@ -3066,6 +3145,8 @@ function App() {
                   <StatCard key={card.label} {...card} />
                 ))}
               </div>
+
+              <UrgentAlertsPanel expiring={urgentExpiring} overdue={overdueBills} />
 
               <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <OccupancyDonut occupied={stats.occupied} vacant={stats.vacant} />
