@@ -52,7 +52,7 @@ ins AS (
     (100000000 + g.i)::text
   FROM generate_series(1,50) AS g(i)
   CROSS JOIN names n
-  CROSS JOIN LATERAL (SELECT (ARRAY['อสังหาริมทรัพย์','ยานพาหนะ','อุปกรณ์'])[1 + (floor(random()*3))::int] AS biz_type) b
+  CROSS JOIN LATERAL (SELECT (ARRAY['อสังหาริมทรัพย์','ยานพาหนะ','อุปกรณ์'])[1 + (floor(random()*3))::int] AS biz_type, g.i AS _gi) b
   CROSS JOIN LATERAL (
     SELECT CASE b.biz_type
       WHEN 'อสังหาริมทรัพย์' THEN (ARRAY['ห้อง 101','ห้อง 102','ห้อง 201','ห้อง 202','ห้อง 301','ห้อง 303','ห้อง 401','ห้อง 402','ห้อง 501','คอนโด A','คอนโด B','คอนโด C','โกดัง A','โกดัง B','โกดัง C','บ้านเดี่ยว 88/1','ทาวน์เฮาส์ 12','ห้อง 505'])[1 + (floor(random()*18))::int]
@@ -60,8 +60,8 @@ ins AS (
       ELSE (ARRAY['กล้อง Sony A7','เครื่องจักร CNC-01','โดรน DJI Mavic','เครื่องเสียงงานแต่ง','โปรเจคเตอร์ Epson','เครื่องพิมพ์ 3D','เครื่องชงกาแฟ','เครื่องปั่นไฟ 5kW'])[1 + (floor(random()*8))::int]
     END AS item_details
   ) it
-  CROSS JOIN LATERAL (SELECT (2000 + (floor(random()*13001))::int) AS amount) a
-  CROSS JOIN LATERAL (SELECT (CURRENT_DATE + ((floor(random()*181))::int - 90)) AS lease_end_date) le
+  CROSS JOIN LATERAL (SELECT (2000 + (floor(random()*13001))::int) AS amount, g.i AS _gi) a
+  CROSS JOIN LATERAL (SELECT (CURRENT_DATE + ((floor(random()*181))::int - 90)) AS lease_end_date, g.i AS _gi) le
   RETURNING id, biz_type, amount, room_status, utility_enabled, water_rate, elec_rate
 )
 SELECT * FROM ins;
