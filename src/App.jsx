@@ -437,16 +437,67 @@ function renderDetailValue(key, value) {
   return renderCell(key, value)
 }
 
-function StatCard({ icon, label, value, iconClass, valueClass = 'text-gray-900' }) {
+function StatCard({ icon, label, value, iconClass, valueClass = 'text-gray-900', onClick }) {
+  const inner = (
+    <div className="flex items-center justify-between">
+      <div>
+        <p className="text-sm font-medium text-gray-500">{label}</p>
+        <p className={`mt-2 text-2xl font-bold tracking-tight ${valueClass}`}>{value}</p>
+      </div>
+      <div className={`flex h-12 w-12 items-center justify-center rounded-xl text-white shadow-lg ${iconClass}`}>
+        <Icon name={icon} className="h-6 w-6" />
+      </div>
+    </div>
+  )
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className="w-full rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm transition-shadow hover:shadow-md">
+        {inner}
+      </button>
+    )
+  }
+  return <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">{inner}</div>
+}
+
+function MonthlyBreakdownModal({ monthly, onClose }) {
+  const rows = Array.isArray(monthly) ? monthly : []
+  const total = rows.reduce((sum, m) => sum + (Number(m.paid) || 0), 0)
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-gray-500">{label}</p>
-          <p className={`mt-2 text-2xl font-bold tracking-tight ${valueClass}`}>{value}</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+      <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">รายได้รายเดือน</h2>
+            <p className="text-xs text-gray-500">ยอดชำระแล้ว (paid) แยกตามเดือน</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600" aria-label="ปิด">
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+          </button>
         </div>
-        <div className={`flex h-12 w-12 items-center justify-center rounded-xl text-white shadow-lg ${iconClass}`}>
-          <Icon name={icon} className="h-6 w-6" />
+        <div className="px-6 py-4">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 text-left text-xs text-gray-500">
+                <th className="py-2 font-medium">เดือน</th>
+                <th className="py-2 text-right font-medium">รายได้</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {rows.map((m) => (
+                <tr key={m.key}>
+                  <td className="py-2.5 font-medium text-gray-700">{m.label}</td>
+                  <td className="py-2.5 text-right font-semibold tabular-nums text-gray-900">{formatCurrency(m.paid)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t border-gray-200">
+                <td className="py-3 font-bold text-gray-900">รวม</td>
+                <td className="py-3 text-right font-bold tabular-nums text-emerald-600">{formatCurrency(total)}</td>
+              </tr>
+            </tfoot>
+          </table>
         </div>
       </div>
     </div>
@@ -2485,6 +2536,7 @@ function App() {
   const [pendingError, setPendingError] = useState(null)
   const [reviewing, setReviewing] = useState(null)
   const [summary, setSummary] = useState({ paidIncome: 0, paidThisMonth: 0, outstanding: 0, monthly: [] })
+  const [showMonthly, setShowMonthly] = useState(false)
   const knownPendingIdsRef = useRef(null)
   const [paymentInfo, setPaymentInfo] = useState({
     payment_type: 'promptpay',
@@ -2908,10 +2960,10 @@ function App() {
   }, [rentals])
 
   const statCards = [
-    { icon: 'banknotes', label: 'รายรับเดือนนี้ (ชำระแล้ว)', value: formatCurrency(summary.paidThisMonth), iconClass: 'bg-emerald-500 shadow-emerald-500/30' },
+    { icon: 'banknotes', label: 'รายได้รวมตั้งแต่เริ่มใช้งาน', value: formatCurrency(summary.paidIncome), iconClass: 'bg-emerald-500 shadow-emerald-500/30', onClick: () => setShowMonthly(true) },
+    { icon: 'banknotes', label: 'รายรับเดือนนี้', value: formatCurrency(summary.paidThisMonth), iconClass: 'bg-indigo-500 shadow-indigo-500/30', onClick: () => setShowMonthly(true) },
     { icon: 'warning', label: 'ยอดค้างชำระ', value: formatCurrency(summary.outstanding), iconClass: 'bg-rose-500 shadow-rose-500/30', valueClass: 'text-rose-600' },
     { icon: 'home', label: 'ห้องว่าง', value: stats.vacant, iconClass: 'bg-sky-500 shadow-sky-500/30' },
-    { icon: 'warning', label: 'สัญญาใกล้หมด (30 วัน)', value: stats.expiringSoon, iconClass: 'bg-amber-500 shadow-amber-500/30', valueClass: stats.expiringSoon ? 'text-amber-600' : 'text-gray-900' },
   ]
 
   return (
@@ -3084,6 +3136,7 @@ function App() {
         onConfirm={handleConfirmAction}
       />
 
+      {showMonthly && <MonthlyBreakdownModal monthly={summary.monthly} onClose={() => setShowMonthly(false)} />}
       <Toast toast={toast} onClose={closeToast} />
     </div>
   )
