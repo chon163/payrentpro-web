@@ -2591,23 +2591,7 @@ function App() {
       const { data, error } = await supabase.from('transactions').select('status, total_amount, base_amount, amount, period, created_at')
       if (error) throw error
       const pad = (n) => String(n).padStart(2, '0')
-      const now = new Date()
-      const currentMonthKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`
-
-      let paidIncome = 0
-      let paidThisMonth = 0
-      let outstanding = 0
-
-      // โครงสร้างเดือนย้อนหลัง 6 เดือน (เดือนปัจจุบัน + 5 เดือนก่อน)
-      const monthly = []
-      const monthMap = {}
-      for (let i = 5; i >= 0; i--) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-        const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`
-        const item = { key, label: THAI_MONTHS[d.getMonth()], paid: 0, outstanding: 0 }
-        monthly.push(item)
-        monthMap[key] = item
-      }
+      const rows = Array.isArray(data) ? data : []
 
       const txMonth = (tx) => {
         const p = String(tx?.period ?? '').trim()
@@ -2618,7 +2602,32 @@ function App() {
         return null
       }
 
-      for (const tx of (Array.isArray(data) ? data : [])) {
+      // หาเดือน "ปัจจุบัน" จากข้อมูลจริง (กันนาฬิกาเครื่องเพี้ยน/ไม่ตรงกับข้อมูล)
+      const dataMonths = new Set()
+      for (const tx of rows) { const mk = txMonth(tx); if (mk) dataMonths.add(mk) }
+      const now = new Date()
+      const browserKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`
+      const currentMonthKey = dataMonths.has(browserKey) || dataMonths.size === 0
+        ? browserKey
+        : [...dataMonths].sort().pop()
+
+      let paidIncome = 0
+      let paidThisMonth = 0
+      let outstanding = 0
+
+      // โครงสร้างเดือนย้อนหลัง 6 เดือน (จบที่เดือนปัจจุบัน)
+      const monthly = []
+      const monthMap = {}
+      const [curYear, curMonth] = currentMonthKey.split('-').map(Number)
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(curYear, curMonth - 1 - i, 1)
+        const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`
+        const item = { key, label: THAI_MONTHS[d.getMonth()], paid: 0, outstanding: 0 }
+        monthly.push(item)
+        monthMap[key] = item
+      }
+
+      for (const tx of rows) {
         const amt = Number(tx.total_amount ?? tx.base_amount ?? tx.amount ?? 0) || 0
         const s = String(tx.status ?? '').toLowerCase()
         const mk = txMonth(tx)
