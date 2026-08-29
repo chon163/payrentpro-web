@@ -2495,8 +2495,8 @@ function App() {
     bank_account: '',
   })
 
-  const fetchRentals = useCallback(async () => {
-    setLoading(true)
+  const fetchRentals = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true)
     setError(null)
     try {
       const { data, error: supabaseError } = await supabase.from('rentals').select('*')
@@ -2506,7 +2506,7 @@ function App() {
     } catch (err) {
       setError(err?.message || 'เกิดข้อผิดพลาดในการดึงข้อมูล')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [])
 
@@ -2642,13 +2642,15 @@ function App() {
     fetchSummary()
   }, [fetchPendingReviews, fetchSummary])
 
-  // polling แบบเรียลไทม์ (ทุก 20 วินาที)
+  // polling แบบเรียลไทม์ (ทุก 20 วินาที) — รีเฟรชการ์ดสรุป + สินทรัพย์ด้วย
   useEffect(() => {
     const timer = setInterval(() => {
       fetchPendingReviews(true)
+      fetchSummary()
+      fetchRentals(true)
     }, 20000)
     return () => clearInterval(timer)
-  }, [fetchPendingReviews])
+  }, [fetchPendingReviews, fetchSummary, fetchRentals])
 
   const handleReviewTransaction = async (id, newStatus) => {
     if (!id) return
@@ -3038,7 +3040,7 @@ function App() {
               )}
               <button
                 type="button"
-                onClick={fetchRentals}
+                onClick={() => { fetchRentals(); fetchSummary(); fetchPendingReviews() }}
                 disabled={loading}
                 className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
               >
