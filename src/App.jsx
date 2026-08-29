@@ -2484,7 +2484,6 @@ function App() {
   const [pendingLoading, setPendingLoading] = useState(true)
   const [pendingError, setPendingError] = useState(null)
   const [reviewing, setReviewing] = useState(null)
-  const [seeding, setSeeding] = useState(false)
   const [summary, setSummary] = useState({ paidIncome: 0, paidThisMonth: 0, outstanding: 0, monthly: [] })
   const knownPendingIdsRef = useRef(null)
   const [paymentInfo, setPaymentInfo] = useState({
@@ -2832,70 +2831,7 @@ function App() {
     setPdpAccepted(true)
   }
 
-  const seedDemoData = async () => {
-    if (seeding) return
-    setSeeding(true)
-    setToast({ type: 'info', message: 'กำลังสร้างข้อมูลตัวอย่าง...' })
-    try {
-      const pad = (n) => String(n).padStart(2, '0')
-      const iso = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-      const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x }
-      const monthKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`
-      const randPhone = () => `08${Math.floor(10000000 + Math.random() * 89999999)}`
-      const now = new Date()
-      const prevMonth = monthKey(new Date(now.getFullYear(), now.getMonth() - 1, 1))
 
-      const { data: existingAdmin } = await supabase.from('admins').select('id').limit(1).maybeSingle()
-      if (!existingAdmin) {
-        const { error: adminError } = await supabase.from('admins').insert([{ email: 'admin@payrentpro.com', payment_type: 'promptpay', promptpay_name: 'บริษัท เพย์เรนท์โปร จำกัด', promptpay: '0812345678', bank_code: '', bank_account: '' }])
-        if (adminError) throw adminError
-      }
-
-      const base = (r) => ({ tenant_phone: randPhone(), tenant_id_card: mockThaiId(), emergency_contact: randPhone(), penalty_per_day: 100, penalty_enabled: true, chase_frequency: 3, stop_chase: false, credit_balance: 0, last_water_meter: 0, water_rate: 18, last_elec_meter: 0, elec_rate: 5, utility_enabled: false, binding_code: generateBindingCode(), ...r })
-
-      const rentals = [
-        base({ biz_type: 'อสังหาริมทรัพย์', cust_name: 'สมชาย ใจดี', item_details: 'ห้อง 401', room_status: 'occupied', amount: 8000, cycle: 'monthly', due_date: 5, deposit_amount: 8000, move_in_date: iso(addDays(now, -300)), lease_end_date: iso(addDays(now, 10)), last_water_meter: 120, last_elec_meter: 4500, utility_enabled: true }),
-        base({ biz_type: 'อสังหาริมทรัพย์', cust_name: 'สมหญิง รุ่งเรือง', item_details: 'คอนโด C-1205', room_status: 'occupied', amount: 12000, cycle: 'monthly', due_date: 15, deposit_amount: 12000, move_in_date: iso(addDays(now, -120)), lease_end_date: iso(addDays(now, 200)), utility_enabled: true }),
-        base({ biz_type: 'ยานพาหนะ', cust_name: 'วีรชน วงศ์สุวรรณ', item_details: 'รถ กก-1234', room_status: 'occupied', amount: 3500, cycle: 'weekly', due_date: 1, deposit_amount: 3000, move_in_date: iso(addDays(now, -60)), lease_end_date: iso(addDays(now, 90)) }),
-        base({ biz_type: 'อุปกรณ์', cust_name: 'อารยา ศรีสุข', item_details: 'กล้อง Sony A7', room_status: 'occupied', amount: 1500, cycle: 'daily', due_date: 10, deposit_amount: 1500, move_in_date: iso(addDays(now, -20)), lease_end_date: iso(addDays(now, 120)) }),
-        base({ biz_type: 'อสังหาริมทรัพย์', cust_name: 'ว่าง', item_details: 'ห้อง 202', room_status: 'vacant', amount: 6000, cycle: 'monthly', due_date: 20, deposit_amount: 6000, move_in_date: null, lease_end_date: null, tenant_phone: null, tenant_id_card: null, emergency_contact: null, utility_enabled: true }),
-        base({ biz_type: 'อสังหาริมทรัพย์', cust_name: '—', item_details: 'ห้อง 303', room_status: 'maintenance', amount: 7000, cycle: 'monthly', due_date: 25, deposit_amount: 0, move_in_date: null, lease_end_date: null, tenant_phone: null, tenant_id_card: null, emergency_contact: null, utility_enabled: true }),
-        base({ biz_type: 'ยานพาหนะ', cust_name: 'ธนกร มั่นคง', item_details: 'แท็กซี่ ทส-5678', room_status: 'occupied', amount: 2500, cycle: 'weekly', due_date: 3, deposit_amount: 2500, move_in_date: iso(addDays(now, -40)), lease_end_date: iso(addDays(now, 5)) }),
-        base({ biz_type: 'อุปกรณ์', cust_name: 'กิตติ ไทยแท้', item_details: 'โดรน DJI Mavic', room_status: 'occupied', amount: 2200, cycle: 'monthly', due_date: 12, deposit_amount: 2200, move_in_date: iso(addDays(now, -90)), lease_end_date: iso(addDays(now, 150)) }),
-      ]
-
-      const { data: insertedRentals, error: rentalsError } = await supabase.from('rentals').insert(rentals).select()
-      if (rentalsError) throw rentalsError
-      const findRental = (name) => (insertedRentals || []).find((r) => r.cust_name === name)
-      const txs = [
-        { rental_id: findRental('สมชาย ใจดี')?.id, period: monthKey(now), base_amount: 8000, water_units: 30, water_cost: 540, elec_units: 92, elec_cost: 460, total_amount: 9000, status: 'paid', secure_token: generateSecureToken() },
-        { rental_id: findRental('สมชาย ใจดี')?.id, period: prevMonth, base_amount: 8000, water_units: 25, water_cost: 450, elec_units: 10, elec_cost: 50, total_amount: 8500, status: 'pending_review', secure_token: generateSecureToken() },
-        { rental_id: findRental('สมหญิง รุ่งเรือง')?.id, period: monthKey(now), base_amount: 12000, water_units: 0, water_cost: 0, elec_units: 0, elec_cost: 0, total_amount: 12000, status: 'unpaid', secure_token: generateSecureToken() },
-        { rental_id: findRental('สมหญิง รุ่งเรือง')?.id, period: prevMonth, base_amount: 12000, water_units: 20, water_cost: 360, elec_units: 60, elec_cost: 300, total_amount: 12660, status: 'paid', secure_token: generateSecureToken() },
-        { rental_id: findRental('วีรชน วงศ์สุวรรณ')?.id, period: monthKey(now), base_amount: 3500, water_units: 0, water_cost: 0, elec_units: 0, elec_cost: 0, total_amount: 3500, status: 'pending_review', secure_token: generateSecureToken() },
-        { rental_id: findRental('อารยา ศรีสุข')?.id, period: monthKey(now), base_amount: 1500, water_units: 0, water_cost: 0, elec_units: 0, elec_cost: 0, total_amount: 1500, status: 'paid', secure_token: generateSecureToken() },
-        { rental_id: findRental('ธนกร มั่นคง')?.id, period: monthKey(now), base_amount: 2500, water_units: 0, water_cost: 0, elec_units: 0, elec_cost: 0, total_amount: 2500, status: 'unpaid', secure_token: generateSecureToken() },
-      ]
-
-      const { data: insertedTxs, error: txsError } = await supabase.from('transactions').insert(txs).select()
-      if (txsError) throw txsError
-      const paidTx = (insertedTxs || []).find((t) => t.status === 'paid')
-      const pendingTx = (insertedTxs || []).find((t) => t.status === 'pending_review')
-      const { error: auditError } = await supabase.from('audit_logs').insert([
-        { transaction_id: paidTx?.id ?? null, old_amount: 9500, new_amount: 9000, reason: 'ลูกค้าขอส่วนลดค่าน้ำ 500 บาท' },
-        { transaction_id: pendingTx?.id ?? null, old_amount: 3600, new_amount: 3500, reason: 'แก้ไขค่าเช่าหลังตรวจสอบสลิป' },
-        { transaction_id: null, old_amount: 0, new_amount: 8000, reason: 'สร้างรายการใหม่ (ข้อมูลตัวอย่าง)' },
-      ])
-      if (auditError) throw auditError
-
-      await Promise.all([fetchRentals(), fetchSummary(), fetchPendingReviews(), fetchPaymentInfo()])
-      setToast({ type: 'success', message: 'สร้างข้อมูลตัวอย่างครบทุกฟีเจอร์แล้ว' })
-    } catch (err) {
-      setToast({ type: 'error', message: err?.message || 'สร้างข้อมูลตัวอย่างไม่สำเร็จ' })
-    } finally {
-      setSeeding(false)
-    }
-  }
 
   const handleExportCsv = async () => {
     try {
@@ -3008,26 +2944,6 @@ function App() {
                   className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
                 >
                   Export CSV
-                </button>
-              )}
-              {!isSettings && !isAudit && (
-                <button
-                  type="button"
-                  onClick={seedDemoData}
-                  disabled={seeding}
-                  className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-700 shadow-sm transition-colors hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {seeding ? (
-                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
-                    </svg>
-                  ) : (
-                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z" />
-                    </svg>
-                  )}
-                  {seeding ? 'กำลังสร้าง...' : 'โหลดข้อมูลตัวอย่าง'}
                 </button>
               )}
               {lastUpdated && (
