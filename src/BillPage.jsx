@@ -159,7 +159,7 @@ function BillPage() {
   const rental = Array.isArray(bill.rentals) ? bill.rentals[0] : bill.rentals
   const custName = rental?.cust_name ?? 'ไม่ระบุ'
   const itemDetails = rental?.item_details ?? 'ไม่ระบุ'
-  const total = Number(bill.base_amount)
+  const total = Number(bill.total_amount || bill.base_amount)
   const isBank = paymentInfo.payment_type === 'bank'
   const ppNumber = (paymentInfo.promptpay || '0812345678').replace(/[^0-9]/g, '')
   const qrUrl = isBank ? '' : `https://promptpay.io/${ppNumber}/${total}.png`

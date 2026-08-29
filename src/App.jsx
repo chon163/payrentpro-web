@@ -52,7 +52,17 @@ const STATUS_LABELS = {
   canceled: 'ยกเลิก',
 }
 
-const BIZ_TYPES = ['อสังหาริมทรัพย์', 'ยานพาหนะ', 'อุปกรณ์']
+const BIZ_TYPES = [
+  { value: 'อสังหาริมทรัพย์', label: 'อสังหาริมทรัพย์ (ห้องเช่า, คอนโด, โกดัง)' },
+  { value: 'ยานพาหนะ', label: 'ยานพาหนะ (รถเช่า, แท็กซี่, รถบรรทุก)' },
+  { value: 'อุปกรณ์', label: 'อุปกรณ์ (เครื่องจักร, กล้องถ่ายวีดีโอ, อุปกรณ์งานแต่งงาน)' },
+]
+
+const ITEM_PLACEHOLDERS = {
+  'อสังหาริมทรัพย์': 'เช่น ห้อง 401, คอนโด, โกดัง A',
+  'ยานพาหนะ': 'เช่น รถ กก-1234, แท็กซี่',
+  'อุปกรณ์': 'เช่น กล้อง Sony A7, เครื่องจักร',
+}
 
 const CYCLE_LABELS = {
   monthly: 'รายเดือน',
@@ -107,6 +117,8 @@ const COLUMN_LABELS = {
   penalty_per_day: 'ค่าปรับต่อวัน',
 }
 
+const TABLE_COLUMNS = ['biz_type', 'cust_name', 'item_details', 'amount', 'cycle', 'due_date', 'created_at']
+
 function getValue(row, keys) {
   if (!row) return undefined
   for (const key of keys) {
@@ -153,6 +165,63 @@ function generateSecureToken() {
 
 function generateBindingCode() {
   return String(Math.floor(100000000 + Math.random() * 900000000))
+}
+
+const MOCK_FIRST_NAMES = ['สมชาย', 'สมหญิง', 'วีรชน', 'อารยา', 'ธนกร', 'กิตติ', 'ณัฐวุฒิ', 'ปิยะ', 'ศิริพร', 'วัชรพล', 'จิราพร', 'อนุชา', 'พรทิพย์', 'สุชาติ', 'รัตนา']
+const MOCK_LAST_NAMES = ['ใจดี', 'รุ่งเรือง', 'วงศ์สุวรรณ', 'ศรีสุข', 'มั่นคง', 'ไทยแท้', 'บุญมี', 'แก้วใส', 'ทองคำ', 'พันธ์ดี']
+
+function mockThaiId() {
+  let id = String(Math.floor(Math.random() * 9) + 1)
+  for (let i = 0; i < 12; i++) id += Math.floor(Math.random() * 10)
+  return id
+}
+
+// สร้างข้อมูลจำลอง (mock) สำหรับฟอร์ม เพื่อให้ทดสอบง่าย
+function buildMockForm() {
+  const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
+  const phone = () => `08${randInt(10000000, 99999999)}`
+  const pad = (n) => String(n).padStart(2, '0')
+  const localDate = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+
+  const bizType = pick(['อสังหาริมทรัพย์', 'ยานพาหนะ', 'อุปกรณ์'])
+  const items = {
+    'อสังหาริมทรัพย์': ['ห้อง 401', 'คอนโด C-1205', 'โกดัง A', 'บ้านเดี่ยว 88/1', 'ห้อง 202'],
+    'ยานพาหนะ': ['รถ กก-1234', 'แท็กซี่ ทส-5678', 'รถบรรทุก 70-8899', 'มอเตอร์ไซค์ 1กข-3456'],
+    'อุปกรณ์': ['กล้อง Sony A7', 'เครื่องจักร CNC-01', 'โดรน DJI Mavic', 'เครื่องเสียงงานแต่ง'],
+  }
+  const amount = bizType === 'อสังหาริมทรัพย์' ? randInt(3000, 15000) : bizType === 'ยานพาหนะ' ? randInt(800, 5000) : randInt(500, 3000)
+
+  const now = new Date()
+  const moveIn = new Date(now)
+  moveIn.setDate(moveIn.getDate() - randInt(0, 365))
+  const leaseEnd = new Date(moveIn)
+  leaseEnd.setFullYear(leaseEnd.getFullYear() + 1)
+
+  return {
+    biz_type: bizType,
+    cust_name: `${pick(MOCK_FIRST_NAMES)} ${pick(MOCK_LAST_NAMES)}`,
+    item_details: pick(items[bizType]),
+    amount: String(amount),
+    cycle: pick(['monthly', 'monthly', 'monthly', 'weekly', 'daily']),
+    due_date: String(randInt(1, 28)),
+    tenant_phone: phone(),
+    tenant_id_card: mockThaiId(),
+    emergency_contact: phone(),
+    room_status: pick(['occupied', 'occupied', 'vacant', 'maintenance']),
+    deposit_amount: String(amount),
+    move_in_date: localDate(moveIn),
+    lease_end_date: localDate(leaseEnd),
+    penalty_enabled: true,
+    penalty_per_day: String(randInt(50, 200)),
+    chase_frequency: pick([3, 7]),
+    stop_chase: String(randInt(0, 90)),
+    utility_enabled: true,
+    last_water_meter: String(randInt(0, 500)),
+    water_rate: '18',
+    last_elec_meter: String(randInt(0, 5000)),
+    elec_rate: '5',
+  }
 }
 
 function normalizeStatus(value) {
@@ -270,6 +339,16 @@ function renderCell(key, value) {
   return <span className="text-gray-700">{String(value)}</span>
 }
 
+function renderDetailValue(key, value) {
+  if (value === null || value === undefined || value === '') return '—'
+  if (key === 'room_status') {
+    const map = { occupied: 'มีผู้เช่า', vacant: 'ว่าง', active: 'ใช้งานอยู่', inactive: 'ไม่ใช้งาน' }
+    return map[value] ?? String(value)
+  }
+  if (key === 'group_id' || key === 'binding_code') return <span className="font-mono text-xs">{String(value)}</span>
+  return renderCell(key, value)
+}
+
 function StatCard({ icon, label, value, iconClass, valueClass = 'text-gray-900' }) {
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
@@ -348,7 +427,57 @@ function TableSkeleton() {
   )
 }
 
-function RentalsTable({ rentals, loading, error, columns, onRetry, onGenerateBill, generatingId }) {
+function RowActionsMenu({ onViewDetails, onBillRequest, onRenew, onMoveOut, onDelete }) {
+  const [open, setOpen] = useState(false)
+
+  const items = [
+    { label: 'ดูรายละเอียด', icon: 'M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z', className: 'text-gray-700', onClick: onViewDetails },
+    { label: 'สร้างบิล', icon: 'M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0v2.25m-3.75 6h7.5m-7.5 3H12', className: 'text-gray-700', onClick: onBillRequest },
+    { label: 'ต่อสัญญา', icon: 'M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99', className: 'text-gray-700', onClick: onRenew },
+    { label: 'ย้ายออก', icon: 'M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9', className: 'text-amber-600', onClick: onMoveOut },
+    { label: 'ลบข้อมูล', icon: 'M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0', className: 'text-rose-600', onClick: onDelete },
+  ]
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+        aria-label="เมนูจัดการ"
+      >
+        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="12" cy="5" r="1.5" />
+          <circle cx="12" cy="12" r="1.5" />
+          <circle cx="12" cy="19" r="1.5" />
+        </svg>
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} aria-hidden="true" />
+          <div className="absolute right-0 z-20 mt-1 w-48 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+            {items.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => { setOpen(false); item.onClick() }}
+                className={`flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-sm font-medium transition-colors hover:bg-gray-50 ${item.className}`}
+              >
+                <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+                </svg>
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function RentalsTable({ rentals, loading, error, columns, onRetry, onBillRequest, onViewDetails, onRenew, onMoveOut, onDelete }) {
   return (
     <div className="mt-8 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
       <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-6 py-5">
@@ -415,24 +544,13 @@ function RentalsTable({ rentals, loading, error, columns, onRetry, onGenerateBil
                     </td>
                   ))}
                   <td className="whitespace-nowrap px-6 py-4 text-right text-sm">
-                    <button
-                      type="button"
-                      onClick={() => onGenerateBill(row)}
-                      disabled={generatingId === row.id}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {generatingId === row.id ? (
-                        <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
-                        </svg>
-                      ) : (
-                        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0v2.25m-3.75 6h7.5m-7.5 3H12" />
-                        </svg>
-                      )}
-                      สร้างบิล
-                    </button>
+                    <RowActionsMenu
+                      onViewDetails={() => onViewDetails(row)}
+                      onBillRequest={() => onBillRequest(row)}
+                      onRenew={() => onRenew(row)}
+                      onMoveOut={() => onMoveOut(row)}
+                      onDelete={() => onDelete(row)}
+                    />
                   </td>
                 </tr>
               ))}
@@ -444,6 +562,134 @@ function RentalsTable({ rentals, loading, error, columns, onRetry, onGenerateBil
   )
 }
 
+function PendingReviewSection({ items, loading, error, reviewing, onApprove, onReject, onRetry }) {
+  return (
+    <section className="mt-8 overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-lg shadow-amber-100/70">
+      <div className="flex items-center justify-between gap-4 border-b border-amber-100 bg-gradient-to-r from-amber-50 to-yellow-50 px-6 py-5">
+        <div className="flex items-center gap-3">
+          <div className="relative flex h-11 w-11 items-center justify-center rounded-xl bg-amber-400 text-white shadow-lg shadow-amber-400/40">
+            <span className="absolute -right-1 -top-1 flex h-3 w-3">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75" />
+              <span className="relative inline-flex h-3 w-3 rounded-full bg-rose-500" />
+            </span>
+            <Icon name="warning" className="h-6 w-6" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold tracking-tight text-gray-900">รอตรวจสอบสลิป</h2>
+            <p className="text-sm text-amber-700">มีผู้เช่าแจ้งชำระเงินแล้ว โปรดตรวจสอบหลักฐานก่อนยืนยัน</p>
+          </div>
+        </div>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">
+          {loading ? 'กำลังโหลด...' : `${items.length} รายการ`}
+        </span>
+      </div>
+
+      {loading ? (
+        <div className="space-y-3 p-6">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={i} className="h-24 animate-pulse rounded-xl bg-amber-50" />
+          ))}
+        </div>
+      ) : error ? (
+        <div className="p-10 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+            <Icon name="warning" className="h-6 w-6" />
+          </div>
+          <h3 className="mt-4 text-base font-semibold text-gray-900">ไม่สามารถโหลดรายการได้</h3>
+          <p className="mx-auto mt-2 max-w-md text-sm text-gray-500">{error}</p>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mt-5 inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-400"
+          >
+            <Icon name="refresh" className="h-4 w-4" />
+            ลองอีกครั้ง
+          </button>
+        </div>
+      ) : items.length === 0 ? (
+        <div className="p-10 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-500">
+            <Icon name="check" className="h-6 w-6" />
+          </div>
+          <h3 className="mt-4 text-base font-semibold text-gray-900">ไม่มีรายการรอตรวจสอบ</h3>
+          <p className="mt-2 text-sm text-gray-500">ยังไม่มีผู้เช่าแจ้งชำระเงินในขณะนี้</p>
+        </div>
+      ) : (
+        <div className="space-y-3 p-6">
+          {items.map((item) => {
+            const rental = Array.isArray(item.rentals) ? item.rentals[0] : item.rentals
+            const custName = rental?.cust_name || item.cust_name || 'ไม่ระบุ'
+            const itemDetails = rental?.item_details || item.item_details || 'ไม่ระบุ'
+            const amount = item.base_amount ?? item.amount
+            const isUpdating = reviewing?.id === item.id
+            const isApproving = isUpdating && reviewing?.status === 'paid'
+            const isRejecting = isUpdating && reviewing?.status === 'unpaid'
+            return (
+              <div
+                key={item.id}
+                className="flex flex-col gap-4 rounded-xl border border-amber-200 bg-amber-50/40 p-4 shadow-sm transition-colors hover:border-amber-300 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-base font-bold text-gray-900">{custName}</p>
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                      รอตรวจสอบสลิป
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-gray-600">{itemDetails}</p>
+                  {item.period ? <p className="mt-1 text-xs text-gray-400">รอบบิล {item.period}</p> : null}
+                </div>
+                <div className="flex shrink-0 flex-col items-start gap-3 sm:items-end">
+                  <p className="text-xl font-bold tabular-nums tracking-tight text-amber-600">{formatCurrency(amount)}</p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onApprove(item.id)}
+                      disabled={isUpdating}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm shadow-emerald-600/30 transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isApproving ? (
+                        <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
+                        </svg>
+                      ) : (
+                        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                        </svg>
+                      )}
+                      อนุมัติ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onReject(item.id)}
+                      disabled={isUpdating}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm shadow-rose-600/30 transition-colors hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isRejecting ? (
+                        <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
+                        </svg>
+                      ) : (
+                        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                        </svg>
+                      )}
+                      ปฏิเสธ
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </section>
+  )
+}
+
 const EMPTY_FORM = {
   biz_type: '',
   cust_name: '',
@@ -451,11 +697,70 @@ const EMPTY_FORM = {
   amount: '',
   cycle: 'monthly',
   due_date: '',
+  tenant_phone: '',
+  tenant_id_card: '',
+  emergency_contact: '',
+  room_status: 'occupied',
+  deposit_amount: '',
+  move_in_date: '',
+  lease_end_date: '',
+  penalty_enabled: true,
   penalty_per_day: '',
+  chase_frequency: 3,
+  stop_chase: '0',
+  utility_enabled: true,
+  last_water_meter: '',
+  water_rate: '',
+  last_elec_meter: '',
+  elec_rate: '',
 }
 
 const inputClass =
   'w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 shadow-sm transition placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20'
+
+function CollapsibleSection({ title, subtitle, icon, defaultOpen = false, children }) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-gray-50"
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+            <Icon name={icon} className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-gray-900">{title}</p>
+            {subtitle && <p className="text-xs text-gray-500">{subtitle}</p>}
+          </div>
+        </div>
+        <svg
+          className={`h-5 w-5 shrink-0 text-gray-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+        </svg>
+      </button>
+      {open && <div className="border-t border-gray-100 px-5 py-5">{children}</div>}
+    </div>
+  )
+}
+
+function Toggle({ checked, onChange, label }) {
+  return (
+    <button type="button" onClick={() => onChange(!checked)} className="flex w-full items-center justify-between gap-3">
+      <span className="text-sm font-medium text-gray-700">{label}</span>
+      <span className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${checked ? 'bg-indigo-600' : 'bg-gray-300'}`}>
+        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
+      </span>
+    </button>
+  )
+}
 
 function AddRentalModal({ open, onClose, onCreated }) {
   const [form, setForm] = useState(EMPTY_FORM)
@@ -464,7 +769,7 @@ function AddRentalModal({ open, onClose, onCreated }) {
 
   useEffect(() => {
     if (open) {
-      setForm(EMPTY_FORM)
+      setForm(buildMockForm())
       setError(null)
       setSaving(false)
     }
@@ -485,24 +790,43 @@ function AddRentalModal({ open, onClose, onCreated }) {
     setForm((prev) => ({ ...prev, [field]: e.target.value }))
   }
 
+  const setField = (field, value) => {
+    setForm((prev) => ({ ...prev, [field]: value }))
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setSaving(true)
     setError(null)
     try {
       const bindingCode = generateBindingCode()
-      const { error: insertError } = await supabase.from('rentals').insert([
-        {
-          biz_type: form.biz_type,
-          cust_name: form.cust_name.trim(),
-          item_details: form.item_details.trim(),
-          amount: Number(form.amount),
-          cycle: form.cycle,
-          due_date: Number(form.due_date),
-          penalty_per_day: form.penalty_per_day === '' ? 0 : Number(form.penalty_per_day),
-          binding_code: bindingCode,
-        },
-      ])
+      const payload = {
+        biz_type: form.biz_type,
+        cust_name: form.cust_name.trim(),
+        tenant_phone: form.tenant_phone.trim() || null,
+        tenant_id_card: form.tenant_id_card.trim() || null,
+        emergency_contact: form.emergency_contact.trim() || null,
+        item_details: form.item_details.trim(),
+        room_status: form.room_status,
+        amount: Number(form.amount),
+        cycle: form.cycle,
+        due_date: Number(form.due_date),
+        penalty_per_day: Number(form.penalty_per_day) || 0,
+        penalty_enabled: Boolean(form.penalty_enabled),
+        chase_frequency: Number(form.chase_frequency) || 3,
+        stop_chase: Number(form.stop_chase) > 0,
+        credit_balance: 0,
+        deposit_amount: Number(form.deposit_amount) || 0,
+        move_in_date: form.move_in_date || null,
+        lease_end_date: form.lease_end_date || null,
+        last_water_meter: Number(form.last_water_meter) || 0,
+        water_rate: Number(form.water_rate) || 0,
+        last_elec_meter: Number(form.last_elec_meter) || 0,
+        elec_rate: Number(form.elec_rate) || 0,
+        utility_enabled: Boolean(form.utility_enabled),
+        binding_code: bindingCode,
+      }
+      const { error: insertError } = await supabase.from('rentals').insert([payload])
       if (insertError) throw insertError
       onCreated({ bindingCode, custName: form.cust_name.trim() })
       onClose()
@@ -544,112 +868,156 @@ function AddRentalModal({ open, onClose, onCreated }) {
               </div>
             )}
 
-            <div>
-              <label htmlFor="biz_type" className="mb-1.5 block text-sm font-medium text-gray-700">
-                ประเภทธุรกิจ <span className="text-rose-500">*</span>
-              </label>
-              <select id="biz_type" value={form.biz_type} onChange={updateField('biz_type')} required className={inputClass}>
-                <option value="" disabled>เลือกประเภทธุรกิจ</option>
-                {BIZ_TYPES.map((type) => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
-              </select>
-            </div>
+            <CollapsibleSection title="ข้อมูลสัญญาเช่า" subtitle="ข้อมูลหลักของสัญญา" icon="document" defaultOpen>
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="biz_type" className="mb-1.5 block text-sm font-medium text-gray-700">
+                    ประเภทธุรกิจ <span className="text-rose-500">*</span>
+                  </label>
+                  <select id="biz_type" value={form.biz_type} onChange={updateField('biz_type')} required className={inputClass}>
+                    <option value="" disabled>เลือกประเภทธุรกิจ</option>
+                    {BIZ_TYPES.map((type) => (
+                      <option key={type.value} value={type.value}>{type.label}</option>
+                    ))}
+                  </select>
+                </div>
 
-            <div>
-              <label htmlFor="cust_name" className="mb-1.5 block text-sm font-medium text-gray-700">
-                ชื่อผู้เช่า <span className="text-rose-500">*</span>
-              </label>
-              <input
-                id="cust_name"
-                type="text"
-                value={form.cust_name}
-                onChange={updateField('cust_name')}
-                placeholder="เช่น นายสมชาย ใจดี"
-                required
-                className={inputClass}
-              />
-            </div>
+                <div>
+                  <label htmlFor="cust_name" className="mb-1.5 block text-sm font-medium text-gray-700">
+                    ชื่อผู้เช่า <span className="text-rose-500">*</span>
+                  </label>
+                  <input id="cust_name" type="text" value={form.cust_name} onChange={updateField('cust_name')} placeholder="เช่น นายสมชาย ใจดี" required className={inputClass} />
+                </div>
 
-            <div>
-              <label htmlFor="item_details" className="mb-1.5 block text-sm font-medium text-gray-700">
-                รายละเอียดสินทรัพย์
-              </label>
-              <input
-                id="item_details"
-                type="text"
-                value={form.item_details}
-                onChange={updateField('item_details')}
-                placeholder="เช่น ห้อง 401, รถ กก-1234"
-                className={inputClass}
-              />
-            </div>
+                <div>
+                  <label htmlFor="item_details" className="mb-1.5 block text-sm font-medium text-gray-700">
+                    รายละเอียดสินทรัพย์
+                  </label>
+                  <input id="item_details" type="text" value={form.item_details} onChange={updateField('item_details')} placeholder={ITEM_PLACEHOLDERS[form.biz_type] || 'เช่น ห้อง 401, รถ กก-1234'} className={inputClass} />
+                </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="amount" className="mb-1.5 block text-sm font-medium text-gray-700">
-                  ค่าเช่า / ค่างวด <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  id="amount"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.amount}
-                  onChange={updateField('amount')}
-                  placeholder="0.00"
-                  required
-                  className={inputClass}
-                />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="amount" className="mb-1.5 block text-sm font-medium text-gray-700">
+                      ค่าเช่า / ค่างวด <span className="text-rose-500">*</span>
+                    </label>
+                    <input id="amount" type="number" min="0" step="0.01" value={form.amount} onChange={updateField('amount')} placeholder="0.00" required className={inputClass} />
+                  </div>
+                  <div>
+                    <label htmlFor="cycle" className="mb-1.5 block text-sm font-medium text-gray-700">
+                      รอบการเก็บเงิน <span className="text-rose-500">*</span>
+                    </label>
+                    <select id="cycle" value={form.cycle} onChange={updateField('cycle')} required className={inputClass}>
+                      {Object.entries(CYCLE_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="due_date" className="mb-1.5 block text-sm font-medium text-gray-700">
+                    วันครบกำหนดชำระ (1-31) <span className="text-rose-500">*</span>
+                  </label>
+                  <input id="due_date" type="number" min="1" max="31" step="1" value={form.due_date} onChange={updateField('due_date')} placeholder="เช่น 1" required className={inputClass} />
+                </div>
               </div>
+            </CollapsibleSection>
 
-              <div>
-                <label htmlFor="cycle" className="mb-1.5 block text-sm font-medium text-gray-700">
-                  รอบการเก็บเงิน <span className="text-rose-500">*</span>
-                </label>
-                <select id="cycle" value={form.cycle} onChange={updateField('cycle')} required className={inputClass}>
-                  {Object.entries(CYCLE_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>{label}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
+            <CollapsibleSection title="ข้อมูลผู้เช่าและสัญญา" subtitle="ข้อมูลติดต่อและช่วงเวลาสัญญา" icon="building">
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="tenant_phone" className="mb-1.5 block text-sm font-medium text-gray-700">เบอร์โทรผู้เช่า</label>
+                    <input id="tenant_phone" type="text" value={form.tenant_phone} onChange={updateField('tenant_phone')} placeholder="08x-xxx-xxxx" className={inputClass} />
+                  </div>
+                  <div>
+                    <label htmlFor="tenant_id_card" className="mb-1.5 block text-sm font-medium text-gray-700">เลขบัตรประชาชน</label>
+                    <input id="tenant_id_card" type="text" value={form.tenant_id_card} onChange={updateField('tenant_id_card')} placeholder="x-xxxx-xxxxx-xx-x" className={inputClass} />
+                  </div>
+                </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="due_date" className="mb-1.5 block text-sm font-medium text-gray-700">
-                  วันครบกำหนด (1-31) <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  id="due_date"
-                  type="number"
-                  min="1"
-                  max="31"
-                  step="1"
-                  value={form.due_date}
-                  onChange={updateField('due_date')}
-                  placeholder="เช่น 1"
-                  required
-                  className={inputClass}
-                />
-              </div>
+                <div>
+                  <label htmlFor="emergency_contact" className="mb-1.5 block text-sm font-medium text-gray-700">เบอร์ติดต่อฉุกเฉิน</label>
+                  <input id="emergency_contact" type="text" value={form.emergency_contact} onChange={updateField('emergency_contact')} placeholder="08x-xxx-xxxx" className={inputClass} />
+                </div>
 
-              <div>
-                <label htmlFor="penalty_per_day" className="mb-1.5 block text-sm font-medium text-gray-700">
-                  ค่าปรับต่อวัน
-                </label>
-                <input
-                  id="penalty_per_day"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.penalty_per_day}
-                  onChange={updateField('penalty_per_day')}
-                  placeholder="0.00"
-                  className={inputClass}
-                />
+                <div>
+                  <label htmlFor="room_status" className="mb-1.5 block text-sm font-medium text-gray-700">สถานะห้อง/สินทรัพย์</label>
+                  <select id="room_status" value={form.room_status} onChange={updateField('room_status')} className={inputClass}>
+                    <option value="occupied">ไม่ว่าง (occupied)</option>
+                    <option value="vacant">ว่าง (vacant)</option>
+                    <option value="maintenance">ซ่อมบำรุง (maintenance)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="deposit_amount" className="mb-1.5 block text-sm font-medium text-gray-700">เงินประกัน</label>
+                  <input id="deposit_amount" type="number" min="0" step="0.01" value={form.deposit_amount} onChange={updateField('deposit_amount')} placeholder="0.00" className={inputClass} />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="move_in_date" className="mb-1.5 block text-sm font-medium text-gray-700">วันที่ย้ายเข้า</label>
+                    <input id="move_in_date" type="date" value={form.move_in_date} onChange={updateField('move_in_date')} className={inputClass} />
+                  </div>
+                  <div>
+                    <label htmlFor="lease_end_date" className="mb-1.5 block text-sm font-medium text-gray-700">วันสิ้นสุดสัญญา</label>
+                    <input id="lease_end_date" type="date" value={form.lease_end_date} onChange={updateField('lease_end_date')} className={inputClass} />
+                  </div>
+                </div>
               </div>
-            </div>
+            </CollapsibleSection>
+
+            <CollapsibleSection title="การตั้งค่าทวงเงินและค่าน้ำไฟ" subtitle="ค่าปรับ การทวงหนี้ และมิเตอร์" icon="banknotes">
+              <div className="space-y-4">
+                <Toggle checked={form.penalty_enabled} onChange={(v) => setField('penalty_enabled', v)} label="เปิดใช้ค่าปรับ" />
+
+                {form.penalty_enabled && (
+                  <div>
+                    <label htmlFor="penalty_per_day" className="mb-1.5 block text-sm font-medium text-gray-700">ค่าปรับต่อวัน (บาท)</label>
+                    <input id="penalty_per_day" type="number" min="0" step="0.01" value={form.penalty_per_day} onChange={updateField('penalty_per_day')} placeholder="0.00" className={inputClass} />
+                  </div>
+                )}
+
+                <div>
+                  <label htmlFor="chase_frequency" className="mb-1.5 block text-sm font-medium text-gray-700">ความถี่ทวงหนี้</label>
+                  <select id="chase_frequency" value={form.chase_frequency} onChange={updateField('chase_frequency')} className={inputClass}>
+                    <option value={3}>ทุก 3 วัน</option>
+                    <option value={7}>ทุก 7 วัน</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="stop_chase" className="mb-1.5 block text-sm font-medium text-gray-700">หยุดทวงหนี้หลังจาก (วัน)</label>
+                  <input id="stop_chase" type="number" min="0" step="1" value={form.stop_chase} onChange={updateField('stop_chase')} placeholder="เช่น 30 (0 = ไม่หยุด)" className={inputClass} />
+                </div>
+
+                <Toggle checked={form.utility_enabled} onChange={(v) => setField('utility_enabled', v)} label="คิดค่าน้ำไฟ" />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="last_water_meter" className="mb-1.5 block text-sm font-medium text-gray-700">เลขมิเตอร์น้ำล่าสุด</label>
+                    <input id="last_water_meter" type="number" min="0" step="1" value={form.last_water_meter} onChange={updateField('last_water_meter')} placeholder="0" className={inputClass} />
+                  </div>
+                  <div>
+                    <label htmlFor="water_rate" className="mb-1.5 block text-sm font-medium text-gray-700">ค่าน้ำ/หน่วย (บาท)</label>
+                    <input id="water_rate" type="number" min="0" step="0.01" value={form.water_rate} onChange={updateField('water_rate')} placeholder="0.00" className={inputClass} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="last_elec_meter" className="mb-1.5 block text-sm font-medium text-gray-700">เลขมิเตอร์ไฟล่าสุด</label>
+                    <input id="last_elec_meter" type="number" min="0" step="1" value={form.last_elec_meter} onChange={updateField('last_elec_meter')} placeholder="0" className={inputClass} />
+                  </div>
+                  <div>
+                    <label htmlFor="elec_rate" className="mb-1.5 block text-sm font-medium text-gray-700">ค่าไฟ/หน่วย (บาท)</label>
+                    <input id="elec_rate" type="number" min="0" step="0.01" value={form.elec_rate} onChange={updateField('elec_rate')} placeholder="0.00" className={inputClass} />
+                  </div>
+                </div>
+              </div>
+            </CollapsibleSection>
           </div>
 
           <div className="flex items-center justify-end gap-3 border-t border-gray-100 bg-gray-50 px-6 py-4">
@@ -765,6 +1133,289 @@ function LineBindingModal({ code, custName, onClose }) {
             className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500"
           >
             เข้าใจแล้ว
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MeterBillModal({ rental, onClose, onConfirm }) {
+  const [waterCurrent, setWaterCurrent] = useState('')
+  const [elecCurrent, setElecCurrent] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (rental) {
+      setWaterCurrent('')
+      setElecCurrent('')
+      setSaving(false)
+    }
+  }, [rental])
+
+  if (!rental) return null
+
+  const utilityEnabled = Boolean(rental.utility_enabled)
+  const amount = Number(getValue(rental, AMOUNT_KEYS)) || 0
+  const lastWater = Number(rental.last_water_meter) || 0
+  const lastElec = Number(rental.last_elec_meter) || 0
+  const waterRate = Number(rental.water_rate) || 0
+  const elecRate = Number(rental.elec_rate) || 0
+
+  const curWater = Number(waterCurrent) || 0
+  const curElec = Number(elecCurrent) || 0
+  const waterUnits = Math.max(0, curWater - lastWater)
+  const waterCost = waterUnits * waterRate
+  const elecUnits = Math.max(0, curElec - lastElec)
+  const elecCost = elecUnits * elecRate
+  const totalAmount = amount + (utilityEnabled ? waterCost + elecCost : 0)
+
+  const handleConfirm = async () => {
+    setSaving(true)
+    try {
+      await onConfirm(rental, { waterCurrent, elecCurrent })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+      <div className="relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-start justify-between border-b border-gray-100 px-6 py-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-600/30">
+              <Icon name="banknotes" className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">บันทึกมิเตอร์และสร้างบิล</h2>
+              <p className="mt-0.5 text-sm text-gray-500">{rental.cust_name} · {rental.item_details}</p>
+            </div>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600" aria-label="ปิด">
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
+          <div className="rounded-xl bg-indigo-50 px-4 py-3 text-sm text-indigo-700">
+            ค่าเช่า / ค่างวด: <span className="font-semibold">{formatCurrency(amount)}</span>
+          </div>
+
+          {utilityEnabled ? (
+            <>
+              <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
+                <p className="text-sm font-semibold text-blue-700">ค่าน้ำ</p>
+                <div className="mt-2 grid grid-cols-2 gap-3 text-xs text-gray-600">
+                  <div className="rounded-lg bg-white p-2.5">มิเตอร์เดือนก่อน: <span className="font-semibold text-gray-900">{lastWater}</span></div>
+                  <div className="rounded-lg bg-white p-2.5">อัตรา: <span className="font-semibold text-gray-900">{waterRate} บาท/หน่วย</span></div>
+                </div>
+                <label htmlFor="water_current" className="mt-3 block text-sm font-medium text-gray-700">เลขมิเตอร์น้ำปัจจุบัน</label>
+                <input id="water_current" type="number" min="0" step="1" value={waterCurrent} onChange={(e) => setWaterCurrent(e.target.value)} placeholder="เช่น 150" className={inputClass} />
+                <p className="mt-2 text-xs text-gray-500">ใช้ไป {waterUnits} หน่วย = {formatCurrency(waterCost)}</p>
+              </div>
+
+              <div className="rounded-2xl border border-amber-100 bg-amber-50/50 p-4">
+                <p className="text-sm font-semibold text-amber-700">ค่าไฟ</p>
+                <div className="mt-2 grid grid-cols-2 gap-3 text-xs text-gray-600">
+                  <div className="rounded-lg bg-white p-2.5">มิเตอร์เดือนก่อน: <span className="font-semibold text-gray-900">{lastElec}</span></div>
+                  <div className="rounded-lg bg-white p-2.5">อัตรา: <span className="font-semibold text-gray-900">{elecRate} บาท/หน่วย</span></div>
+                </div>
+                <label htmlFor="elec_current" className="mt-3 block text-sm font-medium text-gray-700">เลขมิเตอร์ไฟปัจจุบัน</label>
+                <input id="elec_current" type="number" min="0" step="1" value={elecCurrent} onChange={(e) => setElecCurrent(e.target.value)} placeholder="เช่น 2500" className={inputClass} />
+                <p className="mt-2 text-xs text-gray-500">ใช้ไป {elecUnits} หน่วย = {formatCurrency(elecCost)}</p>
+              </div>
+            </>
+          ) : (
+            <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-500">ห้องนี้ไม่ได้เปิดใช้งานระบบน้ำไฟ (ข้ามการคำนวณค่าน้ำ/ค่าไฟ)</div>
+          )}
+
+          <div className="rounded-2xl bg-gray-900 px-4 py-4 text-center text-white">
+            <p className="text-xs text-gray-300">ยอดรวมที่ต้องชำระ</p>
+            <p className="mt-1 text-2xl font-bold tracking-tight">{formatCurrency(totalAmount)}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 border-t border-gray-100 bg-gray-50 px-6 py-4">
+          <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-60">ยกเลิก</button>
+          <button type="button" onClick={handleConfirm} disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60">
+            {saving ? (<><svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" /></svg>กำลังสร้างบิล...</>) : 'สร้างบิล'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RenewModal({ rental, onClose, onConfirm }) {
+  const [date, setDate] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (rental) {
+      const defaultDate = rental.lease_end_date || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+      setDate(defaultDate)
+      setSaving(false)
+    }
+  }, [rental])
+
+  if (!rental) return null
+
+  const handleConfirm = async () => {
+    if (!date) return
+    setSaving(true)
+    try {
+      await onConfirm(rental, date)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+      <div className="relative w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-start justify-between border-b border-gray-100 px-6 py-5">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">ต่อสัญญา</h2>
+            <p className="mt-0.5 text-sm text-gray-500">{rental.cust_name} · {rental.item_details}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600" aria-label="ปิด">
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+        <div className="px-6 py-5">
+          <label htmlFor="renew_lease_end" className="mb-1.5 block text-sm font-medium text-gray-700">วันสิ้นสุดสัญญาใหม่</label>
+          <input id="renew_lease_end" type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
+        </div>
+        <div className="flex items-center justify-end gap-3 border-t border-gray-100 bg-gray-50 px-6 py-4">
+          <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-60">ยกเลิก</button>
+          <button type="button" onClick={handleConfirm} disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60">
+            {saving ? 'กำลังบันทึก...' : 'บันทึก'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function LeaseActionModal({ rental, mode, onClose, onConfirm }) {
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (rental) setSaving(false)
+  }, [rental])
+
+  if (!rental) return null
+
+  const isDelete = mode === 'delete'
+  const title = isDelete ? 'ลบข้อมูล' : 'ย้ายออก'
+  const message = isDelete
+    ? 'ข้อมูลและบิลทั้งหมดของห้องนี้จะถูกลบถาวร ไม่สามารถกู้คืนได้'
+    : 'ผู้เช่าได้ย้ายออกและห้องว่างแล้วใช่ไหม'
+  const confirmLabel = isDelete ? 'ลบข้อมูลถาวร' : 'ยืนยันย้ายออก'
+
+  const handleConfirm = async () => {
+    setSaving(true)
+    try {
+      await onConfirm(rental)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+      <div className="relative w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className={`px-6 py-5 text-white ${isDelete ? 'bg-rose-600' : 'bg-amber-500'}`}>
+          <h2 className="text-lg font-bold">{title}</h2>
+          <p className="mt-0.5 text-sm opacity-90">{rental.cust_name} · {rental.item_details}</p>
+        </div>
+        <div className="px-6 py-6">
+          <p className="text-sm leading-relaxed text-gray-600">{message}</p>
+        </div>
+        <div className="flex items-center justify-end gap-3 border-t border-gray-100 bg-gray-50 px-6 py-4">
+          <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-60">ยกเลิก</button>
+          <button type="button" onClick={handleConfirm} disabled={saving} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${isDelete ? 'bg-rose-600 hover:bg-rose-500' : 'bg-amber-500 hover:bg-amber-400'}`}>
+            {saving ? 'กำลังดำเนินการ...' : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AssetDetailModal({ rental, onClose }) {
+  if (!rental) return null
+
+  const fields = [
+    { key: 'tenant_phone', label: 'เบอร์โทรผู้เช่า' },
+    { key: 'tenant_id_card', label: 'เลขบัตรประชาชน' },
+    { key: 'emergency_contact', label: 'เบอร์ติดต่อฉุกเฉิน' },
+    { key: 'room_status', label: 'สถานะห้อง/สินทรัพย์' },
+    { key: 'deposit_amount', label: 'เงินประกัน' },
+    { key: 'move_in_date', label: 'วันที่ย้ายเข้า' },
+    { key: 'lease_end_date', label: 'วันสิ้นสุดสัญญา' },
+    { key: 'penalty_per_day', label: 'ค่าปรับต่อวัน' },
+    { key: 'penalty_enabled', label: 'เปิดใช้ค่าปรับ' },
+    { key: 'chase_frequency', label: 'ความถี่ทวงหนี้ (วัน)' },
+    { key: 'stop_chase', label: 'หยุดทวงหนี้' },
+    { key: 'last_water_meter', label: 'เลขมิเตอร์น้ำล่าสุด' },
+    { key: 'water_rate', label: 'ค่าน้ำ/หน่วย' },
+    { key: 'last_elec_meter', label: 'เลขมิเตอร์ไฟล่าสุด' },
+    { key: 'elec_rate', label: 'ค่าไฟ/หน่วย' },
+    { key: 'utility_enabled', label: 'คิดค่าน้ำไฟ' },
+    { key: 'group_id', label: 'LINE Group ID' },
+    { key: 'binding_code', label: 'รหัสผูกกลุ่ม (Binding Code)' },
+  ]
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+
+      <div className="relative flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-start justify-between border-b border-gray-100 px-6 py-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/30">
+              <Icon name="document" className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">ข้อมูลสินทรัพย์เพิ่มเติม</h2>
+              <p className="mt-0.5 text-sm text-gray-500">{rental.cust_name} · {rental.item_details}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+            aria-label="ปิด"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-5">
+          <dl className="divide-y divide-gray-100">
+            {fields.map((f) => (
+              <div key={f.key} className="flex items-start justify-between gap-4 py-3">
+                <dt className="text-sm text-gray-500">{f.label}</dt>
+                <dd className="text-right text-sm font-semibold text-gray-900">{renderDetailValue(f.key, rental[f.key])}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+
+        <div className="border-t border-gray-100 bg-gray-50 px-6 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500"
+          >
+            ปิด
           </button>
         </div>
       </div>
@@ -1300,9 +1951,16 @@ function App() {
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [bindingModal, setBindingModal] = useState(null)
-  const [generatingId, setGeneratingId] = useState(null)
+  const [detailRental, setDetailRental] = useState(null)
+  const [billRental, setBillRental] = useState(null)
+  const [renewRental, setRenewRental] = useState(null)
+  const [confirmAction, setConfirmAction] = useState(null)
   const [invoice, setInvoice] = useState(null)
   const [toast, setToast] = useState(null)
+  const [pendingReviews, setPendingReviews] = useState([])
+  const [pendingLoading, setPendingLoading] = useState(true)
+  const [pendingError, setPendingError] = useState(null)
+  const [reviewing, setReviewing] = useState(null)
   const [paymentInfo, setPaymentInfo] = useState({
     payment_type: 'promptpay',
     promptpay: '',
@@ -1376,27 +2034,105 @@ function App() {
     fetchPaymentInfo()
   }, [fetchPaymentInfo])
 
-  const handleGenerateBill = async (row) => {
-    setGeneratingId(row.id)
+  const fetchPendingReviews = useCallback(async () => {
+    setPendingLoading(true)
+    setPendingError(null)
+    try {
+      const { data, error: supabaseError } = await supabase
+        .from('transactions')
+        .select('*, rentals(cust_name, item_details)')
+        .eq('status', 'pending_review')
+      if (supabaseError) throw supabaseError
+      setPendingReviews(Array.isArray(data) ? data : [])
+    } catch (err) {
+      setPendingError(err?.message || 'เกิดข้อผิดพลาดในการดึงข้อมูล')
+    } finally {
+      setPendingLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchPendingReviews()
+  }, [fetchPendingReviews])
+
+  const handleReviewTransaction = async (id, newStatus) => {
+    if (!id) return
+    setReviewing({ id, status: newStatus })
     setToast(null)
     try {
-      const amount = Number(getValue(row, AMOUNT_KEYS))
+      const { error: updateError } = await supabase
+        .from('transactions')
+        .update({ status: newStatus })
+        .eq('id', id)
+      if (updateError) throw updateError
+      setToast({
+        type: 'success',
+        message:
+          newStatus === 'paid'
+            ? 'อนุมัติการชำระเงินเรียบร้อยแล้ว'
+            : 'ปฏิเสธการชำระเงินและเปลี่ยนกลับเป็น "รอชำระเงิน" แล้ว',
+      })
+      await fetchPendingReviews()
+    } catch (err) {
+      setToast({ type: 'error', message: err?.message || 'อัปเดตสถานะไม่สำเร็จ' })
+    } finally {
+      setReviewing(null)
+    }
+  }
+
+  const handleCreateBill = async (rental, meters) => {
+    setToast(null)
+    try {
+      const amount = Number(getValue(rental, AMOUNT_KEYS))
       const period = currentPeriod()
       const secureToken = generateSecureToken()
-      const custName = getValue(row, ['cust_name', 'tenant_name', 'customer', 'customer_name', 'name']) ?? 'ไม่ระบุ'
-      const itemDetails = getValue(row, ['item_details', 'property_name', 'property', 'unit', 'room']) ?? 'ไม่ระบุ'
+      const custName = getValue(rental, ['cust_name', 'tenant_name', 'customer', 'customer_name', 'name']) ?? 'ไม่ระบุ'
+      const itemDetails = getValue(rental, ['item_details', 'property_name', 'property', 'unit', 'room']) ?? 'ไม่ระบุ'
       const { data: rentalGroup } = await supabase
         .from('rentals')
         .select('group_id')
-        .eq('id', row.id)
+        .eq('id', rental.id)
         .maybeSingle()
       const lineGroupId = rentalGroup?.group_id || ''
+
+      const utilityEnabled = Boolean(rental.utility_enabled)
+      const lastWater = Number(rental.last_water_meter) || 0
+      const lastElec = Number(rental.last_elec_meter) || 0
+      const waterCurrent = utilityEnabled ? Number(meters?.waterCurrent) || 0 : 0
+      const elecCurrent = utilityEnabled ? Number(meters?.elecCurrent) || 0 : 0
+      const waterUnits = utilityEnabled ? Math.max(0, waterCurrent - lastWater) : 0
+      const waterCost = utilityEnabled ? waterUnits * (Number(rental.water_rate) || 0) : 0
+      const elecUnits = utilityEnabled ? Math.max(0, elecCurrent - lastElec) : 0
+      const elecCost = utilityEnabled ? elecUnits * (Number(rental.elec_rate) || 0) : 0
+      const totalAmount = amount + waterCost + elecCost
+
       const { data: tx, error: insertError } = await supabase
         .from('transactions')
-        .insert([{ base_amount: amount, status: 'unpaid', period, secure_token: secureToken, rental_id: row.id }])
+        .insert([{
+          rental_id: rental.id,
+          period,
+          base_amount: amount,
+          water_units: waterUnits,
+          water_cost: waterCost,
+          elec_units: elecUnits,
+          elec_cost: elecCost,
+          total_amount: totalAmount,
+          status: 'unpaid',
+          secure_token: secureToken,
+        }])
         .select()
         .single()
       if (insertError) throw insertError
+
+      // อัปเดตเลขมิเตอร์ล่าสุดใน rentals สำหรับเดือนถัดไป
+      if (utilityEnabled) {
+        const { error: updateError } = await supabase
+          .from('rentals')
+          .update({ last_water_meter: waterCurrent, last_elec_meter: elecCurrent })
+          .eq('id', rental.id)
+        if (updateError) throw updateError
+        fetchRentals()
+      }
 
       const billLink = `http://localhost:5173/bill/${secureToken}`
       const isBank = paymentInfo.payment_type === 'bank'
@@ -1411,11 +2147,16 @@ function App() {
       setInvoice({
         transactionId: tx.id,
         secureToken,
-        rentalId: row.id,
+        rentalId: rental.id,
         lineGroupId,
         custName,
         itemDetails,
-        total: amount,
+        total: totalAmount,
+        baseAmount: amount,
+        waterUnits,
+        waterCost,
+        elecUnits,
+        elecCost,
         period,
         paymentType: paymentInfo.payment_type || 'promptpay',
         promptpayName: accountName,
@@ -1423,15 +2164,51 @@ function App() {
         bankCode,
         bankAccount,
         paymentText,
-        qrUrl: isBank ? '' : `https://promptpay.io/${ppNumber}/${amount}.png`,
+        qrUrl: isBank ? '' : `https://promptpay.io/${ppNumber}/${totalAmount}.png`,
         billLink,
         status: 'unpaid',
         sent: false,
       })
+
+      setBillRental(null)
     } catch (err) {
       setToast({ type: 'error', message: err?.message || 'สร้างบิลไม่สำเร็จ' })
-    } finally {
-      setGeneratingId(null)
+    }
+  }
+
+  const handleRenew = async (rental, leaseEndDate) => {
+    try {
+      const { error } = await supabase.from('rentals').update({ lease_end_date: leaseEndDate }).eq('id', rental.id)
+      if (error) throw error
+      setToast({ type: 'success', message: 'ต่อสัญญาเรียบร้อยแล้ว' })
+      setRenewRental(null)
+      fetchRentals()
+    } catch (err) {
+      setToast({ type: 'error', message: err?.message || 'ต่อสัญญาไม่สำเร็จ' })
+    }
+  }
+
+  const handleConfirmAction = async (rental) => {
+    try {
+      if (confirmAction?.type === 'delete') {
+        const { error } = await supabase.from('rentals').delete().eq('id', rental.id)
+        if (error) throw error
+        setToast({ type: 'success', message: 'ลบข้อมูลเรียบร้อยแล้ว' })
+      } else {
+        const { error } = await supabase.from('rentals').update({
+          room_status: 'vacant',
+          cust_name: 'ว่าง',
+          tenant_phone: null,
+          tenant_id_card: null,
+          emergency_contact: null,
+        }).eq('id', rental.id)
+        if (error) throw error
+        setToast({ type: 'success', message: 'ย้ายออกเรียบร้อยแล้ว' })
+      }
+      setConfirmAction(null)
+      fetchRentals()
+    } catch (err) {
+      setToast({ type: 'error', message: err?.message || 'ดำเนินการไม่สำเร็จ' })
     }
   }
 
@@ -1503,7 +2280,7 @@ function App() {
   }
 
   const stats = useMemo(() => computeStats(rentals), [rentals])
-  const columns = useMemo(() => (rentals.length ? Object.keys(rentals[0]) : []), [rentals])
+  const columns = TABLE_COLUMNS
 
   const statCards = [
     { icon: 'document', label: 'สัญญาเช่าทั้งหมด', value: stats.total, iconClass: 'bg-indigo-600 shadow-indigo-600/30' },
@@ -1578,14 +2355,27 @@ function App() {
             ))}
           </div>
 
+          <PendingReviewSection
+            items={pendingReviews}
+            loading={pendingLoading}
+            error={pendingError}
+            reviewing={reviewing}
+            onApprove={(id) => handleReviewTransaction(id, 'paid')}
+            onReject={(id) => handleReviewTransaction(id, 'unpaid')}
+            onRetry={fetchPendingReviews}
+          />
+
           <RentalsTable
             rentals={rentals}
             loading={loading}
             error={error}
             columns={columns}
             onRetry={fetchRentals}
-            onGenerateBill={handleGenerateBill}
-            generatingId={generatingId}
+            onBillRequest={setBillRental}
+            onViewDetails={setDetailRental}
+            onRenew={setRenewRental}
+            onMoveOut={(rental) => setConfirmAction({ type: 'moveout', rental })}
+            onDelete={(rental) => setConfirmAction({ type: 'delete', rental })}
           />
         </main>
       </div>
@@ -1617,6 +2407,30 @@ function App() {
         code={bindingModal?.code}
         custName={bindingModal?.custName}
         onClose={() => setBindingModal(null)}
+      />
+
+      <AssetDetailModal
+        rental={detailRental}
+        onClose={() => setDetailRental(null)}
+      />
+
+      <MeterBillModal
+        rental={billRental}
+        onClose={() => setBillRental(null)}
+        onConfirm={handleCreateBill}
+      />
+
+      <RenewModal
+        rental={renewRental}
+        onClose={() => setRenewRental(null)}
+        onConfirm={handleRenew}
+      />
+
+      <LeaseActionModal
+        rental={confirmAction?.rental}
+        mode={confirmAction?.type}
+        onClose={() => setConfirmAction(null)}
+        onConfirm={handleConfirmAction}
       />
 
       <Toast toast={toast} onClose={closeToast} />
