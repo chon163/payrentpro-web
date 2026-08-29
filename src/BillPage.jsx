@@ -28,6 +28,7 @@ function BillPage() {
   const [notFound, setNotFound] = useState(false)
   const [qrError, setQrError] = useState(false)
   const [marking, setMarking] = useState(false)
+  const [customAmount, setCustomAmount] = useState('')
   const [paymentInfo, setPaymentInfo] = useState({
     payment_type: 'promptpay',
     promptpay: '',
@@ -106,16 +107,46 @@ function BillPage() {
     fetchPayment()
   }, [fetchPayment])
 
+  useEffect(() => {
+    if (bill) {
+      setCustomAmount(String(Number(bill.total_amount || bill.base_amount) || 0))
+    }
+  }, [bill])
+
   const handleMarkPaid = async () => {
     if (!bill) return
     setMarking(true)
     try {
+      const v = Number(customAmount)
+      const paidAmount = customAmount !== '' && Number.isFinite(v) && v > 0 ? v : total
       const { error } = await supabase
         .from('transactions')
-        .update({ status: 'pending_review' })
+        .update({ status: 'pending_review', paid_amount: paidAmount })
         .eq('id', bill.id)
       if (error) throw error
-      setBill((prev) => ({ ...prev, status: 'pending_review' }))
+      setBill((prev) => ({ ...prev, status: 'pending_review', paid_amount: paidAmount }))
+
+      const webhookUrl = import.meta.env.VITE_WEBHOOK_URL
+      if (webhookUrl) {
+        try {
+          await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'payment_review',
+              transaction_id: bill.id,
+              secure_token: bill.secure_token,
+              cust_name: custName,
+              item_details: itemDetails,
+              total_amount: total,
+              paid_amount: paidAmount,
+              bill_link: `http://localhost:5173/bill/${bill.secure_token}`,
+            }),
+          })
+        } catch (webhookErr) {
+          console.error('Payment webhook failed:', webhookErr)
+        }
+      }
     } catch (err) {
       console.error('Update status error:', err)
     } finally {
@@ -154,9 +185,11 @@ function BillPage() {
   const custName = rental?.cust_name ?? 'ไม่ระบุ'
   const itemDetails = rental?.item_details ?? 'ไม่ระบุ'
   const total = Number(bill.total_amount || bill.base_amount)
+  const customVal = Number(customAmount)
+  const paidAmount = customAmount !== '' && Number.isFinite(customVal) && customVal > 0 ? customVal : total
   const isBank = paymentInfo.payment_type === 'bank'
   const ppNumber = (paymentInfo.promptpay || '0812345678').replace(/[^0-9]/g, '')
-  const qrUrl = isBank ? '' : `https://promptpay.io/${ppNumber}/${total}.png`
+  const qrUrl = isBank ? '' : `https://promptpay.io/${ppNumber}/${paidAmount}.png`
   const accountName = paymentInfo.promptpay_name || ''
   const paymentText = isBank
     ? `โอนเข้าบัญชี ${bankName(paymentInfo.bank_code)} เลขที่ ${paymentInfo.bank_account} ชื่อบัญชี ${accountName}`
@@ -202,6 +235,22 @@ function BillPage() {
             <p className="text-xs font-medium text-gray-500">ยอดรวมที่ต้องจ่าย</p>
             <p className="mt-1 text-4xl font-bold tracking-tight text-rose-600">{formatCurrency(total)}</p>
           </div>
+
+          {!settled && (
+            <div className="mt-5 rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4">
+              <label htmlFor="custom_amount" className="mb-1.5 block text-sm font-medium text-gray-700">ระบุยอดที่ต้องการชำระ (บาท)</label>
+              <input
+                id="custom_amount"
+                type="number"
+                min="0"
+                step="0.01"
+                value={customAmount}
+                onChange={(e) => setCustomAmount(e.target.value)}
+                className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-right text-lg font-semibold tabular-nums text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+              <p className="mt-1.5 text-xs text-gray-500">QR Code จะอัปเดตตามยอดที่คุณกรอกทันที</p>
+            </div>
+          )}
 
           <div className="mt-5 flex flex-col items-center">
             {isBank ? (

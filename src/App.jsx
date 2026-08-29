@@ -1166,6 +1166,11 @@ function PendingReviewSection({ items, loading, error, reviewing, onApprove, onR
                     </span>
                   </div>
                   <p className="mt-1 text-sm text-gray-600">{itemDetails}</p>
+                  {item.paid_amount > 0 && (
+                    <p className="mt-1.5 text-sm font-semibold text-amber-700">
+                      ผู้เช่าแจ้งจ่ายยอด {formatCurrency(item.paid_amount)} (จากยอดรวม {formatCurrency(item.total_amount || item.base_amount)})
+                    </p>
+                  )}
                   {item.period ? <p className="mt-1 text-xs text-gray-400">รอบบิล {item.period}</p> : null}
                 </div>
                 <div className="flex shrink-0 flex-col items-start gap-3 sm:items-end">
