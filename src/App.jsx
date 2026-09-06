@@ -1,8 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { NavLink, useLocation } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { supabase } from './supabaseClient'
 import { BANKS, bankName } from './payment'
+import AuthPage from './AuthPage'
+import { createPromptpayQR } from './utils/promptpay'
+import { createReceiptPdf } from './utils/receipt'
+import { THAI_MONTHS, currentPeriod, formatPeriod } from './utils/period'
 
 const ICONS = {
   building:
@@ -55,15 +60,46 @@ const STATUS_LABELS = {
 }
 
 const BIZ_TYPES = [
-  { value: 'อสังหาริมทรัพย์', label: 'อสังหาริมทรัพย์ (ห้องเช่า, คอนโด, โกดัง)' },
-  { value: 'ยานพาหนะ', label: 'ยานพาหนะ (รถเช่า, แท็กซี่, รถบรรทุก)' },
-  { value: 'อุปกรณ์', label: 'อุปกรณ์ (เครื่องจักร, กล้องถ่ายวีดีโอ, อุปกรณ์งานแต่งงาน)' },
+  {
+    value: 'property',
+    label: 'อสังหาริมทรัพย์',
+    tab: 'อสังหา',
+    icon: '🏠',
+    examples: 'หอพัก/ห้องเช่า',
+    itemLabel: 'ห้อง/รายการห้อง',
+    placeholder: 'เช่น ห้อง 401, คอนโด, โกดัง A',
+  },
+  {
+    value: 'vehicle',
+    label: 'ยานพาหนะ',
+    tab: 'ยานพาหนะ',
+    icon: '🚗',
+    examples: 'รถเช่า/แท็กซี่',
+    itemLabel: 'ทะเบียน/รถคันที่',
+    placeholder: 'เช่น รถ กก-1234, แท็กซี่ ทส-5678',
+  },
+  {
+    value: 'other',
+    label: 'อุปกรณ์/อื่นๆ',
+    tab: 'อุปกรณ์/อื่นๆ',
+    icon: '🛠️',
+    examples: 'เครื่องจักร/กล้อง/บริการรายเดือน',
+    itemLabel: 'ชื่ออุปกรณ์/รายการ',
+    placeholder: 'เช่น กล้อง Sony A7, เครื่องจักร CNC-01',
+  },
 ]
 
-const ITEM_PLACEHOLDERS = {
-  'อสังหาริมทรัพย์': 'เช่น ห้อง 401, คอนโด, โกดัง A',
-  'ยานพาหนะ': 'เช่น รถ กก-1234, แท็กซี่',
-  'อุปกรณ์': 'เช่น กล้อง Sony A7, เครื่องจักร',
+// แปลง biz_type จากทุกฟอร์แมต (ค่าใหม่ property/vehicle/other หรือค่าไทยเดิมสมัยแรก) ให้เป็นค่ามาตรฐาน
+function normalizeBizType(value) {
+  const raw = String(value ?? '').trim().toLowerCase()
+  if (raw === 'vehicle' || raw.includes('ยานพาหนะ')) return 'vehicle'
+  if (raw === 'other' || raw.includes('อุปกรณ์')) return 'other'
+  return 'property'
+}
+
+function bizTypeMeta(value) {
+  const key = normalizeBizType(value)
+  return BIZ_TYPES.find((t) => t.value === key) || BIZ_TYPES[0]
 }
 
 const CYCLE_LABELS = {
@@ -74,77 +110,6 @@ const CYCLE_LABELS = {
 
 const AMOUNT_KEYS = ['amount', 'rent', 'rent_amount', 'monthly_rent', 'price', 'total', 'balance', 'deposit']
 const DATE_KEYS = ['due_date', 'due', 'due_at', 'paid_at', 'payment_date', 'payment_at', 'created_at', 'date', 'start_date', 'end_date']
-
-const COLUMN_LABELS = {
-  id: 'ID',
-  tenant_name: 'ผู้เช่า',
-  tenant: 'ผู้เช่า',
-  customer: 'ผู้เช่า',
-  customer_name: 'ผู้เช่า',
-  name: 'ชื่อ',
-  full_name: 'ชื่อ-นามสกุล',
-  property_name: 'ทรัพย์สิน',
-  property: 'ทรัพย์สิน',
-  unit: 'ยูนิต/ห้อง',
-  room: 'ห้อง',
-  address: 'ที่อยู่',
-  building: 'อาคาร',
-  amount: 'จำนวนเงิน',
-  rent: 'ค่าเช่า',
-  rent_amount: 'ค่าเช่า',
-  monthly_rent: 'ค่าเช่ารายเดือน',
-  price: 'ราคา',
-  total: 'ยอดรวม',
-  balance: 'ยอดคงเหลือ',
-  deposit: 'เงินประกัน',
-  due_date: 'ครบกำหนดชำระ',
-  due: 'ครบกำหนด',
-  due_at: 'ครบกำหนด',
-  paid_at: 'ชำระเมื่อ',
-  payment_date: 'วันที่ชำระ',
-  payment_at: 'วันที่ชำระ',
-  created_at: 'สร้างเมื่อ',
-  date: 'วันที่',
-  start_date: 'วันที่เริ่ม',
-  end_date: 'วันที่สิ้นสุด',
-  status: 'สถานะ',
-  payment_status: 'สถานะชำระ',
-  phone: 'เบอร์โทร',
-  contact: 'ช่องทางติดต่อ',
-  email: 'อีเมล',
-  biz_type: 'ประเภทธุรกิจ',
-  cust_name: 'ชื่อผู้เช่า',
-  item_details: 'รายละเอียดสินทรัพย์',
-  cycle: 'รอบการเก็บเงิน',
-  penalty_per_day: 'ค่าปรับต่อวัน',
-}
-
-const TABLE_COLUMNS = ['biz_type', 'cust_name', 'item_details', 'amount', 'cycle', 'due_date', 'room_status']
-
-// responsive: ซ่อนคอลัมน์รองบนจอมือถือ/แท็บเล็ต
-const COLUMN_RESPONSIVE = {
-  biz_type: '',
-  cust_name: '',
-  item_details: 'hidden sm:table-cell',
-  amount: '',
-  cycle: 'hidden md:table-cell',
-  due_date: 'hidden md:table-cell',
-  room_status: 'hidden lg:table-cell',
-}
-
-// ความกว้างคอลัมน์ (table-fixed): กำหนดให้พอดีจอเดสก์ท็อปโดยไม่ต้องเลื่อน
-const COLUMN_WIDTH = {
-  biz_type: 'w-[15%]',
-  cust_name: 'w-[15%]',
-  amount: 'w-[12%]',
-  cycle: 'w-[10%]',
-  due_date: 'w-[10%]',
-  room_status: 'w-[10%]',
-  // item_details (รายละเอียดสินทรัพย์) รับความกว้างส่วนที่เหลือ
-}
-
-// คอลัมน์ข้อความยาว ให้ตัดเป็นจุดไข่ปลาแทนการดันตาราง
-const TRUNCATE_COLUMNS = new Set(['item_details', 'cust_name'])
 
 function getValue(row, keys) {
   if (!row) return undefined
@@ -168,15 +133,6 @@ function formatDate(value) {
   return new Intl.DateTimeFormat('th-TH', { day: '2-digit', month: 'short', year: 'numeric' }).format(d)
 }
 
-const THAI_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.']
-
-function currentPeriod() {
-  const now = new Date()
-  const month = THAI_MONTHS[now.getMonth()]
-  const year = String((now.getFullYear() + 543) % 100).padStart(2, '0')
-  return `${month} ${year}`
-}
-
 function generateSecureToken() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID().replace(/-/g, '')
@@ -198,20 +154,21 @@ function mockThaiId() {
 }
 
 // สร้างข้อมูลจำลอง (mock) สำหรับฟอร์ม เพื่อให้ทดสอบง่าย
-function buildMockForm() {
+// (รับ bizType ตอนกดเลือกการ์ดประเภท — ไม่ส่งจะสุ่มเอง)
+function buildMockForm(bizTypeArg) {
   const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
   const phone = () => `08${randInt(10000000, 99999999)}`
   const pad = (n) => String(n).padStart(2, '0')
   const localDate = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 
-  const bizType = pick(['อสังหาริมทรัพย์', 'ยานพาหนะ', 'อุปกรณ์'])
+  const bizType = bizTypeArg || pick(['property', 'property', 'vehicle', 'other'])
   const items = {
-    'อสังหาริมทรัพย์': ['ห้อง 401', 'คอนโด C-1205', 'โกดัง A', 'บ้านเดี่ยว 88/1', 'ห้อง 202'],
-    'ยานพาหนะ': ['รถ กก-1234', 'แท็กซี่ ทส-5678', 'รถบรรทุก 70-8899', 'มอเตอร์ไซค์ 1กข-3456'],
-    'อุปกรณ์': ['กล้อง Sony A7', 'เครื่องจักร CNC-01', 'โดรน DJI Mavic', 'เครื่องเสียงงานแต่ง'],
+    property: ['ห้อง 401', 'คอนโด C-1205', 'โกดัง A', 'บ้านเดี่ยว 88/1', 'ห้อง 202'],
+    vehicle: ['รถ กก-1234', 'แท็กซี่ ทส-5678', 'รถบรรทุก 70-8899', 'มอเตอร์ไซค์ 1กข-3456'],
+    other: ['กล้อง Sony A7', 'เครื่องจักร CNC-01', 'โดรน DJI Mavic', 'เครื่องเสียงงานแต่ง'],
   }
-  const amount = bizType === 'อสังหาริมทรัพย์' ? randInt(3000, 15000) : bizType === 'ยานพาหนะ' ? randInt(800, 5000) : randInt(500, 3000)
+  const amount = bizType === 'property' ? randInt(3000, 15000) : bizType === 'vehicle' ? randInt(800, 5000) : randInt(500, 3000)
 
   const now = new Date()
   const moveIn = new Date(now)
@@ -237,11 +194,11 @@ function buildMockForm() {
     penalty_per_day: String(randInt(50, 200)),
     chase_frequency: pick([3, 7]),
     stop_chase: String(randInt(0, 90)),
-    utility_enabled: true,
-    last_water_meter: String(randInt(0, 500)),
-    water_rate: '18',
-    last_elec_meter: String(randInt(0, 5000)),
-    elec_rate: '5',
+    utility_enabled: bizType === 'property',
+    last_water_meter: bizType === 'property' ? String(randInt(0, 500)) : '0',
+    water_rate: bizType === 'property' ? '18' : '0',
+    last_elec_meter: bizType === 'property' ? String(randInt(0, 5000)) : '0',
+    elec_rate: bizType === 'property' ? '5' : '0',
   }
 }
 
@@ -319,32 +276,6 @@ function txAmount(tx) {
   return Number(tx?.total_amount ?? tx?.base_amount ?? 0)
 }
 
-async function sendLineWebhook(inv) {
-  const webhookUrl = import.meta.env.VITE_WEBHOOK_URL
-  if (!webhookUrl) throw new Error('ไม่พบ Webhook URL (VITE_WEBHOOK_URL)')
-  const billLink = inv.billLink || `http://localhost:5173/bill/${inv.secureToken}`
-  const res = await fetch(webhookUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      action: 'generate_bill',
-      rental_id: inv.rentalId,
-      line_group_id: inv.lineGroupId || '',
-      cust_name: inv.custName,
-      item_details: inv.itemDetails,
-      total_amount: inv.total,
-      bill_link: billLink,
-      payment_type: inv.paymentType || 'promptpay',
-      promptpay_name: inv.promptpayName || '',
-      qr_url: inv.qrUrl || '',
-      bank_code: inv.bankCode || '',
-      bank_account: inv.bankAccount || '',
-      payment_text: inv.paymentText || '',
-    }),
-  })
-  if (!res.ok) throw new Error(`Webhook HTTP ${res.status}`)
-}
-
 function computeStats(rows) {
   let totalAmount = 0
   let hasAmount = false
@@ -368,16 +299,6 @@ function computeStats(rows) {
     if (row?.lease_end_date && rs !== 'vacant' && isExpiringSoon(row.lease_end_date)) expiringSoon += 1
   }
   return { total: rows.length, totalAmount: hasAmount ? totalAmount : null, overdue, paid, vacant, occupied, expiringSoon }
-}
-
-function titleCase(key) {
-  return String(key)
-    .replace(/[_-]+/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase())
-}
-
-function labelColumn(key) {
-  return COLUMN_LABELS[key] ?? titleCase(key)
 }
 
 function isAmountColumn(key) {
@@ -442,6 +363,7 @@ const CARD_TONES = {
   green: { card: 'border-green-100 bg-green-50', text: 'text-green-600', icon: 'bg-green-100 text-green-600' },
   red: { card: 'border-red-100 bg-red-50', text: 'text-red-600', icon: 'bg-red-100 text-red-600' },
   orange: { card: 'border-orange-100 bg-orange-50', text: 'text-orange-600', icon: 'bg-orange-100 text-orange-600' },
+  yellow: { card: 'border-yellow-200 bg-yellow-50', text: 'text-yellow-700', icon: 'bg-yellow-100 text-yellow-700' },
 }
 
 function StatCard({ icon, label, value, tone = 'blue', onClick }) {
@@ -531,7 +453,7 @@ function OccupancyDonut({ occupied, vacant }) {
         </div>
         <span className="text-lg font-bold text-blue-600">{total ? Math.round((occupied / total) * 100) : 0}%</span>
       </div>
-      <div className="h-56">
+      <div className="h-44">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie data={data} dataKey="value" nameKey="name" innerRadius={60} outerRadius={85} paddingAngle={3}>
@@ -555,7 +477,7 @@ function RevenueBar({ monthly }) {
         <h3 className="text-base font-bold text-gray-900">รายงานรายได้ vs ค้างชำระ (6 เดือนล่าสุด)</h3>
         <p className="text-xs text-gray-500">เปรียบเทียบยอดชำระแล้วกับยอดค้างชำระ (ย้อนหลัง 6 เดือน)</p>
       </div>
-      <div className="h-64">
+      <div className="h-48">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -572,49 +494,86 @@ function RevenueBar({ monthly }) {
   )
 }
 
-function UrgentAlertsPanel({ expiring, overdue }) {
-  const hasData = expiring.length > 0 || overdue.length > 0
+function UrgentChaseSection({ overdue, sendingId, onSendBill, sendingReminder, onSendReminders }) {
+  const rows = useMemo(() => {
+    return [...(overdue || [])]
+      .sort((a, b) => Number(b.total_amount ?? 0) - Number(a.total_amount ?? 0))
+      .slice(0, 5)
+  }, [overdue])
+
+  if (rows.length === 0) return null
+
   return (
-    <section className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
-      <div className="flex items-center gap-2">
-        <Icon name="warning" className="h-5 w-5 text-amber-600" />
-        <h2 className="text-base font-bold text-amber-800">การแจ้งเตือนด่วน</h2>
-      </div>
-      {!hasData ? (
-        <p className="mt-3 rounded-xl bg-green-50 px-4 py-3 text-sm font-medium text-green-600">ไม่มีรายการด่วนในตอนนี้</p>
-      ) : (
-        <div className="mt-3 space-y-4">
-          {expiring.length > 0 && (
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">สัญญาเช่าที่จะหมดภายใน 7 วัน</p>
-              <ul className="mt-2 space-y-2">
-                {expiring.map((r) => (
-                  <li key={r.id} className="flex items-center justify-between gap-3 rounded-lg bg-white/70 px-3 py-2.5 text-sm">
-                    <span className="font-medium text-gray-800">{r.cust_name} · {r.item_details}</span>
-                    <span className="shrink-0 font-semibold text-amber-600">เหลือ {daysUntil(r.lease_end_date)} วัน</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {overdue.length > 0 && (
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">บิลค้างชำระเกิน 15 วัน</p>
-              <ul className="mt-2 space-y-2">
-                {overdue.map((t) => {
-                  const rental = Array.isArray(t.rentals) ? t.rentals[0] : t.rentals
-                  return (
-                    <li key={t.id} className="flex items-center justify-between gap-3 rounded-lg bg-white/70 px-3 py-2.5 text-sm">
-                      <span className="font-medium text-gray-800">{rental?.cust_name || 'ไม่ระบุ'}</span>
-                      <span className="shrink-0 font-semibold text-red-600">{formatCurrency(t.total_amount)}</span>
-                    </li>
-                  )
-                })}
-              </ul>
-            </div>
-          )}
+    <section className="mt-6 overflow-hidden rounded-2xl border border-rose-200 bg-white shadow-lg shadow-rose-100/60">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rose-100 bg-gradient-to-r from-rose-50 to-orange-50 px-5 py-5">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-rose-500 text-white shadow-lg shadow-rose-500/40">
+            <Icon name="warning" className="h-6 w-6" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold tracking-tight text-gray-900">ต้องทวงด่วน</h2>
+            <p className="text-sm text-rose-700">ค้างชำระเกิน 15 วัน เรียงยอดมากไปน้อย</p>
+          </div>
         </div>
-      )}
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onSendReminders}
+            disabled={sendingReminder}
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-base font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {sendingReminder ? (
+              <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
+              </svg>
+            ) : (
+              <span className="text-base leading-none">⏰</span>
+            )}
+            เตือนล่วงหน้า
+          </button>
+          <span className="inline-flex shrink-0 items-center rounded-full bg-rose-100 px-3 py-1 text-sm font-bold text-rose-700 ring-1 ring-inset ring-rose-200">
+            {overdue.length} ห้อง
+          </span>
+        </div>
+      </div>
+      <ul className="divide-y divide-gray-100">
+        {rows.map((item) => {
+          const rental = Array.isArray(item.rentals) ? item.rentals[0] : item.rentals
+          const room = rental?.item_details || item.item_details || 'ไม่ระบุ'
+          const custName = rental?.cust_name || item.cust_name || 'ไม่ระบุ'
+          const sending = sendingId === item.id
+          return (
+            <li key={item.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="truncate text-base font-bold text-gray-900">{room}</p>
+                <p className="mt-0.5 truncate text-base text-gray-600">{custName}</p>
+              </div>
+              <div className="flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:gap-5">
+                <p className="text-2xl font-bold tabular-nums text-rose-600 sm:text-right">{formatCurrency(item.total_amount)}</p>
+                <button
+                  type="button"
+                  onClick={() => onSendBill(item.id)}
+                  disabled={sending}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 px-5 py-3 text-base font-semibold text-white shadow-sm shadow-green-600/30 transition-colors hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                >
+                  {sending ? (
+                    <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
+                    </svg>
+                  ) : (
+                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
+                    </svg>
+                  )}
+                  ส่งบิล
+                </button>
+              </div>
+            </li>
+          )
+        })}
+      </ul>
     </section>
   )
 }
@@ -760,15 +719,41 @@ function PDPAConsentModal({ onAccept }) {
   )
 }
 
-function Sidebar() {
+const MEMBERSHIP_PLANS = {
+  trial: { label: 'ทดลองใช้', cls: 'bg-sky-100 text-sky-700 ring-sky-200' },
+  starter: { label: 'Starter', cls: 'bg-emerald-100 text-emerald-700 ring-emerald-200' },
+  founder: { label: 'ผู้ก่อตั้ง', cls: 'bg-violet-100 text-violet-700 ring-violet-200' },
+}
+
+function MembershipBadge({ membership }) {
+  if (!membership?.ok) return null
+  const expired = String(membership.status ?? '').toLowerCase() === 'expired'
+  const plan = String(membership.plan ?? '').toLowerCase()
+  const meta = MEMBERSHIP_PLANS[plan] || { label: plan || '—', cls: 'bg-gray-100 text-gray-600 ring-gray-200' }
+  const daysLeft = Number(membership.days_left)
+  const hasExpiry = !expired && Boolean(membership.expire_date) && Number.isFinite(daysLeft)
+  // ใกล้หมดอายุ (<= 3 วัน) หรือหมดอายุแล้ว → เปลี่ยนเป็นสีแดงทั้ง badge
+  const urgent = hasExpiry && daysLeft <= 3
+  return (
+    <span className={`mb-1 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold ring-1 ring-inset ${
+      expired || urgent ? 'bg-rose-100 text-rose-700 ring-rose-200' : meta.cls
+    }`}>
+      {expired ? 'หมดอายุ' : meta.label}
+      {hasExpiry && <span>· เหลือ {daysLeft} วัน</span>}
+    </span>
+  )
+}
+
+function Sidebar({ businessName, membership }) {
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-gray-200 bg-white lg:flex">
       <div className="flex items-center gap-3 border-b border-gray-100 px-6 py-6">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/30">
           <Icon name="building" className="h-6 w-6" />
         </div>
-        <div>
-          <p className="text-lg font-bold tracking-tight text-gray-900">PayRentPro</p>
+        <div className="min-w-0">
+          <MembershipBadge membership={membership} />
+          <p className="truncate text-lg font-bold tracking-tight text-gray-900">{businessName || 'PayRentPro'}</p>
           <p className="text-xs text-gray-500">ระบบจัดการค่าเช่า</p>
         </div>
       </div>
@@ -792,7 +777,7 @@ function Sidebar() {
 
         <button
           type="button"
-          onClick={() => console.log('logout')}
+          onClick={() => supabase.auth.signOut()}
           className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-600 transition-colors hover:bg-rose-50 hover:text-rose-700"
         >
           <Icon name="warning" className="h-5 w-5" />
@@ -826,8 +811,13 @@ function TableSkeleton() {
   )
 }
 
+const MENU_WIDTH = 208 // w-52 = 13rem
+
 function RowActionsMenu({ onViewDetails, onBillRequest, onRenew, onMoveOut, onDelete }) {
   const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState(null)
+  const buttonRef = useRef(null)
+  const menuRef = useRef(null)
 
   const items = [
     { label: 'ดูรายละเอียด', icon: 'M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z', className: 'text-gray-700', onClick: onViewDetails },
@@ -837,13 +827,63 @@ function RowActionsMenu({ onViewDetails, onBillRequest, onRenew, onMoveOut, onDe
     { label: 'ลบข้อมูล', icon: 'M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0', className: 'text-rose-600', onClick: onDelete },
   ]
 
+  const toggleMenu = () => {
+    if (open) {
+      setOpen(false)
+      return
+    }
+    const rect = buttonRef.current?.getBoundingClientRect()
+    if (!rect) {
+      setOpen(true)
+      return
+    }
+    // เปิดทางซ้ายของปุ่ม (ปุ่มอยู่ขวาสุดของแถว) และไม่ให้ล้นขอบขวา/ซ้ายของจอ
+    const left = Math.max(8, Math.min(rect.right - MENU_WIDTH, window.innerWidth - MENU_WIDTH - 8))
+    setPos({ left: Math.round(left), top: Math.round(rect.bottom + 4) })
+    setOpen(true)
+  }
+
+  // วัดความสูงจริงของเมนูหลัง render แล้ว flip ขึ้นถ้าใกล้ขอบล่างของจอ
+  // (ResizeObserver ช่วยวัดซ้ำเมื่อขนาดเมนูเปลี่ยน เช่น font/style โหลดช้า)
+  useLayoutEffect(() => {
+    if (!open || !menuRef.current || !buttonRef.current) return
+    const menu = menuRef.current
+    const update = () => {
+      const rect = buttonRef.current.getBoundingClientRect()
+      const menuH = menu.offsetHeight
+      const spaceBelow = window.innerHeight - 8 - rect.bottom
+      if (menuH > spaceBelow) {
+        const target = Math.max(8, Math.round(rect.top - 4 - menuH))
+        setPos((prev) => (prev.top === target ? prev : { ...prev, top: target }))
+      }
+    }
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(menu)
+    return () => observer.disconnect()
+  }, [open])
+
+  // เมนูเป็น fixed ไม่เลื่อนตามตาราง จึงปิดให้เมื่อผู้ใช้เลื่อนหน้าจอ
+  useEffect(() => {
+    if (!open) return
+    const close = () => setOpen(false)
+    window.addEventListener('scroll', close, true)
+    return () => window.removeEventListener('scroll', close, true)
+  }, [open])
+
   return (
-    <div className="relative">
+    <>
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+        onClick={toggleMenu}
         aria-label="เมนูจัดการ"
+        aria-expanded={open}
+        className={
+          open
+            ? 'relative z-[70] rounded-lg bg-gray-100 p-2 text-gray-700'
+            : 'rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700'
+        }
       >
         <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
           <circle cx="12" cy="5" r="1.5" />
@@ -852,42 +892,105 @@ function RowActionsMenu({ onViewDetails, onBillRequest, onRenew, onMoveOut, onDe
         </svg>
       </button>
 
-      {open && (
+      {open && pos && createPortal(
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} aria-hidden="true" />
-          <div className="absolute right-0 z-20 mt-1 w-48 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+          <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} aria-hidden="true" />
+          <div
+            ref={menuRef}
+            style={{ left: pos.left, top: pos.top }}
+            className="fixed z-[61] w-52 overflow-hidden rounded-xl border border-gray-200 bg-white py-1.5 shadow-xl"
+          >
             {items.map((item) => (
               <button
                 key={item.label}
                 type="button"
                 onClick={() => { setOpen(false); item.onClick() }}
-                className={`flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-sm font-medium transition-colors hover:bg-gray-50 ${item.className}`}
+                className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-base font-medium transition-colors hover:bg-gray-50 ${item.className}`}
               >
-                <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
                 </svg>
                 {item.label}
               </button>
             ))}
           </div>
-        </>
+        </>,
+        document.body
       )}
-    </div>
+    </>
   )
 }
 
-function RentalsTable({ rentals, loading, error, columns, onRetry, onBillRequest, onViewDetails, onRenew, onMoveOut, onDelete }) {
+function AssetStatusBadge({ status }) {
+  const key = String(status ?? '').toLowerCase()
+  if (key === 'occupied') {
+    return <span className="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-sm font-semibold text-green-700 ring-1 ring-inset ring-green-300">มีผู้เช่า</span>
+  }
+  if (key === 'vacant') {
+    return <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-sm font-semibold text-gray-600 ring-1 ring-inset ring-gray-300">ว่าง</span>
+  }
+  const label = key === 'maintenance' ? 'ซ่อมบำรุง' : (String(status) || 'อื่นๆ')
+  return <span className="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-sm font-semibold text-amber-700 ring-1 ring-inset ring-amber-300">{label}</span>
+}
+
+function AssetsView({ rentals, loading, error, search, onRetry, onBillRequest, onViewDetails, onRenew, onMoveOut, onDelete }) {
+  const [bizTab, setBizTab] = useState('all')
+  const keyword = (search ?? '').trim().toLowerCase()
+
+  // จำนวนต่อประเภท (นับจากทั้งหมด ไม่ขึ้นกับคำค้นหา)
+  const counts = { all: (rentals || []).length, property: 0, vehicle: 0, other: 0 }
+  for (const r of rentals || []) counts[normalizeBizType(r?.biz_type)] += 1
+
+  const filtered = (rentals || []).filter((r) => {
+    const matchKeyword = !keyword
+      || String(r?.cust_name ?? '').toLowerCase().includes(keyword)
+      || String(r?.item_details ?? '').toLowerCase().includes(keyword)
+    const matchTab = bizTab === 'all' || normalizeBizType(r?.biz_type) === bizTab
+    return matchKeyword && matchTab
+  })
+
+  const actions = (row) => (
+    <RowActionsMenu
+      onViewDetails={() => onViewDetails(row)}
+      onBillRequest={() => onBillRequest(row)}
+      onRenew={() => onRenew(row)}
+      onMoveOut={() => onMoveOut(row)}
+      onDelete={() => onDelete(row)}
+    />
+  )
+
   return (
     <div className="mt-8 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
       <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-6 py-5">
         <div>
           <h2 className="text-lg font-bold text-gray-900">ข้อมูลสัญญาเช่า</h2>
-          <p className="text-sm text-gray-500">
-            ดึงข้อมูลจากตาราง{' '}
-            <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-indigo-600">rentals</code>{' '}
-            จำนวน {rentals.length} รายการ
-          </p>
+          <p className="text-sm text-gray-500">จำนวน {filtered.length} รายการ{keyword ? ` (จากทั้งหมด ${rentals.length})` : ''}</p>
         </div>
+      </div>
+
+      {/* แท็ปกรองตามประเภทสินทรัพย์ */}
+      <div className="flex flex-wrap gap-2 border-b border-gray-100 px-6 py-3">
+        <button
+          type="button"
+          onClick={() => setBizTab('all')}
+          className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors ${
+            bizTab === 'all' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          ทั้งหมด {counts.all}
+        </button>
+        {BIZ_TYPES.map((t) => (
+          <button
+            key={t.value}
+            type="button"
+            onClick={() => setBizTab(t.value)}
+            className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors ${
+              bizTab === t.value ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            {t.icon} {t.tab} {counts[t.value]}
+          </button>
+        ))}
       </div>
 
       {loading ? (
@@ -908,58 +1011,86 @@ function RentalsTable({ rentals, loading, error, columns, onRetry, onBillRequest
             ลองอีกครั้ง
           </button>
         </div>
-      ) : rentals.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div className="p-10 text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-gray-400">
             <Icon name="document" className="h-6 w-6" />
           </div>
-          <h3 className="mt-4 text-base font-semibold text-gray-900">ยังไม่มีข้อมูล</h3>
-          <p className="mt-2 text-sm text-gray-500">ไม่พบข้อมูลในตาราง rentals ของ Supabase</p>
+          <h3 className="mt-4 text-base font-semibold text-gray-900">{keyword ? 'ไม่พบรายการที่ค้นหา' : 'ยังไม่มีข้อมูล'}</h3>
+          <p className="mt-2 text-sm text-gray-500">{keyword ? 'ลองเปลี่ยนคำค้นหา เช่น ชื่อผู้เช่า หรือชื่อห้อง' : 'ยังไม่มีสินทรัพย์ในระบบ'}</p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] table-fixed divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                {columns.map((column) => (
-                  <th
-                    key={column}
-                    className={`${COLUMN_RESPONSIVE[column] || ''} ${COLUMN_WIDTH[column] || ''} whitespace-nowrap px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500`}
-                  >
-                    {labelColumn(column)}
-                  </th>
-                ))}
-                <th className="w-[10%] whitespace-nowrap px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  จัดการ
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 bg-white">
-              {rentals.map((row, index) => (
-                <tr key={row.id ?? index} className="transition-colors hover:bg-gray-50">
-                  {columns.map((column) => (
-                    <td key={column} className={`${COLUMN_RESPONSIVE[column] || ''} whitespace-nowrap px-6 py-4 text-sm`}>
-                      {TRUNCATE_COLUMNS.has(column) ? (
-                        <div className="max-w-[200px] truncate">{renderCell(column, row[column])}</div>
-                      ) : (
-                        renderCell(column, row[column])
-                      )}
-                    </td>
-                  ))}
-                  <td className="whitespace-nowrap px-6 py-4 text-right text-sm">
-                    <RowActionsMenu
-                      onViewDetails={() => onViewDetails(row)}
-                      onBillRequest={() => onBillRequest(row)}
-                      onRenew={() => onRenew(row)}
-                      onMoveOut={() => onMoveOut(row)}
-                      onDelete={() => onDelete(row)}
-                    />
-                  </td>
+        <>
+          {/* ตารางเดสก์ท็อป */}
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[720px] divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr className="text-left text-sm font-semibold uppercase tracking-wide text-gray-500">
+                  <th className="px-6 py-3.5">ห้อง/รายการ</th>
+                  <th className="px-6 py-3.5">ผู้เช่า</th>
+                  <th className="px-6 py-3.5">ค่าเช่า</th>
+                  <th className="px-6 py-3.5">สถานะ</th>
+                  <th className="w-28 px-6 py-3.5 text-right">จัดการ</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {filtered.map((row, index) => (
+                  <tr
+                    key={row.id ?? index}
+                    onClick={() => onViewDetails(row)}
+                    className="cursor-pointer transition-colors hover:bg-gray-50"
+                  >
+                    <td className="max-w-[260px] truncate px-6 py-3.5 text-base font-medium text-gray-900">
+                      <span className="mr-1.5">{bizTypeMeta(row.biz_type).icon}</span>
+                      {row.item_details || '—'}
+                    </td>
+                    <td className="max-w-[200px] truncate px-6 py-3.5 text-base text-gray-700">
+                      {row.cust_name || '—'}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-3.5 text-base font-semibold tabular-nums text-gray-900">
+                      {formatCurrency(row.amount)}
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-3.5">
+                      <AssetStatusBadge status={row.room_status} />
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
+                      {actions(row)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* การ์ดมือถือ */}
+          <div className="divide-y divide-gray-100 md:hidden">
+            {filtered.map((row, index) => (
+              <div key={row.id ?? index} className="p-4">
+                <div role="button" tabIndex={0} onClick={() => onViewDetails(row)} onKeyDown={(e) => { if (e.key === 'Enter') onViewDetails(row) }} className="cursor-pointer">
+                  <div className="flex items-start justify-between gap-3">
+                        <p className="min-w-0 flex-1 truncate text-base font-bold text-gray-900">
+                          <span className="mr-1.5">{bizTypeMeta(row.biz_type).icon}</span>
+                          {row.item_details || 'ไม่ระบุ'}
+                        </p>
+                    <AssetStatusBadge status={row.room_status} />
+                  </div>
+                  <p className="mt-1.5 truncate text-base text-gray-600">
+                    ผู้เช่า: <span className="font-medium text-gray-800">{row.cust_name || '—'}</span>
+                  </p>
+                  <p className="mt-1 text-lg font-bold tabular-nums text-gray-900">
+                    {formatCurrency(row.amount)}
+                  </p>
+                </div>
+                <div className="mt-3 flex items-center justify-end border-t border-gray-100 pt-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-500">จัดการ</span>
+                    {actions(row)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   )
@@ -1016,7 +1147,7 @@ function LeaseExpirySection({ rentals, onRenew, onMoveOut }) {
 }
 
 function SettingsPage({ onSaved }) {
-  const [form, setForm] = useState({ payment_type: 'promptpay', promptpay: '', promptpay_name: '', bank_code: '', bank_account: '' })
+  const [form, setForm] = useState({ business_name: '', owner_name: '', address: '', payment_type: 'promptpay', promptpay: '', promptpay_name: '', bank_code: '', bank_account: '' })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -1030,10 +1161,10 @@ function SettingsPage({ onSaved }) {
     async function load() {
       setLoading(true)
       try {
-        const { data, error: e } = await supabase.from('admins').select('payment_type, promptpay_name, promptpay, bank_code, bank_account').limit(1).maybeSingle()
+        const { data, error: e } = await supabase.from('admins').select('payment_type, promptpay_name, promptpay, bank_code, bank_account, business_name, owner_name, address').limit(1).maybeSingle()
         if (e) throw e
         if (!cancelled && data) {
-          setForm({ payment_type: data.payment_type || 'promptpay', promptpay: data.promptpay ?? '', promptpay_name: data.promptpay_name ?? '', bank_code: data.bank_code ?? '', bank_account: data.bank_account ?? '' })
+          setForm({ payment_type: data.payment_type || 'promptpay', promptpay: data.promptpay ?? '', promptpay_name: data.promptpay_name ?? '', bank_code: data.bank_code ?? '', bank_account: data.bank_account ?? '', business_name: data.business_name ?? '', owner_name: data.owner_name ?? '', address: data.address ?? '' })
         }
       } catch (err) {
         if (!cancelled) setError(err?.message || 'ดึงข้อมูลไม่สำเร็จ')
@@ -1053,7 +1184,7 @@ function SettingsPage({ onSaved }) {
     setError(null)
     setSuccess(false)
     try {
-      const payload = { payment_type: form.payment_type, promptpay: form.promptpay.trim(), promptpay_name: form.promptpay_name.trim(), bank_code: isBank ? form.bank_code : '', bank_account: isBank ? form.bank_account.trim() : '' }
+      const payload = { business_name: form.business_name.trim(), owner_name: form.owner_name.trim(), address: form.address.trim(), payment_type: form.payment_type, promptpay: form.promptpay.trim(), promptpay_name: form.promptpay_name.trim(), bank_code: isBank ? form.bank_code : '', bank_account: isBank ? form.bank_account.trim() : '' }
       if (isBank && (!form.bank_code || !form.bank_account.trim() || !form.promptpay_name.trim())) throw new Error('กรุณากรอก ธนาคาร เลขบัญชี และชื่อบัญชี')
       if (!isBank && (!form.promptpay.trim() || !form.promptpay_name.trim())) throw new Error('กรุณากรอก เลขพร้อมเพย์ และชื่อบัญชี')
       const { data: existing } = await supabase.from('admins').select('id').limit(1).maybeSingle()
@@ -1091,6 +1222,24 @@ function SettingsPage({ onSaved }) {
             <p className="py-8 text-center text-sm text-gray-400">กำลังโหลดข้อมูล...</p>
           ) : (
             <>
+              <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-4">
+                <p className="mb-3 text-sm font-bold text-gray-900">โปรไฟล์ธุรกิจ</p>
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700">ชื่อธุรกิจ</label>
+                    <input type="text" value={form.business_name} onChange={updateField('business_name')} placeholder="เช่น หอพักบ้านสวย" className={inputClass} />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700">ชื่อเจ้าของ</label>
+                    <input type="text" value={form.owner_name} onChange={updateField('owner_name')} placeholder="เช่น สมชาย ใจดี" className={inputClass} />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-gray-700">ที่อยู่</label>
+                    <textarea value={form.address} onChange={updateField('address')} rows={2} placeholder="บ้านเลขที่ ถนน ตำบล อำเภอ จังหวัด" className={inputClass} />
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <p className="mb-2 text-sm font-medium text-gray-700">ประเภทการรับเงิน</p>
                 <div className="grid grid-cols-2 gap-3">
@@ -1143,6 +1292,7 @@ function SettingsPage({ onSaved }) {
 }
 
 function PendingReviewSection({ items, loading, error, reviewing, onApprove, onReject, onRetry }) {
+  const [previewSlip, setPreviewSlip] = useState(null)
   return (
     <section className="mt-8 overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-lg shadow-amber-100/70">
       <div className="flex items-center justify-between gap-4 border-b border-amber-100 bg-gradient-to-r from-amber-50 to-yellow-50 px-6 py-5">
@@ -1195,7 +1345,7 @@ function PendingReviewSection({ items, loading, error, reviewing, onApprove, onR
           <p className="mt-2 text-sm text-gray-500">ยังไม่มีผู้เช่าแจ้งชำระเงินในขณะนี้</p>
         </div>
       ) : (
-        <div className="space-y-3 p-6">
+        <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2">
           {items.map((item) => {
             const rental = Array.isArray(item.rentals) ? item.rentals[0] : item.rentals
             const custName = rental?.cust_name || item.cust_name || 'ไม่ระบุ'
@@ -1207,70 +1357,118 @@ function PendingReviewSection({ items, loading, error, reviewing, onApprove, onR
             return (
               <div
                 key={item.id}
-                className="flex flex-col gap-4 rounded-xl border border-amber-200 bg-amber-50/40 p-4 shadow-sm transition-colors hover:border-amber-300 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-4 rounded-2xl border border-amber-200 bg-white p-4 shadow-sm"
               >
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-base font-bold text-gray-900">{custName}</p>
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">
-                      <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                      รอตรวจสอบสลิป
-                    </span>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-bold text-gray-900">{itemDetails}</p>
+                    <p className="mt-0.5 truncate text-base text-gray-600">{custName}</p>
+                    {item.period ? <p className="mt-1 text-sm text-gray-400">รอบบิล {formatPeriod(item.period)}</p> : null}
                   </div>
-                  <p className="mt-1 text-sm text-gray-600">{itemDetails}</p>
-                  {item.paid_amount > 0 && (
-                    <p className="mt-1.5 text-sm font-semibold text-amber-700">
-                      ผู้เช่าแจ้งจ่ายยอด {formatCurrency(item.paid_amount)} (จากยอดรวม {formatCurrency(item.total_amount || item.base_amount)})
-                    </p>
-                  )}
-                  {item.period ? <p className="mt-1 text-xs text-gray-400">รอบบิล {item.period}</p> : null}
+                  <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                    รอตรวจ
+                  </span>
                 </div>
-                <div className="flex shrink-0 flex-col items-start gap-3 sm:items-end">
-                  <p className="text-xl font-bold tabular-nums tracking-tight text-amber-600">{formatCurrency(amount)}</p>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => onApprove(item.id)}
-                      disabled={isUpdating}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm shadow-emerald-600/30 transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isApproving ? (
-                        <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
-                        </svg>
-                      ) : (
-                        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                        </svg>
-                      )}
-                      อนุมัติ
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onReject(item.id)}
-                      disabled={isUpdating}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm shadow-rose-600/30 transition-colors hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isRejecting ? (
-                        <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
-                        </svg>
-                      ) : (
-                        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-                        </svg>
-                      )}
-                      ปฏิเสธ
-                    </button>
+
+                <p className="text-2xl font-bold tabular-nums tracking-tight text-amber-600">{formatCurrency(amount)}</p>
+                {item.paid_amount > 0 && (
+                  <p className="-mt-2 text-sm font-medium text-amber-700">
+                    ผู้เช่าแจ้งจ่าย {formatCurrency(item.paid_amount)}
+                  </p>
+                )}
+
+                {item.slip_image_url ? (
+                  <button
+                    type="button"
+                    onClick={() => setPreviewSlip(item.slip_image_url)}
+                    className="group relative block overflow-hidden rounded-xl border border-amber-200"
+                    aria-label="ดูสลิปเต็มจอ"
+                  >
+                    <img
+                      src={item.slip_image_url}
+                      alt="สลิปโอนเงิน"
+                      className="h-40 w-full object-cover"
+                      loading="lazy"
+                    />
+                    <span className="absolute inset-x-0 bottom-0 bg-gray-900/60 px-3 py-1.5 text-center text-sm font-semibold text-white">
+                      แตะเพื่อดูสลิปเต็มจอ
+                    </span>
+                  </button>
+                ) : (
+                  <div className="flex h-24 items-center justify-center rounded-xl border border-dashed border-amber-200 bg-amber-50/60 text-sm text-amber-600">
+                    ไม่มีรูปสลิปแนบมา
                   </div>
+                )}
+
+                <div className="mt-auto grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => onApprove(item.id)}
+                    disabled={isUpdating}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-base font-semibold text-white shadow-sm shadow-emerald-600/30 transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isApproving ? (
+                      <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
+                      </svg>
+                    ) : (
+                      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                      </svg>
+                    )}
+                    อนุมัติ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onReject(item.id)}
+                    disabled={isUpdating}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 py-3 text-base font-semibold text-white shadow-sm shadow-rose-600/30 transition-colors hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isRejecting ? (
+                      <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
+                      </svg>
+                    ) : (
+                      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                      </svg>
+                    )}
+                    ปฏิเสธ
+                  </button>
                 </div>
               </div>
             )
           })}
         </div>
       )}
+
+      {previewSlip ? (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setPreviewSlip(null)}
+        >
+          <div className="relative max-h-[90vh] max-w-3xl" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setPreviewSlip(null)}
+              className="absolute -right-3 -top-3 z-10 rounded-full bg-white p-1.5 text-gray-600 shadow-lg transition-colors hover:text-gray-900"
+              aria-label="ปิด"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <img
+              src={previewSlip}
+              alt="สลิปโอนเงิน"
+              className="max-h-[90vh] max-w-full rounded-xl object-contain shadow-2xl"
+            />
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }
@@ -1354,7 +1552,8 @@ function AddRentalModal({ open, onClose, onCreated }) {
 
   useEffect(() => {
     if (open) {
-      setForm(buildMockForm())
+      // เริ่มที่ขั้นเลือกประเภทสินทรัพย์ก่อน (ฟอร์ม mock จะเติมให้หลังเลือกการ์ด)
+      setForm({ ...EMPTY_FORM })
       setError(null)
       setSaving(false)
     }
@@ -1379,14 +1578,25 @@ function AddRentalModal({ open, onClose, onCreated }) {
     setForm((prev) => ({ ...prev, [field]: value }))
   }
 
+  const isProperty = normalizeBizType(form.biz_type) === 'property'
+  const typeMeta = bizTypeMeta(form.biz_type)
+
+  // กดเลือกการ์ดประเภท → เติมฟอร์ม mock ให้ตรงประเภท (vehicle/other ได้ utility_enabled=false + มิเตอร์ 0 อัตโนมัติ)
+  const selectBizType = (value) => {
+    setForm(buildMockForm(value))
+    setError(null)
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setSaving(true)
     setError(null)
     try {
       const bindingCode = generateBindingCode()
+      // vehicle/other: ไม่มีค่าน้ำไฟ — บังคับ utility_enabled=false และมิเตอร์/อัตราเป็น 0
+      const isProperty = normalizeBizType(form.biz_type) === 'property'
       const payload = {
-        biz_type: form.biz_type,
+        biz_type: normalizeBizType(form.biz_type),
         cust_name: form.cust_name.trim(),
         tenant_phone: form.tenant_phone.trim() || null,
         tenant_id_card: form.tenant_id_card.trim() || null,
@@ -1399,16 +1609,16 @@ function AddRentalModal({ open, onClose, onCreated }) {
         penalty_per_day: Number(form.penalty_per_day) || 0,
         penalty_enabled: Boolean(form.penalty_enabled),
         chase_frequency: Number(form.chase_frequency) || 3,
-        stop_chase: Number(form.stop_chase) > 0,
+        stop_chase: Number(form.stop_chase) > 0 ? 1 : 0,
         credit_balance: 0,
         deposit_amount: Number(form.deposit_amount) || 0,
         move_in_date: form.move_in_date || null,
         lease_end_date: form.lease_end_date || null,
-        last_water_meter: Number(form.last_water_meter) || 0,
-        water_rate: Number(form.water_rate) || 0,
-        last_elec_meter: Number(form.last_elec_meter) || 0,
-        elec_rate: Number(form.elec_rate) || 0,
-        utility_enabled: Boolean(form.utility_enabled),
+        last_water_meter: isProperty ? Number(form.last_water_meter) || 0 : 0,
+        water_rate: isProperty ? Number(form.water_rate) || 0 : 0,
+        last_elec_meter: isProperty ? Number(form.last_elec_meter) || 0 : 0,
+        elec_rate: isProperty ? Number(form.elec_rate) || 0 : 0,
+        utility_enabled: isProperty ? Boolean(form.utility_enabled) : false,
         binding_code: bindingCode,
       }
       const { error: insertError } = await supabase.from('rentals').insert([payload])
@@ -1453,18 +1663,40 @@ function AddRentalModal({ open, onClose, onCreated }) {
               </div>
             )}
 
+            {!form.biz_type ? (
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-gray-700">
+                  เลือกประเภทสินทรัพย์ <span className="text-rose-500">*</span>
+                </p>
+                {BIZ_TYPES.map((t) => (
+                  <button
+                    key={t.value}
+                    type="button"
+                    onClick={() => selectBizType(t.value)}
+                    className="flex w-full items-center gap-4 rounded-2xl border-2 border-gray-200 bg-white px-5 py-4 text-left shadow-sm transition-colors hover:border-indigo-400 hover:bg-indigo-50/50"
+                  >
+                    <span className="text-3xl leading-none">{t.icon}</span>
+                    <span className="min-w-0">
+                      <span className="block text-base font-bold text-gray-900">{t.label}</span>
+                      <span className="mt-0.5 block truncate text-sm text-gray-500">{t.examples}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+            <>
             <CollapsibleSection title="ข้อมูลสัญญาเช่า" subtitle="ข้อมูลหลักของสัญญา" icon="document" defaultOpen>
               <div className="space-y-4">
-                <div>
-                  <label htmlFor="biz_type" className="mb-1.5 block text-sm font-medium text-gray-700">
-                    ประเภทธุรกิจ <span className="text-rose-500">*</span>
-                  </label>
-                  <select id="biz_type" value={form.biz_type} onChange={updateField('biz_type')} required className={inputClass}>
-                    <option value="" disabled>เลือกประเภทธุรกิจ</option>
-                    {BIZ_TYPES.map((type) => (
-                      <option key={type.value} value={type.value}>{type.label}</option>
-                    ))}
-                  </select>
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3">
+                  <p className="text-sm font-bold text-indigo-900">{typeMeta.icon} {typeMeta.label}</p>
+                  <button
+                    type="button"
+                    onClick={() => setField('biz_type', '')}
+                    disabled={saving}
+                    className="shrink-0 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-indigo-600 shadow-sm transition-colors hover:bg-indigo-100"
+                  >
+                    เปลี่ยนประเภท
+                  </button>
                 </div>
 
                 <div>
@@ -1476,9 +1708,9 @@ function AddRentalModal({ open, onClose, onCreated }) {
 
                 <div>
                   <label htmlFor="item_details" className="mb-1.5 block text-sm font-medium text-gray-700">
-                    รายละเอียดสินทรัพย์
+                    {typeMeta.itemLabel}
                   </label>
-                  <input id="item_details" type="text" value={form.item_details} onChange={updateField('item_details')} placeholder={ITEM_PLACEHOLDERS[form.biz_type] || 'เช่น ห้อง 401, รถ กก-1234'} className={inputClass} />
+                  <input id="item_details" type="text" value={form.item_details} onChange={updateField('item_details')} placeholder={typeMeta.placeholder} className={inputClass} />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -1506,6 +1738,24 @@ function AddRentalModal({ open, onClose, onCreated }) {
                   </label>
                   <input id="due_date" type="number" min="1" max="31" step="1" value={form.due_date} onChange={updateField('due_date')} placeholder="เช่น 1" required className={inputClass} />
                 </div>
+
+                {!isProperty && (
+                  <div className="rounded-xl border-2 border-amber-200 bg-amber-50/60 p-4">
+                    <label htmlFor="deposit_amount_main" className="mb-1.5 block text-sm font-bold text-amber-800">
+                      ค่าประกัน / เงินมัดจำ (บาท)
+                    </label>
+                    <input
+                      id="deposit_amount_main"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.deposit_amount}
+                      onChange={updateField('deposit_amount')}
+                      placeholder="0.00"
+                      className={inputClass}
+                    />
+                  </div>
+                )}
               </div>
             </CollapsibleSection>
 
@@ -1536,10 +1786,12 @@ function AddRentalModal({ open, onClose, onCreated }) {
                   </select>
                 </div>
 
-                <div>
-                  <label htmlFor="deposit_amount" className="mb-1.5 block text-sm font-medium text-gray-700">เงินประกัน</label>
-                  <input id="deposit_amount" type="number" min="0" step="0.01" value={form.deposit_amount} onChange={updateField('deposit_amount')} placeholder="0.00" className={inputClass} />
-                </div>
+                {isProperty && (
+                  <div>
+                    <label htmlFor="deposit_amount" className="mb-1.5 block text-sm font-medium text-gray-700">เงินประกัน</label>
+                    <input id="deposit_amount" type="number" min="0" step="0.01" value={form.deposit_amount} onChange={updateField('deposit_amount')} placeholder="0.00" className={inputClass} />
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -1554,7 +1806,11 @@ function AddRentalModal({ open, onClose, onCreated }) {
               </div>
             </CollapsibleSection>
 
-            <CollapsibleSection title="การตั้งค่าทวงเงินและค่าน้ำไฟ" subtitle="ค่าปรับ การทวงหนี้ และมิเตอร์" icon="banknotes">
+            <CollapsibleSection
+              title={isProperty ? 'การตั้งค่าทวงเงินและค่าน้ำไฟ' : 'การตั้งค่าทวงเงิน'}
+              subtitle={isProperty ? 'ค่าปรับ การทวงหนี้ และมิเตอร์' : 'ค่าปรับและการทวงหนี้'}
+              icon="banknotes"
+            >
               <div className="space-y-4">
                 <Toggle checked={form.penalty_enabled} onChange={(v) => setField('penalty_enabled', v)} label="เปิดใช้ค่าปรับ" />
 
@@ -1578,31 +1834,37 @@ function AddRentalModal({ open, onClose, onCreated }) {
                   <input id="stop_chase" type="number" min="0" step="1" value={form.stop_chase} onChange={updateField('stop_chase')} placeholder="เช่น 30 (0 = ไม่หยุด)" className={inputClass} />
                 </div>
 
-                <Toggle checked={form.utility_enabled} onChange={(v) => setField('utility_enabled', v)} label="คิดค่าน้ำไฟ" />
+                {isProperty && (
+                  <>
+                    <Toggle checked={form.utility_enabled} onChange={(v) => setField('utility_enabled', v)} label="คิดค่าน้ำไฟ" />
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="last_water_meter" className="mb-1.5 block text-sm font-medium text-gray-700">เลขมิเตอร์น้ำล่าสุด</label>
-                    <input id="last_water_meter" type="number" min="0" step="1" value={form.last_water_meter} onChange={updateField('last_water_meter')} placeholder="0" className={inputClass} />
-                  </div>
-                  <div>
-                    <label htmlFor="water_rate" className="mb-1.5 block text-sm font-medium text-gray-700">ค่าน้ำ/หน่วย (บาท)</label>
-                    <input id="water_rate" type="number" min="0" step="0.01" value={form.water_rate} onChange={updateField('water_rate')} placeholder="0.00" className={inputClass} />
-                  </div>
-                </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label htmlFor="last_water_meter" className="mb-1.5 block text-sm font-medium text-gray-700">เลขมิเตอร์น้ำล่าสุด</label>
+                        <input id="last_water_meter" type="number" min="0" step="1" value={form.last_water_meter} onChange={updateField('last_water_meter')} placeholder="0" className={inputClass} />
+                      </div>
+                      <div>
+                        <label htmlFor="water_rate" className="mb-1.5 block text-sm font-medium text-gray-700">ค่าน้ำ/หน่วย (บาท)</label>
+                        <input id="water_rate" type="number" min="0" step="0.01" value={form.water_rate} onChange={updateField('water_rate')} placeholder="0.00" className={inputClass} />
+                      </div>
+                    </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="last_elec_meter" className="mb-1.5 block text-sm font-medium text-gray-700">เลขมิเตอร์ไฟล่าสุด</label>
-                    <input id="last_elec_meter" type="number" min="0" step="1" value={form.last_elec_meter} onChange={updateField('last_elec_meter')} placeholder="0" className={inputClass} />
-                  </div>
-                  <div>
-                    <label htmlFor="elec_rate" className="mb-1.5 block text-sm font-medium text-gray-700">ค่าไฟ/หน่วย (บาท)</label>
-                    <input id="elec_rate" type="number" min="0" step="0.01" value={form.elec_rate} onChange={updateField('elec_rate')} placeholder="0.00" className={inputClass} />
-                  </div>
-                </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label htmlFor="last_elec_meter" className="mb-1.5 block text-sm font-medium text-gray-700">เลขมิเตอร์ไฟล่าสุด</label>
+                        <input id="last_elec_meter" type="number" min="0" step="1" value={form.last_elec_meter} onChange={updateField('last_elec_meter')} placeholder="0" className={inputClass} />
+                      </div>
+                      <div>
+                        <label htmlFor="elec_rate" className="mb-1.5 block text-sm font-medium text-gray-700">ค่าไฟ/หน่วย (บาท)</label>
+                        <input id="elec_rate" type="number" min="0" step="0.01" value={form.elec_rate} onChange={updateField('elec_rate')} placeholder="0.00" className={inputClass} />
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </CollapsibleSection>
+            </>
+            )}
           </div>
 
           <div className="flex items-center justify-end gap-3 border-t border-gray-100 bg-gray-50 px-6 py-4">
@@ -1730,6 +1992,8 @@ function MeterBillModal({ rental, onClose, onConfirm }) {
   const [elecCurrent, setElecCurrent] = useState('')
   const [sendToLine, setSendToLine] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [period, setPeriod] = useState(currentPeriod)
+  const [existingPeriods, setExistingPeriods] = useState([])
 
   useEffect(() => {
     if (rental) {
@@ -1737,12 +2001,34 @@ function MeterBillModal({ rental, onClose, onConfirm }) {
       setElecCurrent('')
       setSendToLine(true)
       setSaving(false)
+      setPeriod(currentPeriod())
     }
   }, [rental])
 
+  // งวดที่ห้องนี้มีบิลแล้ว (กันสร้างซ้ำ ชน unique rental+period)
+  useEffect(() => {
+    const rentalId = rental?.id
+    if (!rentalId) {
+      setExistingPeriods([])
+      return
+    }
+    let active = true
+    supabase
+      .from('transactions')
+      .select('period')
+      .eq('rental_id', rentalId)
+      .then(({ data }) => {
+        if (active) setExistingPeriods((Array.isArray(data) ? data : []).map((t) => t.period).filter(Boolean))
+      })
+      .catch(() => {})
+    return () => { active = false }
+  }, [rental?.id])
+
   if (!rental) return null
 
-  const utilityEnabled = Boolean(rental.utility_enabled)
+  // vehicle/other ไม่มีค่าน้ำไฟ — ซ่อนส่วนกรอกมิเตอร์ทั้งหมด
+  const isProperty = normalizeBizType(rental?.biz_type) === 'property'
+  const utilityEnabled = isProperty && Boolean(rental.utility_enabled)
   const amount = Number(getValue(rental, AMOUNT_KEYS)) || 0
   const lastWater = Number(rental.last_water_meter) || 0
   const lastElec = Number(rental.last_elec_meter) || 0
@@ -1757,10 +2043,28 @@ function MeterBillModal({ rental, onClose, onConfirm }) {
   const elecCost = elecUnits * elecRate
   const totalAmount = amount + (utilityEnabled ? waterCost + elecCost : 0)
 
+  // ตัวเลือกงวด: 3 เดือนก่อนย้อนหลัง จนถึงเดือนหน้า (value = ISO สำหรับบันทึก, label = ไทยสำหรับแสดง)
+  const periodOptions = (() => {
+    const now = new Date()
+    const opts = []
+    for (let i = 3; i >= -1; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      opts.push({
+        value: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+        label: formatPeriod(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`),
+      })
+    }
+    return opts
+  })()
+  const periodLabel = periodOptions.find((o) => o.value === period)?.label || formatPeriod(period)
+  // จับคู่ทั้งงวด ISO ใหม่และงวดเดิมที่เคยบันทึกฟอร์แมตไทย
+  const periodHasBill = existingPeriods.includes(period) || existingPeriods.includes(periodLabel)
+  const optionHasBill = (o) => existingPeriods.includes(o.value) || existingPeriods.includes(o.label)
+
   const handleConfirm = async () => {
     setSaving(true)
     try {
-      await onConfirm(rental, { waterCurrent, elecCurrent }, sendToLine)
+      await onConfirm(rental, { waterCurrent, elecCurrent }, sendToLine, period)
     } finally {
       setSaving(false)
     }
@@ -1790,6 +2094,22 @@ function MeterBillModal({ rental, onClose, onConfirm }) {
             ค่าเช่า / ค่างวด: <span className="font-semibold">{formatCurrency(amount)}</span>
           </div>
 
+          <div>
+            <label htmlFor="bill_period" className="mb-1.5 block text-sm font-medium text-gray-700">งวดบิล</label>
+            <select id="bill_period" value={period} onChange={(e) => setPeriod(e.target.value)} className={inputClass}>
+              {periodOptions.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}{optionHasBill(o) ? ' (มีบิลแล้ว)' : ''}</option>
+              ))}
+            </select>
+            {periodHasBill ? (
+              <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-medium text-amber-700">
+                ⚠️ งวดนี้มีบิลอยู่แล้ว — ไม่สามารถสร้างบิลซ้ำได้
+              </p>
+            ) : existingPeriods.length > 0 ? (
+              <p className="mt-1.5 text-xs text-gray-400">งวดที่มีบิลแล้ว: {existingPeriods.slice(-6).map(formatPeriod).join(', ')}</p>
+            ) : null}
+          </div>
+
           {utilityEnabled ? (
             <>
               <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
@@ -1815,7 +2135,9 @@ function MeterBillModal({ rental, onClose, onConfirm }) {
               </div>
             </>
           ) : (
-            <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-500">ห้องนี้ไม่ได้เปิดใช้งานระบบน้ำไฟ (ข้ามการคำนวณค่าน้ำ/ค่าไฟ)</div>
+            <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-500">
+              {isProperty ? 'ห้องนี้ไม่ได้เปิดใช้งานระบบน้ำไฟ (ข้ามการคำนวณค่าน้ำ/ค่าไฟ)' : 'สินทรัพย์ประเภทนี้ไม่มีค่าน้ำไฟ (ข้ามการคำนวณค่าน้ำ/ค่าไฟ)'}
+            </div>
           )}
 
           <div className="rounded-2xl bg-gray-900 px-4 py-4 text-center text-white">
@@ -1836,8 +2158,8 @@ function MeterBillModal({ rental, onClose, onConfirm }) {
           </label>
           <div className="flex items-center justify-end gap-3">
             <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-60">ยกเลิก</button>
-            <button type="button" onClick={handleConfirm} disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60">
-              {saving ? (<><svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" /></svg>กำลังสร้างบิล...</>) : 'สร้างบิล'}
+            <button type="button" onClick={handleConfirm} disabled={saving || periodHasBill} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60">
+              {saving ? (<><svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" /></svg>กำลังสร้างบิล...</>) : periodHasBill ? 'งวดนี้มีบิลแล้ว' : 'สร้างบิล'}
             </button>
           </div>
         </div>
@@ -1960,8 +2282,64 @@ function LeaseActionModal({ rental, mode, onClose, onConfirm }) {
   )
 }
 
-function AssetDetailModal({ rental, onClose }) {
+function AssetDetailModal({ rental, onClose, onToast }) {
+  const [copied, setCopied] = useState(false)
+  const [reminders, setReminders] = useState(null)
+  const [expandedReminder, setExpandedReminder] = useState(null)
+
+  // ประวัติการติดต่อ: reminders ของทุกบิลของห้องนี้ (ค้นผ่าน transaction_id แบบ client-side)
+  useEffect(() => {
+    const rentalId = rental?.id
+    if (!rentalId) return
+    let active = true
+    setReminders(null)
+    setExpandedReminder(null)
+    async function load() {
+      try {
+        const { data: txs, error: txError } = await supabase
+          .from('transactions')
+          .select('id')
+          .eq('rental_id', rentalId)
+        if (txError) throw txError
+        const txIds = (txs || []).map((t) => t.id)
+        if (txIds.length === 0) {
+          if (active) setReminders([])
+          return
+        }
+        const { data: rows, error: remError } = await supabase
+          .from('reminders')
+          .select('kind, message_text, sent_at')
+          .in('transaction_id', txIds)
+          .order('sent_at', { ascending: false })
+          .limit(20)
+        if (remError) throw remError
+        if (active) setReminders(Array.isArray(rows) ? rows : [])
+      } catch (err) {
+        console.error('Reminders fetch error:', err)
+        if (active) setReminders([])
+      }
+    }
+    load()
+    return () => { active = false }
+  }, [rental?.id])
+
   if (!rental) return null
+
+  const copyBindingCode = async () => {
+    const code = rental?.binding_code
+    if (!code) return
+    try {
+      await navigator.clipboard.writeText(String(code))
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+      onToast?.({ type: 'success', message: 'คัดลอกแล้ว' })
+    } catch {
+      onToast?.({ type: 'error', message: 'คัดลอกรหัสไม่สำเร็จ' })
+    }
+  }
+
+  // มิเตอร์น้ำไฟแสดงเฉพาะสินทรัพย์ประเภทอสังหาริมทรัพย์ (property)
+  const isProperty = normalizeBizType(rental?.biz_type) === 'property'
 
   const fields = [
     { key: 'tenant_phone', label: 'เบอร์โทรผู้เช่า' },
@@ -1975,11 +2353,13 @@ function AssetDetailModal({ rental, onClose }) {
     { key: 'penalty_enabled', label: 'เปิดใช้ค่าปรับ' },
     { key: 'chase_frequency', label: 'ความถี่ทวงหนี้ (วัน)' },
     { key: 'stop_chase', label: 'หยุดทวงหนี้' },
-    { key: 'last_water_meter', label: 'เลขมิเตอร์น้ำล่าสุด' },
-    { key: 'water_rate', label: 'ค่าน้ำ/หน่วย' },
-    { key: 'last_elec_meter', label: 'เลขมิเตอร์ไฟล่าสุด' },
-    { key: 'elec_rate', label: 'ค่าไฟ/หน่วย' },
-    { key: 'utility_enabled', label: 'คิดค่าน้ำไฟ' },
+    ...(isProperty ? [
+      { key: 'last_water_meter', label: 'เลขมิเตอร์น้ำล่าสุด' },
+      { key: 'water_rate', label: 'ค่าน้ำ/หน่วย' },
+      { key: 'last_elec_meter', label: 'เลขมิเตอร์ไฟล่าสุด' },
+      { key: 'elec_rate', label: 'ค่าไฟ/หน่วย' },
+      { key: 'utility_enabled', label: 'คิดค่าน้ำไฟ' },
+    ] : []),
     { key: 'group_id', label: 'LINE Group ID' },
     { key: 'binding_code', label: 'รหัสผูกกลุ่ม (Binding Code)' },
   ]
@@ -2012,6 +2392,31 @@ function AssetDetailModal({ rental, onClose }) {
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5">
+          <div className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4">
+            <p className="text-sm font-bold text-emerald-800">เชื่อมต่อ LINE</p>
+            {rental.group_id ? (
+              <span className="mt-2 inline-flex items-center rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white">
+                🔗 ผูกกลุ่มแล้ว
+              </span>
+            ) : (
+              <div className="mt-2">
+                <p className="font-mono text-2xl font-bold tracking-[0.2em] text-gray-900">{rental.binding_code || '—'}</p>
+                <button
+                  type="button"
+                  onClick={copyBindingCode}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500"
+                >
+                  {copied ? '✓ คัดลอกแล้ว' : 'คัดลอกรหัส'}
+                </button>
+                <ol className="mt-3 space-y-1 text-xs leading-relaxed text-gray-600">
+                  <li>1) เพิ่มเพื่อนบอท PayRentPro ใน LINE {import.meta.env.VITE_LINE_BOT_ID ? `(ID: ${import.meta.env.VITE_LINE_BOT_ID})` : '(ดู ID บอทในคู่มือ)'}</li>
+                  <li>2) เชิญบอทเข้ากลุ่มแชทกับผู้เช่า</li>
+                  <li>3) พิมพ์รหัสนี้ในกลุ่ม เพื่อผูกห้องกับกลุ่ม</li>
+                </ol>
+              </div>
+            )}
+          </div>
+
           <dl className="divide-y divide-gray-100">
             {fields.map((f) => (
               <div key={f.key} className="flex items-start justify-between gap-4 py-3">
@@ -2020,6 +2425,47 @@ function AssetDetailModal({ rental, onClose }) {
               </div>
             ))}
           </dl>
+
+          <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50/60 px-4 py-4">
+            <h3 className="text-base font-bold text-gray-900">ประวัติการติดต่อ</h3>
+            {reminders === null ? (
+              <div className="mt-3 space-y-2">
+                {Array.from({ length: 2 }).map((_, i) => (
+                  <div key={i} className="h-10 animate-pulse rounded-lg bg-gray-100" />
+                ))}
+              </div>
+            ) : reminders.length === 0 ? (
+              <p className="mt-2 text-sm text-gray-500">ยังไม่มีประวัติ</p>
+            ) : (
+              <ol className="mt-3 ml-4 border-l-2 border-gray-200 pl-5">
+                {reminders.map((r, i) => {
+                  const icon = r.kind === 'due_soon' ? '⏰' : r.kind === 'chase' ? '⚠️' : r.kind === 'receipt' ? '🧾' : '💬'
+                  const expanded = expandedReminder === i
+                  const at = r.sent_at
+                    ? new Date(r.sent_at).toLocaleString('th-TH', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' น.'
+                    : '—'
+                  return (
+                    <li key={`${r.sent_at ?? ''}-${i}`} className="relative pb-4 last:pb-0">
+                      <span className="absolute -left-[35px] top-0 flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-base shadow-sm">
+                        {icon}
+                      </span>
+                      <p className="text-sm font-semibold text-gray-900">{at}</p>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedReminder(expanded ? null : i)}
+                        className={`mt-0.5 w-full text-left text-sm leading-relaxed text-gray-600 transition-colors hover:text-gray-800 ${expanded ? '' : 'line-clamp-2'}`}
+                      >
+                        {r.message_text || '—'}
+                      </button>
+                      <span className="mt-0.5 inline-block text-xs font-medium text-indigo-500">
+                        {expanded ? 'ย่อ' : 'อ่านทั้งหมด'}
+                      </span>
+                    </li>
+                  )
+                })}
+              </ol>
+            )}
+          </div>
         </div>
 
         <div className="border-t border-gray-100 bg-gray-50 px-6 py-4">
@@ -2038,6 +2484,9 @@ function AssetDetailModal({ rental, onClose }) {
 
 function SettingsModal({ open, onClose, onSaved }) {
   const [form, setForm] = useState({
+    business_name: '',
+    owner_name: '',
+    address: '',
     payment_type: 'promptpay',
     promptpay: '',
     promptpay_name: '',
@@ -2061,7 +2510,7 @@ function SettingsModal({ open, onClose, onSaved }) {
       try {
         const { data, error: fetchError } = await supabase
           .from('admins')
-          .select('id, payment_type, promptpay_name, promptpay, bank_code, bank_account')
+          .select('id, payment_type, promptpay_name, promptpay, bank_code, bank_account, business_name, owner_name, address')
           .limit(1)
           .maybeSingle()
         if (fetchError) throw fetchError
@@ -2072,6 +2521,9 @@ function SettingsModal({ open, onClose, onSaved }) {
           promptpay_name: data?.promptpay_name ?? '',
           bank_code: data?.bank_code ?? '',
           bank_account: data?.bank_account ?? '',
+          business_name: data?.business_name ?? '',
+          owner_name: data?.owner_name ?? '',
+          address: data?.address ?? '',
         })
       } catch (err) {
         if (cancelled) return
@@ -2115,6 +2567,9 @@ function SettingsModal({ open, onClose, onSaved }) {
     setError(null)
     try {
       const payload = {
+        business_name: form.business_name.trim(),
+        owner_name: form.owner_name.trim(),
+        address: form.address.trim(),
         payment_type: form.payment_type,
         promptpay: form.promptpay.trim(),
         promptpay_name: form.promptpay_name.trim(),
@@ -2197,6 +2652,24 @@ function SettingsModal({ open, onClose, onSaved }) {
               </div>
             ) : (
               <>
+                <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-4">
+                  <p className="mb-3 text-sm font-bold text-gray-900">โปรไฟล์ธุรกิจ</p>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-gray-700">ชื่อธุรกิจ</label>
+                      <input type="text" value={form.business_name} onChange={updateField('business_name')} placeholder="เช่น หอพักบ้านสวย" className={inputClass} />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-gray-700">ชื่อเจ้าของ</label>
+                      <input type="text" value={form.owner_name} onChange={updateField('owner_name')} placeholder="เช่น สมชาย ใจดี" className={inputClass} />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-gray-700">ที่อยู่</label>
+                      <textarea value={form.address} onChange={updateField('address')} rows={2} placeholder="บ้านเลขที่ ถนน ตำบล อำเภอ จังหวัด" className={inputClass} />
+                    </div>
+                  </div>
+                </div>
+
                 <div>
                   <p className="mb-2 text-sm font-medium text-gray-700">ประเภทการรับเงิน</p>
                   <div className="grid grid-cols-2 gap-3">
@@ -2323,13 +2796,46 @@ function SettingsModal({ open, onClose, onSaved }) {
   )
 }
 
-function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine }) {
+function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine, onIssueReceipt, onEditAmount }) {
   const [marking, setMarking] = useState(false)
   const [sending, setSending] = useState(false)
-  const [qrError, setQrError] = useState(false)
+  const [issuingReceipt, setIssuingReceipt] = useState(false)
+  const [qrDataUrl, setQrDataUrl] = useState(null)
+  const [qrFailed, setQrFailed] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [justEdited, setJustEdited] = useState(false)
+  const [editForm, setEditForm] = useState({ water: '', elec: '', extra: '', reason: '' })
 
+  // รีเซ็ตฟอร์มเมื่อเปิดบิลใหม่ (key ด้วย transactionId — แก้ยอดแล้ว object เปลี่ยนแต่บิลเดิมต้องไม่รีเซ็ต)
   useEffect(() => {
-    if (invoice) setQrError(false)
+    setEditing(false)
+    setJustEdited(false)
+    setEditForm({ water: '', elec: '', extra: '', reason: '' })
+  }, [invoice?.transactionId])
+
+  // สร้าง QR พร้อมเพย์ในเครื่องจากยอดบิล + เบอร์พร้อมเพย์ของเจ้าของ
+  useEffect(() => {
+    let active = true
+    const isBank = invoice?.paymentType === 'bank'
+    const ppNumber = String(invoice?.promptpayNumber ?? '').replace(/[^0-9]/g, '')
+    if (!invoice || isBank || !ppNumber) {
+      setQrDataUrl(null)
+      setQrFailed(false)
+      return
+    }
+    createPromptpayQR(ppNumber, invoice.total)
+      .then((dataUrl) => {
+        if (!active) return
+        setQrDataUrl(dataUrl)
+        setQrFailed(false)
+      })
+      .catch(() => {
+        if (!active) return
+        setQrDataUrl(null)
+        setQrFailed(true)
+      })
+    return () => { active = false }
   }, [invoice])
 
   useEffect(() => {
@@ -2344,6 +2850,7 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine }
   if (!invoice) return null
 
   const isPaid = invoice.status === 'paid'
+  const isUnpaid = invoice.status === 'unpaid'
 
   const handleMarkPaid = async () => {
     setMarking(true)
@@ -2362,6 +2869,45 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine }
       setSending(false)
     }
   }
+
+  const handleIssueReceipt = async () => {
+    setIssuingReceipt(true)
+    try {
+      await onIssueReceipt()
+    } finally {
+      setIssuingReceipt(false)
+    }
+  }
+
+  const startEdit = () => {
+    setEditForm({
+      water: String(invoice.waterCost ?? 0),
+      elec: String(invoice.elecCost ?? 0),
+      extra: String(invoice.extraCharges ?? 0),
+      reason: '',
+    })
+    setEditing(true)
+  }
+
+  const handleSaveEdit = async () => {
+    setSavingEdit(true)
+    try {
+      const ok = await onEditAmount({
+        waterCost: Number(editForm.water) || 0,
+        elecCost: Number(editForm.elec) || 0,
+        extraCharges: Number(editForm.extra) || 0,
+        reason: editForm.reason.trim(),
+      })
+      if (ok) {
+        setEditing(false)
+        setJustEdited(true)
+      }
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  const editPreviewTotal = (Number(invoice.baseAmount) || 0) + (Number(editForm.water) || 0) + (Number(editForm.elec) || 0) + (Number(editForm.extra) || 0)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -2382,6 +2928,98 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine }
           </button>
         </div>
         <div className="px-6 py-6">
+          {editing ? (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                <p className="text-sm text-gray-500">ค่าเช่า (แก้ไม่ได้)</p>
+                <p className="mt-0.5 text-lg font-bold tabular-nums text-gray-900">{formatCurrency(invoice.baseAmount)}</p>
+              </div>
+              <div>
+                <label htmlFor="edit_water" className="mb-1.5 block text-sm font-medium text-gray-700">ค่าน้ำ (บาท)</label>
+                <input
+                  id="edit_water"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={editForm.water}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, water: e.target.value }))}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label htmlFor="edit_elec" className="mb-1.5 block text-sm font-medium text-gray-700">ค่าไฟ (บาท)</label>
+                <input
+                  id="edit_elec"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={editForm.elec}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, elec: e.target.value }))}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label htmlFor="edit_extra" className="mb-1.5 block text-sm font-medium text-gray-700">ค่าอื่นๆ / ซ่อมแซม (บาท)</label>
+                <input
+                  id="edit_extra"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={editForm.extra}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, extra: e.target.value }))}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label htmlFor="edit_reason" className="mb-1.5 block text-sm font-medium text-gray-700">เหตุผลการแก้ <span className="text-rose-500">*</span></label>
+                <textarea
+                  id="edit_reason"
+                  rows={2}
+                  value={editForm.reason}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, reason: e.target.value }))}
+                  placeholder="เช่น อ่านมิเตอร์น้ำผิด / ค่าซ่อมแอร์"
+                  className={inputClass}
+                />
+              </div>
+              <div className="rounded-2xl bg-gray-900 px-4 py-4 text-center text-white">
+                <p className="text-xs text-gray-300">ยอดใหม่ที่ต้องชำระ</p>
+                <p className="mt-1 text-3xl font-bold tabular-nums">{formatCurrency(editPreviewTotal)}</p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setEditing(false)}
+                  disabled={savingEdit}
+                  className="flex-1 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:opacity-60"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveEdit}
+                  disabled={savingEdit || !editForm.reason.trim()}
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {savingEdit ? (
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
+                    </svg>
+                  ) : null}
+                  {savingEdit ? 'กำลังบันทึก...' : 'บันทึกยอดใหม่'}
+                </button>
+              </div>
+            </div>
+          ) : (
+          <>
+          {justEdited && (
+            <div className="mb-4 rounded-xl bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
+              ✏️ แก้ยอดแล้ว — ลิงก์บิลเดิมที่ผู้เช่าเปิดอยู่จะแสดงยอดใหม่อัตโนมัติ
+            </div>
+          )}
           <div className={`mb-5 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset ${isPaid ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-rose-50 text-rose-700 ring-rose-200'}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${isPaid ? 'bg-emerald-500' : 'bg-rose-500'}`} />
             {isPaid ? 'ชำระแล้ว' : 'รอการชำระเงิน'}
@@ -2404,7 +3042,7 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine }
             </div>
             <div className="flex items-start justify-between gap-4">
               <dt className="text-sm text-gray-500">รอบบิล</dt>
-              <dd className="text-right text-sm font-semibold text-gray-900">{invoice.period}</dd>
+              <dd className="text-right text-sm font-semibold text-gray-900">{formatPeriod(invoice.period)}</dd>
             </div>
             <div className="flex items-start justify-between gap-4">
               <dt className="text-sm text-gray-500">เลขที่บิล</dt>
@@ -2433,19 +3071,20 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine }
             ) : (
               <>
                 <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
-                  {qrError ? (
+                  {qrFailed ? (
                     <div className="flex h-44 w-44 items-center justify-center rounded-xl bg-gray-100 p-4 text-center text-xs text-gray-400">
-                      ไม่สามารถโหลด QR Code ได้
+                      ไม่สามารถสร้าง QR Code ได้
                     </div>
-                  ) : (
+                  ) : qrDataUrl ? (
                     <img
-                      src={invoice.qrUrl}
+                      src={qrDataUrl}
                       alt="QR Code พร้อมเพย์"
                       width={176}
                       height={176}
                       className="h-44 w-44 object-contain"
-                      onError={() => setQrError(true)}
                     />
+                  ) : (
+                    <div className="h-44 w-44 animate-pulse rounded-xl bg-gray-100" />
                   )}
                 </div>
                 <p className="mt-3 text-sm text-gray-600">
@@ -2458,8 +3097,37 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine }
               </>
             )}
           </div>
+          </>
+          )}
         </div>
         <div className="space-y-3 border-t border-gray-100 bg-gray-50 px-6 py-4">
+          {isUnpaid && !editing && (
+            <button
+              type="button"
+              onClick={startEdit}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-700 shadow-sm transition-colors hover:bg-indigo-100"
+            >
+              ✏️ แก้ไขยอดบิล
+            </button>
+          )}
+          {isPaid && (
+            <button
+              type="button"
+              onClick={handleIssueReceipt}
+              disabled={issuingReceipt}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-base font-semibold text-white shadow-sm shadow-emerald-600/30 transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {issuingReceipt ? (
+                <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
+                </svg>
+              ) : (
+                <span className="text-base leading-none">🧾</span>
+              )}
+              {issuingReceipt ? 'กำลังออกใบเสร็จ...' : 'ออกใบเสร็จ (ส่งเข้าไลน์)'}
+            </button>
+          )}
           <button
             type="button"
             onClick={handleSendToLine}
@@ -2478,17 +3146,17 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine }
               </>
             ) : invoice.sent ? (
               '✅ ส่งสำเร็จแล้ว'
+            ) : justEdited ? (
+              '📤 ส่งบิลฉบับแก้ไขเข้าไลน์'
             ) : (
               '📤 ส่งบิลเข้าไลน์'
             )}
           </button>
           <div className={`grid gap-3 ${invoice.paymentType === 'bank' ? 'grid-cols-1' : 'grid-cols-2'}`}>
-            {invoice.paymentType !== 'bank' && (
+            {invoice.paymentType !== 'bank' && qrDataUrl && (
               <a
-                href={invoice.qrUrl}
+                href={qrDataUrl}
                 download="promptpay-qr.png"
-                target="_blank"
-                rel="noreferrer"
                 className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
               >
                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -2573,12 +3241,161 @@ function Toast({ toast, onClose }) {
   )
 }
 
+function TrialWelcomeScreen({ starting, notice, onStart, onSignOut }) {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-indigo-50 via-white to-white px-4 py-10">
+      <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 shadow-xl shadow-indigo-100/60">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/30">
+          <Icon name="building" className="h-7 w-7" />
+        </div>
+        <h1 className="mt-5 text-center text-2xl font-bold tracking-tight text-gray-900">เริ่มใช้งานฟรี 30 วัน</h1>
+        <p className="mt-2 text-center text-sm leading-relaxed text-gray-600">
+          ทดลองใช้ PayRentPro ฟรี 30 วัน — จัดการห้องเช่า ออกบิล ทวงเงินเข้า LINE ได้ทันที ไม่ต้องใช้บัตรเครดิต
+        </p>
+        {notice && (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm font-medium text-amber-700">
+            {notice}
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={onStart}
+          disabled={starting}
+          className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-base font-semibold text-white shadow-lg shadow-indigo-600/30 transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {starting ? (
+            <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
+            </svg>
+          ) : null}
+          {starting ? 'กำลังเริ่ม...' : 'เริ่มทดลองใช้ฟรี'}
+        </button>
+        <button
+          type="button"
+          onClick={onSignOut}
+          className="mt-4 w-full text-center text-sm font-medium text-gray-500 transition-colors hover:text-gray-700"
+        >
+          ออกจากระบบ
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// หน้าล็อคเมื่อสมาชิกหมดอายุ — ข้อมูลยังอยู่ทั้งหมด แค่ต่ออายุเพื่อกลับมาใช้ต่อ
+// (ชำระเงิน manual ผ่านพร้อมเพย์ + ส่งสลิปทาง LINE แบบ manual ก่อน)
+function ExpiredScreen({ promptpayNumber, onSignOut }) {
+  const [showRenew, setShowRenew] = useState(false)
+  const pp = String(promptpayNumber ?? '').trim() || '08x-xxx-xxxx'
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4 py-10">
+      <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 shadow-xl shadow-rose-100/60">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
+          <Icon name="warning" className="h-7 w-7" />
+        </div>
+        <h1 className="mt-5 text-center text-2xl font-bold tracking-tight text-gray-900">หมดอายุการใช้งาน</h1>
+        <p className="mt-2 text-center text-sm leading-relaxed text-gray-600">
+          ข้อมูลทั้งหมดยังอยู่ ต่ออายุเพื่อใช้งานต่อ
+        </p>
+        {showRenew ? (
+          <div className="mt-6 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-4 text-sm leading-relaxed text-indigo-900">
+            ชำระค่าสมาชิกผ่านพร้อมเพย์ <span className="font-bold">{pp}</span> แล้วส่งสลิปที่ LINE ของเรา
+            ทีมงานจะต่ออายุให้หลังตรวจสอบสลิป
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowRenew(true)}
+            className="mt-6 w-full rounded-xl bg-indigo-600 px-4 py-3 text-base font-semibold text-white shadow-lg shadow-indigo-600/30 transition-colors hover:bg-indigo-500"
+          >
+            ต่ออายุ
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onSignOut}
+          className="mt-4 w-full text-center text-sm font-medium text-gray-500 transition-colors hover:text-gray-700"
+        >
+          ออกจากระบบ
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function App() {
+  const [session, setSession] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
+
+  useEffect(() => {
+    let active = true
+    supabase.auth.getSession().then(({ data }) => {
+      if (active) {
+        setSession(data.session)
+        setAuthLoading(false)
+      }
+    })
+
+    // fallback กรณีถูกพากลับมาพร้อม magic link แบบ PKCE (?code=...)
+    // ปกติ detectSessionInUrl ของ supabase จัดการตอน init แล้ว — ตรงนี้เป็นเบาะหลัง
+    // (code ถ้าถูกใช้ไปแล้วจะ error แล้วเราเงียบไว้ ไม่กระทบ session เดิม)
+    const url = new URL(window.location.href)
+    if (url.searchParams.has('code')) {
+      supabase.auth
+        .exchangeCodeForSession(window.location.href)
+        .catch((err) => console.warn('Magic link code exchange failed:', err?.message))
+        .finally(() => {
+          url.searchParams.delete('code')
+          url.searchParams.delete('next')
+          window.history.replaceState({}, '', url.pathname + (url.searchParams.toString() ? '?' + url.searchParams.toString() : '') + url.hash)
+        })
+    }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+    })
+
+    return () => {
+      active = false
+      subscription.unsubscribe()
+    }
+  }, [])
+
+  useEffect(() => {
+    const user = session?.user
+    if (!user) return
+    supabase.from('admins')
+      .update({ user_id: user.id })
+      .eq('user_id', null)
+      .eq('email', user.email)
+      .then(({ error }) => {
+        if (error) console.error('Link admin error:', error)
+      })
+  }, [session])
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <p className="text-sm text-gray-500">กำลังโหลด...</p>
+      </div>
+    )
+  }
+
+  if (!session) {
+    return <AuthPage />
+  }
+
+  return <Dashboard />
+}
+
+function Dashboard() {
   const [rentals, setRentals] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [isAddOpen, setIsAddOpen] = useState(false)
+  const [assetSearch, setAssetSearch] = useState('')
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [bindingModal, setBindingModal] = useState(null)
   const [detailRental, setDetailRental] = useState(null)
@@ -2602,7 +3419,13 @@ function App() {
     promptpay_name: '',
     bank_code: '',
     bank_account: '',
+    business_name: '',
+    owner_name: '',
+    address: '',
   })
+  const [membership, setMembership] = useState(null)
+  const [startingTrial, setStartingTrial] = useState(false)
+  const [trialNotice, setTrialNotice] = useState(null)
 
   const fetchRentals = useCallback(async (silent = false) => {
     if (!silent) setLoading(true)
@@ -2629,7 +3452,7 @@ function App() {
     try {
       const { data, error: ppError } = await supabase
         .from('admins')
-        .select('payment_type, promptpay_name, promptpay, bank_code, bank_account')
+        .select('payment_type, promptpay_name, promptpay, bank_code, bank_account, business_name, owner_name, address')
         .limit(1)
         .maybeSingle()
       if (ppError) throw ppError
@@ -2640,6 +3463,9 @@ function App() {
           promptpay_name: data.promptpay_name ?? '',
           bank_code: data.bank_code ?? '',
           bank_account: data.bank_account ?? '',
+          business_name: data.business_name ?? '',
+          owner_name: data.owner_name ?? '',
+          address: data.address ?? '',
         })
       }
     } catch (err) {
@@ -2761,7 +3587,7 @@ function App() {
       cutoff.setDate(cutoff.getDate() - 15)
       const { data, error } = await supabase
         .from('transactions')
-        .select('id, total_amount, rentals(cust_name)')
+        .select('id, total_amount, rentals(cust_name, item_details)')
         .eq('status', 'unpaid')
         .lt('created_at', cutoff.toISOString())
       if (error) throw error
@@ -2770,6 +3596,22 @@ function App() {
       console.error('Overdue fetch error:', err)
     }
   }, [])
+
+  // สถานะสมาชิก (plan / วันหมดอายุ / ลิมิตห้อง) — เรียกครั้งเดียวหลัง login และหลังเริ่มทดลองใช้
+  const fetchMembership = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.rpc('get_membership_status')
+      if (error) throw error
+      setMembership(data ?? { ok: false })
+    } catch (err) {
+      console.error('Membership status error:', err)
+      setMembership({ ok: false, error: err?.message })
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchMembership()
+  }, [fetchMembership])
 
   useEffect(() => {
     fetchPendingReviews()
@@ -2789,7 +3631,7 @@ function App() {
   }, [fetchPendingReviews, fetchSummary, fetchRentals, fetchOverdue])
 
   const handleReviewTransaction = async (id, newStatus) => {
-    if (!id) return
+    if (!id) return false
     setReviewing({ id, status: newStatus })
     setToast(null)
     try {
@@ -2801,18 +3643,76 @@ function App() {
       setToast({ type: 'success', message: newStatus === 'paid' ? 'อนุมัติสำเร็จ' : 'ปฏิเสธสำเร็จ' })
       await fetchPendingReviews()
       fetchSummary()
+      return true
     } catch (err) {
       setToast({ type: 'error', message: err?.message || 'อัปเดตสถานะไม่สำเร็จ' })
+      return false
     } finally {
       setReviewing(null)
     }
   }
 
-  const handleCreateBill = async (rental, meters, sendToLine = true) => {
+  // ออกใบเสร็จ PDF → อัปโหลด bucket receipts → ส่งรูปเข้ากลุ่ม LINE
+  // failToast: ข้อความ toast เมื่อขั้นตอนใด ๆ พัง (คนละ flow ใช้คนละข้อความ)
+  const issueReceiptAndSend = async ({ txId, custName, itemDetails, period, totalAmount, paidAmount, paidAt, failToast }) => {
+    try {
+      const blob = createReceiptPdf({
+        custName,
+        itemDetails,
+        period,
+        totalAmount,
+        paidAmount,
+        txId,
+        paidAt,
+        businessName: paymentInfo.business_name,
+        ownerName: paymentInfo.owner_name,
+        address: paymentInfo.address,
+      })
+      const path = `${txId}.pdf`
+      const { error: uploadError } = await supabase.storage
+        .from('receipts')
+        .upload(path, blob, { contentType: 'application/pdf', upsert: true })
+      if (uploadError) throw uploadError
+      const { data: publicData } = supabase.storage.from('receipts').getPublicUrl(path)
+      const { data, error } = await supabase.rpc('send_receipt_to_line', { p_tx_id: txId, p_public_url: publicData?.publicUrl })
+      if (error) throw error
+      if (data?.ok === false && data?.error === 'no_group') {
+        setToast({ type: 'warning', message: 'บิลนี้ยังไม่ได้ผูกกลุ่ม LINE — ใบเสร็จถูกบันทึกแล้ว' })
+        return
+      }
+      if (data?.ok === false) throw new Error(data?.error || 'send_receipt_to_line failed')
+      setToast({ type: 'success', message: 'ส่งใบเสร็จเข้า LINE แล้ว' })
+    } catch (err) {
+      console.error('Issue receipt failed:', err)
+      setToast(failToast || { type: 'error', message: 'ส่งใบเสร็จไม่สำเร็จ' })
+    }
+  }
+
+  // กดอนุมัติ: ทำงานเดิมก่อน แล้วออกใบเสร็จส่งเข้าไลน์เฉพาะเมื่ออนุมัติสำเร็จ
+  // (ถ้าขั้นใบเสร็จพัง แค่ toast เตือน — ไม่กระทบสถานะบิลที่อนุมัติไปแล้ว)
+  const handleApproveWithReceipt = async (item) => {
+    if (!item?.id) return
+    const ok = await handleReviewTransaction(item.id, 'paid')
+    if (!ok) return
+    const rental = Array.isArray(item.rentals) ? item.rentals[0] : item.rentals
+    const total = Number(item.total_amount || item.base_amount || 0)
+    await issueReceiptAndSend({
+      txId: item.id,
+      custName: rental?.cust_name || item.cust_name || 'ไม่ระบุ',
+      itemDetails: rental?.item_details || item.item_details || 'ไม่ระบุ',
+      period: item.period ? formatPeriod(item.period) : '',
+      totalAmount: total,
+      paidAmount: Number(item.paid_amount) > 0 ? Number(item.paid_amount) : total,
+      paidAt: new Date().toISOString(),
+      failToast: { type: 'warning', message: 'อนุมัติสำเร็จ แต่ส่งใบเสร็จไม่ได้' },
+    })
+  }
+
+  const handleCreateBill = async (rental, meters, sendToLine = true, periodArg) => {
     setToast(null)
     try {
       const amount = Number(getValue(rental, AMOUNT_KEYS))
-      const period = currentPeriod()
+      const period = periodArg || currentPeriod()
       const secureToken = generateSecureToken()
       const custName = getValue(rental, ['cust_name', 'tenant_name', 'customer', 'customer_name', 'name']) ?? 'ไม่ระบุ'
       const itemDetails = getValue(rental, ['item_details', 'property_name', 'property', 'unit', 'room']) ?? 'ไม่ระบุ'
@@ -2823,7 +3723,8 @@ function App() {
         .maybeSingle()
       const lineGroupId = rentalGroup?.group_id || ''
 
-      const utilityEnabled = Boolean(rental.utility_enabled)
+      // ค่าน้ำไฟคิดเฉพาะ property — vehicle/other บังคับข้าม (แม้ข้อมูลเก่าตั้ง utility_enabled ไว้)
+      const utilityEnabled = Boolean(rental.utility_enabled) && normalizeBizType(rental.biz_type) === 'property'
       const lastWater = Number(rental.last_water_meter) || 0
       const lastElec = Number(rental.last_elec_meter) || 0
       const waterCurrent = utilityEnabled ? Number(meters?.waterCurrent) || 0 : 0
@@ -2833,6 +3734,18 @@ function App() {
       const elecUnits = utilityEnabled ? Math.max(0, elecCurrent - lastElec) : 0
       const elecCost = utilityEnabled ? elecUnits * (Number(rental.elec_rate) || 0) : 0
       const totalAmount = amount + waterCost + elecCost
+
+      // guard: กันสร้างบิลซ้ำงวดเดิม — เทียบทั้งค่า ISO ที่บันทึกใหม่และค่าเดิมฟอร์แมตไทย
+      const periodLabel = formatPeriod(period)
+      const { data: existingTxs } = await supabase
+        .from('transactions')
+        .select('id, period')
+        .eq('rental_id', rental.id)
+      if ((existingTxs || []).some((t) => t.period === period || t.period === periodLabel)) {
+        setToast({ type: 'warning', message: `งวดนี้มีบิลอยู่แล้ว (${periodLabel}) — ไม่สามารถสร้างบิลซ้ำได้` })
+        setBillRental(null)
+        return
+      }
 
       const { data: tx, error: insertError } = await supabase
         .from('transactions')
@@ -2850,7 +3763,15 @@ function App() {
         }])
         .select()
         .single()
-      if (insertError) throw insertError
+      if (insertError) {
+        // ชน unique constraint ที่ตรวจไม่ทัน (เช่น สร้างพร้อมกันสองที่)
+        if (insertError.code === '23505' || /uniq_tx_rental_period/i.test(insertError.message || '')) {
+          setToast({ type: 'warning', message: `งวดนี้มีบิลอยู่แล้ว (${periodLabel}) — ไม่สามารถสร้างบิลซ้ำได้` })
+          setBillRental(null)
+          return
+        }
+        throw insertError
+      }
 
       // อัปเดตเลขมิเตอร์ล่าสุดใน rentals สำหรับเดือนถัดไป
       if (utilityEnabled) {
@@ -2862,9 +3783,8 @@ function App() {
         fetchRentals()
       }
 
-      const billLink = `http://localhost:5173/bill/${secureToken}`
+      const billLink = (import.meta.env.VITE_BILL_BASE_URL || window.location.origin) + '/bill/' + secureToken
       const isBank = paymentInfo.payment_type === 'bank'
-      const ppNumber = (paymentInfo.promptpay || '0812345678').replace(/[^0-9]/g, '')
       const accountName = paymentInfo.promptpay_name || ''
       const bankCode = paymentInfo.bank_code || ''
       const bankAccount = paymentInfo.bank_account || ''
@@ -2892,20 +3812,27 @@ function App() {
         bankCode,
         bankAccount,
         paymentText,
-        qrUrl: isBank ? '' : `https://promptpay.io/${ppNumber}/${totalAmount}.png`,
         billLink,
         status: 'unpaid',
         sent: false,
       }
 
-      // ส่งเข้าไลน์อัตโนมัติ (ถ้าเลือก)
+      // ส่งเข้าไลน์อัตโนมัติ (ถ้าเลือก) ผ่าน Supabase RPC
       if (sendToLine) {
         try {
-          await sendLineWebhook(invoiceObj)
-          invoiceObj.sent = true
+          const { data: rpcData, error: rpcError } = await supabase.rpc('send_bill_to_line', { p_tx_id: tx.id })
+          if (rpcError) throw rpcError
+          if (rpcData?.ok === false && rpcData?.error === 'no_group') {
+            setToast({ type: 'warning', message: 'สร้างบิลแล้ว แต่ห้องนี้ยังไม่ได้ผูกกลุ่ม LINE — ส่งไม่ได้' })
+          } else if (rpcData?.ok === false) {
+            setToast({ type: 'error', message: 'ส่งบิลเข้าไลน์ไม่สำเร็จ' })
+          } else {
+            invoiceObj.sent = true
+            setToast({ type: 'success', message: 'ส่งบิลเข้า LINE แล้ว' })
+          }
         } catch (err) {
-          console.error('Auto LINE webhook failed:', err)
-          setToast({ type: 'warning', message: 'สร้างบิลแล้ว แต่ส่งเข้าไลน์ไม่สำเร็จ (กดส่งเองได้ในหน้าบิล)' })
+          console.error('Auto LINE send failed:', err)
+          setToast({ type: 'error', message: 'ส่งบิลเข้าไลน์ไม่สำเร็จ' })
         }
       }
 
@@ -3003,7 +3930,7 @@ function App() {
       setToast({ type: 'error', message: 'ไม่พบลิงก์บิล' })
       return
     }
-    const link = `http://localhost:5173/bill/${token}`
+    const link = (import.meta.env.VITE_BILL_BASE_URL || window.location.origin) + '/bill/' + token
     try {
       await navigator.clipboard.writeText(link)
       setToast({ type: 'success', message: 'คัดลอกลิงก์บิลแล้ว' })
@@ -3013,15 +3940,125 @@ function App() {
   }
 
   const handleSendBillToLine = async () => {
-    if (!invoice) return
+    if (!invoice?.transactionId) return
     try {
-      await sendLineWebhook(invoice)
+      const { data, error } = await supabase.rpc('send_bill_to_line', { p_tx_id: invoice.transactionId })
+      if (error) throw error
+      if (data?.ok === false && data?.error === 'no_group') {
+        setToast({ type: 'warning', message: 'ห้องนี้ยังไม่ได้ผูกกลุ่ม LINE — ส่งไม่ได้' })
+        return
+      }
+      if (data?.ok === false) throw new Error(data?.error || 'send_bill_to_line failed')
       setInvoice((prev) => ({ ...prev, sent: true }))
-      setToast({ type: 'success', message: 'ส่งบิลเข้าไลน์เรียบร้อยแล้ว' })
+      setToast({ type: 'success', message: 'ส่งบิลเข้า LINE แล้ว' })
     } catch (err) {
-      console.error('Webhook request failed:', err)
-      setToast({ type: 'error', message: err?.message || 'ส่งบิลเข้าไลน์ไม่สำเร็จ' })
+      console.error('Send bill to LINE failed:', err)
+      setToast({ type: 'error', message: 'ส่งบิลเข้าไลน์ไม่สำเร็จ' })
     }
+  }
+
+  const [sendingBillId, setSendingBillId] = useState(null)
+  const [sendingReminder, setSendingReminder] = useState(false)
+  const handleSendDueSoonReminders = async () => {
+    setSendingReminder(true)
+    setToast(null)
+    try {
+      const { data, error } = await supabase.rpc('send_due_soon_reminders')
+      if (error) throw error
+      if (data?.ok && Number(data.sent) > 0) {
+        setToast({ type: 'success', message: `ส่งการแจ้งเตือน ${Number(data.sent)} รายการแล้ว` })
+      } else {
+        setToast({ type: 'info', message: 'ไม่มีบิลที่ต้องเตือนวันนี้' })
+      }
+    } catch (err) {
+      console.error('Send due-soon reminders failed:', err)
+      setToast({ type: 'error', message: 'ส่งการแจ้งเตือนไม่สำเร็จ' })
+    } finally {
+      setSendingReminder(false)
+    }
+  }
+  const handleSendOverdueBill = async (txId) => {
+    if (!txId) return
+    setSendingBillId(txId)
+    setToast(null)
+    try {
+      const { data, error } = await supabase.rpc('send_bill_to_line', { p_tx_id: txId })
+      if (error) throw error
+      if (data?.ok === false && data?.error === 'no_group') {
+        setToast({ type: 'warning', message: 'ห้องนี้ยังไม่ได้ผูกกลุ่ม LINE — ส่งไม่ได้' })
+        return
+      }
+      if (data?.ok === false) throw new Error(data?.error || 'send_bill_to_line failed')
+      setToast({ type: 'success', message: 'ส่งบิลเข้า LINE แล้ว' })
+    } catch (err) {
+      console.error('Send bill to LINE failed:', err)
+      setToast({ type: 'error', message: 'ส่งบิลเข้าไลน์ไม่สำเร็จ' })
+    } finally {
+      setSendingBillId(null)
+    }
+  }
+
+  // แก้ยอดบิล (เฉพาะ unpaid) — เรียก RPC update_bill_amount แล้วรีเฟรชสรุป
+  const handleEditBillAmount = async ({ waterCost, elecCost, extraCharges, reason }) => {
+    if (!invoice?.transactionId) return false
+    setToast(null)
+    try {
+      const { data, error } = await supabase.rpc('update_bill_amount', {
+        p_tx_id: invoice.transactionId,
+        p_water_cost: waterCost,
+        p_elec_cost: elecCost,
+        p_extra_charges: extraCharges,
+        p_reason: reason,
+      })
+      if (error) throw error
+      if (data?.ok === false) throw new Error(data?.error || 'update_bill_amount failed')
+      const newTotal = (Number(invoice.baseAmount) || 0) + waterCost + elecCost + extraCharges
+      setInvoice((prev) => ({ ...prev, total: newTotal, waterCost, elecCost, extraCharges, sent: false }))
+      setToast({ type: 'success', message: `แก้ไขบิลแล้ว ยอดใหม่ ${formatCurrency(newTotal)} — ลิงก์บิลเดิมจะแสดงยอดใหม่อัตโนมัติ` })
+      fetchSummary()
+      fetchOverdue()
+      return true
+    } catch (err) {
+      console.error('Edit bill amount failed:', err)
+      setToast({ type: 'error', message: 'แก้ไขบิลไม่สำเร็จ' })
+      return false
+    }
+  }
+
+  // เริ่มทดลองใช้ฟรี 30 วัน (หน้าต้อนรับผู้ใช้ใหม่ที่ยังไม่มีแถวสมาชิก)
+  const handleStartTrial = async () => {
+    setStartingTrial(true)
+    setTrialNotice(null)
+    setToast(null)
+    try {
+      const { data, error } = await supabase.rpc('start_trial')
+      if (error) throw error
+      if (data?.ok === false) {
+        if (data?.error === 'already_registered') {
+          setTrialNotice('อีเมลนี้เคยสมัครแล้ว')
+          return
+        }
+        throw new Error(data?.error || 'start_trial failed')
+      }
+      setToast({ type: 'success', message: 'เริ่มทดลองใช้ฟรี 30 วันแล้ว — ยินดีต้อนรับ!' })
+      await fetchMembership()
+    } catch (err) {
+      console.error('Start trial failed:', err)
+      setToast({ type: 'error', message: 'เริ่มทดลองใช้ไม่สำเร็จ' })
+    } finally {
+      setStartingTrial(false)
+    }
+  }
+
+  // gate จำนวนห้องตามแพ็กเกจ — ใช้แล้วครบ room_limit ไม่ให้เปิดฟอร์มเพิ่มสินทรัพย์
+  const handleOpenAddForm = () => {
+    const used = rentals.length
+    const limit = Number(membership?.room_limit)
+    if (membership?.ok && Number.isFinite(limit) && limit > 0 && used >= limit) {
+      setToast({ type: 'warning', message: `ครบจำนวนห้องของแพ็กเกจแล้ว (ใช้ ${used}/${limit} ห้อง) — อัปเกรดเพื่อเพิ่มห้อง` })
+      return
+    }
+    setIsAddOpen(true)
   }
 
   const location = useLocation()
@@ -3030,29 +4067,56 @@ function App() {
   const isAudit = location.pathname === '/audit'
 
   const stats = useMemo(() => computeStats(rentals), [rentals])
-  const columns = TABLE_COLUMNS
   const expiringLeases = useMemo(() => {
     return (rentals || []).filter((r) => r?.lease_end_date && String(r.room_status ?? '').toLowerCase() !== 'vacant' && isExpiringSoon(r.lease_end_date))
   }, [rentals])
 
-  const urgentExpiring = useMemo(() => {
-    return (rentals || []).filter((r) => {
-      if (!r?.lease_end_date || String(r.room_status ?? '').toLowerCase() === 'vacant') return false
-      const d = daysUntil(r.lease_end_date)
-      return d !== null && d >= 0 && d <= 7
-    })
-  }, [rentals])
-
   const statCards = [
-    { icon: 'chart', label: 'รายได้รวมตั้งแต่เริ่มใช้งาน', value: formatCurrency(summary.paidIncome), tone: 'blue', onClick: () => setShowMonthly(true) },
     { icon: 'banknotes', label: 'รายรับเดือนนี้', value: formatCurrency(summary.paidThisMonth), tone: 'green', onClick: () => setShowMonthly(true) },
-    { icon: 'warning', label: 'ยอดค้างชำระ', value: formatCurrency(summary.outstanding), tone: 'red' },
-    { icon: 'home', label: 'ห้องว่าง', value: stats.vacant, tone: 'orange' },
+    { icon: 'warning', label: 'ยอดค้างชำระรวม', value: formatCurrency(summary.outstanding), tone: 'red' },
+    { icon: 'home', label: 'ห้องค้างชำระเกิน 15 วัน', value: overdueBills.length, tone: 'orange' },
+    { icon: 'check', label: 'รอตรวจสลิป', value: pendingReviews.length, tone: pendingReviews.length > 0 ? 'yellow' : 'green' },
   ]
+
+  // membership gate: กำลังโหลดสถานะ → จอว่าง, ยังไม่มีแถวสมาชิก → หน้าเริ่มทดลองใช้ฟรี
+  if (!membership) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <p className="text-sm text-gray-500">กำลังโหลด...</p>
+      </div>
+    )
+  }
+
+  if (membership.ok === false) {
+    return (
+      <>
+        <TrialWelcomeScreen
+          starting={startingTrial}
+          notice={trialNotice}
+          onStart={handleStartTrial}
+          onSignOut={() => supabase.auth.signOut()}
+        />
+        <Toast toast={toast} onClose={closeToast} />
+      </>
+    )
+  }
+
+  // สมาชิกหมดอายุ (status อัปเดตโดย cron check_membership_expiry ฝั่ง DB) → ล็อคหน้า dashboard
+  if (String(membership.status ?? '').toLowerCase() === 'expired') {
+    return (
+      <>
+        <ExpiredScreen
+          promptpayNumber={paymentInfo.promptpay}
+          onSignOut={() => supabase.auth.signOut()}
+        />
+        <Toast toast={toast} onClose={closeToast} />
+      </>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
-      <Sidebar />
+      <Sidebar businessName={paymentInfo.business_name} membership={membership} />
 
       <div className="lg:pl-64">
         <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/80 backdrop-blur">
@@ -3079,7 +4143,7 @@ function App() {
                   onClick={handleExportCsv}
                   className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
                 >
-                  Export CSV
+                  ⬇️ Export CSV
                 </button>
               )}
               {lastUpdated && (
@@ -3088,12 +4152,26 @@ function App() {
                 </p>
               )}
               {isAssets && (
+                <div className="relative hidden min-w-0 flex-1 sm:block sm:max-w-xs md:max-w-sm">
+                  <svg className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                  </svg>
+                  <input
+                    type="text"
+                    value={assetSearch}
+                    onChange={(e) => setAssetSearch(e.target.value)}
+                    placeholder="ค้นหาชื่อผู้เช่า / ห้อง"
+                    className="w-full rounded-xl border border-gray-300 bg-white py-2.5 pl-11 pr-4 text-base text-gray-900 placeholder:text-gray-400 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                  />
+                </div>
+              )}
+              {isAssets && (
                 <button
                   type="button"
-                  onClick={() => setIsAddOpen(true)}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-500"
+                  onClick={handleOpenAddForm}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-base font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-500"
                 >
-                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                   </svg>
                   เพิ่มสินทรัพย์
@@ -3106,7 +4184,17 @@ function App() {
                 className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Icon name="refresh" className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                รีเฟรชข้อมูล
+                <span className="hidden xl:inline">รีเฟรชข้อมูล</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => supabase.auth.signOut()}
+                className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
+                </svg>
+                <span className="hidden xl:inline">ออกจากระบบ</span>
               </button>
             </div>
           </div>
@@ -3119,17 +4207,30 @@ function App() {
             <SettingsPage onSaved={fetchPaymentInfo} />
           ) : isAssets ? (
             <>
+              <div className="relative sm:hidden">
+                <svg className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                </svg>
+                <input
+                  type="text"
+                  value={assetSearch}
+                  onChange={(e) => setAssetSearch(e.target.value)}
+                  placeholder="ค้นหาชื่อผู้เช่า / ห้อง"
+                  className="w-full rounded-xl border border-gray-300 bg-white py-3 pl-11 pr-4 text-base text-gray-900 placeholder:text-gray-400 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                />
+              </div>
+
               <LeaseExpirySection
                 rentals={rentals}
                 onRenew={setRenewRental}
                 onMoveOut={(rental) => setConfirmAction({ type: 'moveout', rental })}
               />
 
-              <RentalsTable
+              <AssetsView
                 rentals={rentals}
                 loading={loading}
                 error={error}
-                columns={columns}
+                search={assetSearch}
                 onRetry={fetchRentals}
                 onBillRequest={setBillRental}
                 onViewDetails={setDetailRental}
@@ -3140,28 +4241,34 @@ function App() {
             </>
           ) : (
             <>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
                 {statCards.map((card) => (
                   <StatCard key={card.label} {...card} />
                 ))}
               </div>
 
-              <UrgentAlertsPanel expiring={urgentExpiring} overdue={overdueBills} />
-
-              <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <OccupancyDonut occupied={stats.occupied} vacant={stats.vacant} />
-                <RevenueBar monthly={summary.monthly} />
-              </div>
+              <UrgentChaseSection
+                overdue={overdueBills}
+                sendingId={sendingBillId}
+                onSendBill={handleSendOverdueBill}
+                sendingReminder={sendingReminder}
+                onSendReminders={handleSendDueSoonReminders}
+              />
 
               <PendingReviewSection
                 items={pendingReviews}
                 loading={pendingLoading}
                 error={pendingError}
                 reviewing={reviewing}
-                onApprove={(id) => handleReviewTransaction(id, 'paid')}
+                onApprove={(id) => handleApproveWithReceipt(pendingReviews.find((t) => t.id === id))}
                 onReject={(id) => handleReviewTransaction(id, 'unpaid')}
                 onRetry={fetchPendingReviews}
               />
+
+              <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <OccupancyDonut occupied={stats.occupied} vacant={stats.vacant} />
+                <RevenueBar monthly={summary.monthly} />
+              </div>
             </>
           )}
         </main>
@@ -3184,6 +4291,19 @@ function App() {
         onMarkPaid={handleMarkPaid}
         onCopyLink={handleCopyBillLink}
         onSendToLine={handleSendBillToLine}
+        onIssueReceipt={async () => {
+          if (!invoice?.transactionId) return
+          await issueReceiptAndSend({
+            txId: invoice.transactionId,
+            custName: invoice.custName,
+            itemDetails: invoice.itemDetails,
+            period: invoice.period ? formatPeriod(invoice.period) : '',
+            totalAmount: invoice.total,
+            paidAmount: invoice.total,
+            paidAt: new Date().toISOString(),
+          })
+        }}
+        onEditAmount={handleEditBillAmount}
       />
 
       <SettingsModal
@@ -3201,6 +4321,7 @@ function App() {
       <AssetDetailModal
         rental={detailRental}
         onClose={() => setDetailRental(null)}
+        onToast={setToast}
       />
 
       <MeterBillModal
