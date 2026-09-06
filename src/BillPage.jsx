@@ -4,6 +4,7 @@ import { supabase } from './supabaseClient'
 import { bankName } from './payment'
 import { createPromptpayQR } from './utils/promptpay'
 import { formatPeriod } from './utils/period'
+import { displayAssetName } from './utils/assetName'
 
 function formatCurrency(value) {
   const n = Number(value)
@@ -172,7 +173,7 @@ function BillPage() {
   }
 
   const custName = bill.cust_name ?? 'ไม่ระบุ'
-  const itemDetails = bill.item_details ?? 'ไม่ระบุ'
+  const itemDetails = displayAssetName(bill)
   const total = Number(bill.total_amount || bill.base_amount)
   const isBank = bill.payment_type === 'bank'
   const hasPromptpay = Boolean(bill.promptpay && String(bill.promptpay).trim())

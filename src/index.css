@@ -1,7 +1,57 @@
 @import "tailwindcss";
 
+/* Tailwind v4: เปิด dark variant แบบ class-based (คุมด้วย class "dark" บน <html>) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* โหมดตัวอักษรขยาย (accessibility): ขยาย root font-size — Tailwind ใช้ rem ทั้งระบบ
+   text-sm/base/lg รวมถึง spacing py/px ของปุ่มจะขยายตามอัตโนมัติ */
+html.text-large {
+  font-size: 18px;
+}
+
+@media (max-width: 639px) {
+  html.text-large {
+    font-size: 17px;
+  }
+}
+
+/* ประกันความสูงขั้นต่ำของปุ่ม/ช่องกรอกในโหมดขยาย (กันปุ่มเตี้ยเกินจะกดยาก)
+   2rem = ความสูงปุ่มไอคอนมาตรฐาน (h-8) จึงไม่บิดสัดส่วนปุ่มที่เป็นสี่เหลี่ยมจัตุรัส
+   (checkbox/radio/file ไม่รวม เพราะ min-height จะทำให้ control ผิดรูป) */
+html.text-large button,
+html.text-large input:not([type='checkbox']):not([type='radio']):not([type='file']),
+html.text-large select,
+html.text-large textarea {
+  min-height: 2rem;
+}
+
 @layer base {
   body {
     @apply bg-gray-50 text-gray-900 antialiased;
+  }
+}
+
+/* ธีมมืด: ให้ scrollbars / native controls ของเบราว์เซอร์เป็นโทนเข้มตาม */
+html.dark {
+  color-scheme: dark;
+}
+
+/* สีพื้น/ขอบ/ตัวหนังสือไหลเนียนตอนสลับธีม — class นี้ถูกใส่ชั่วคราว ~300ms โดย ThemeProvider
+   (ไม่ใส่ transition ถาวรกับทุก element เพื่อไม่ให้ชนกับ transition ที่มีอยู่แล้ว) */
+html.theme-transition,
+html.theme-transition *,
+html.theme-transition *::before,
+html.theme-transition *::after {
+  transition-property: background-color, border-color, color, fill, stroke !important;
+  transition-duration: 200ms !important;
+  transition-timing-function: ease !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.theme-transition,
+  html.theme-transition *,
+  html.theme-transition *::before,
+  html.theme-transition *::after {
+    transition: none !important;
   }
 }
