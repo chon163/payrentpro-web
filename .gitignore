@@ -30,3 +30,9 @@ dist-ssr
 
 # Supabase CLI
 supabase/.temp/
+
+.vercel
+.env*
+
+# ภาพจาก responsive harness — สร้างใหม่ได้ด้วย node tools/shoot.mjs / shoot-modals.mjs
+gui-test-screenshots/

@@ -414,12 +414,13 @@ function StatCard({ icon, label, value, tone = 'blue', onClick }) {
         <p className={`text-sm font-semibold ${t.text}`}>{label}</p>
         <p className={`mt-2 text-2xl font-bold tracking-tight ${t.text}`}>{value}</p>
       </div>
-      <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${t.icon}`}>
-        <Icon name={icon} className="h-6 w-6" />
+      {/* ไอคอนย่อลงที่ 375px เพื่อให้ตัวเลขคง text-2xl ได้ในการ์ด 2 คอลัมน์ */}
+      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl sm:h-12 sm:w-12 ${t.icon}`}>
+        <Icon name={icon} className="h-5 w-5 sm:h-6 sm:w-6" />
       </div>
     </div>
   )
-  const cls = `w-full rounded-2xl border p-5 text-left shadow-sm transition-shadow hover:shadow-md ${t.card}`
+  const cls = `w-full rounded-2xl border p-4 text-left shadow-sm transition-shadow hover:shadow-md sm:p-5 ${t.card}`
   if (onClick) {
     return <button type="button" onClick={onClick} className={cls}>{inner}</button>
   }
@@ -430,19 +431,19 @@ function MonthlyBreakdownModal({ monthly, onClose }) {
   const rows = Array.isArray(monthly) ? monthly : []
   const total = rows.reduce((sum, m) => sum + (Number(m.paid) || 0), 0)
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
-      <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white dark:bg-gray-900 shadow-2xl">
+      <div className="relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white dark:bg-gray-900 shadow-2xl sm:max-h-[90vh] sm:max-w-md sm:rounded-2xl">
         <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 px-6 py-4">
           <div>
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">รายได้รายเดือน</h2>
             <p className="text-xs text-gray-500 dark:text-gray-400">ยอดชำระแล้ว (paid) แยกตามเดือน</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300" aria-label="ปิด">
+          <button type="button" onClick={onClose} className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 lg:mr-0 lg:h-auto lg:w-auto lg:p-1.5" aria-label="ปิด">
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
           </button>
         </div>
-        <div className="px-6 py-4">
+        <div className="flex-1 overflow-y-auto px-6 py-4">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 dark:border-gray-800 text-left text-xs text-gray-500 dark:text-gray-400">
@@ -497,7 +498,7 @@ function OccupancyDonut({ occupied, vacant }) {
         </div>
         <span className="text-lg font-bold text-blue-600 dark:text-blue-400">{total ? Math.round((occupied / total) * 100) : 0}%</span>
       </div>
-      <div className="h-44">
+      <div className="h-40 sm:h-44">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie data={data} dataKey="value" nameKey="name" innerRadius={60} outerRadius={85} paddingAngle={3}>
@@ -522,7 +523,7 @@ function RevenueBar({ monthly }) {
         <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">รายรับ 6 เดือน (แยกตามประเภทสินทรัพย์)</h3>
         <p className="text-xs text-gray-500 dark:text-gray-400">ยอดชำระแล้วแยกตามอสังหา / ยานพาหนะ / อุปกรณ์ (ย้อนหลัง 6 เดือน)</p>
       </div>
-      <div className="h-48">
+      <div className="h-40 sm:h-48">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chart.grid} />
@@ -616,7 +617,7 @@ function AgingBarChart({ buckets }) {
       </div>
       {hasData ? (
         <>
-          <div className="h-44">
+          <div className="h-40 sm:h-44">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={buckets} layout="vertical" margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={chart.grid} />
@@ -661,22 +662,22 @@ function UrgentChaseSection({ overdue, sendingId, onSendBill, sendingReminder, o
 
   return (
     <section className="mt-6 overflow-hidden rounded-2xl border border-rose-200 dark:border-rose-800/70 bg-white dark:bg-gray-900 shadow-lg shadow-rose-100/60">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rose-100 dark:border-rose-800/50 bg-gradient-to-r from-rose-50 dark:from-rose-950/30 to-orange-50 dark:to-orange-950/30 px-5 py-5">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rose-100 dark:border-rose-800/50 bg-gradient-to-r from-rose-50 dark:from-rose-950/30 to-orange-50 dark:to-orange-950/30 px-4 py-4 sm:px-5 sm:py-5">
+        <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-rose-500 text-white shadow-lg shadow-rose-500/40">
             <Icon name="warning" className="h-6 w-6" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h2 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100">ต้องทวงด่วน</h2>
             <p className="text-sm text-rose-700 dark:text-rose-300">ค้างชำระเกิน 15 วัน เรียงยอดมากไปน้อย</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex w-full items-center gap-3 sm:w-auto">
           <button
             type="button"
             onClick={onSendReminders}
             disabled={sendingReminder}
-            className="inline-flex items-center gap-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-2.5 text-base font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-3 text-base font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60 lg:flex-none lg:py-2.5"
           >
             {sendingReminder ? (
               <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -700,7 +701,7 @@ function UrgentChaseSection({ overdue, sendingId, onSendBill, sendingReminder, o
           const custName = rental?.cust_name || item.cust_name || 'ไม่ระบุ'
           const sending = sendingId === item.id
           return (
-            <li key={item.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <li key={item.id} className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
               <div className="min-w-0">
                 <p className="truncate text-base font-bold text-gray-900 dark:text-gray-100">{room}</p>
                 <p className="mt-0.5 truncate text-base text-gray-600 dark:text-gray-400">{custName}</p>
@@ -743,7 +744,7 @@ function NotificationsBell({ pendingReviews, expiringLeases }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="relative rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 p-2.5 text-gray-600 dark:text-gray-400 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800"
+        className="relative flex h-11 w-11 items-center justify-center rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 lg:h-auto lg:w-auto lg:p-2.5"
         aria-label="การแจ้งเตือน"
       >
         <Icon name="bell" className="h-5 w-5" />
@@ -830,28 +831,50 @@ function AuditLogPage() {
       ) : logs.length === 0 ? (
         <div className="p-10 text-center text-sm text-gray-500 dark:text-gray-400">ยังไม่มีประวัติการแก้ไข</div>
       ) : (
-        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-          <thead className="bg-gray-50 dark:bg-gray-950">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">เลขบิล</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">ยอดเก่า</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">ยอดใหม่</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">เหตุผล</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">วันที่แก้ไข</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+        <>
+          {/* ตารางที่ 768px ขึ้นไป */}
+          <div className="hidden overflow-x-auto sm:block">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead className="bg-gray-50 dark:bg-gray-950">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">เลขบิล</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">ยอดเก่า</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">ยอดใหม่</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">เหตุผล</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">วันที่แก้ไข</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                {logs.map((log) => (
+                  <tr key={log.id} className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800">
+                    <td className="px-6 py-3 font-mono text-xs text-gray-700 dark:text-gray-300">{log.transaction_id || '—'}</td>
+                    <td className="px-6 py-3 text-sm text-gray-500 dark:text-gray-400">{formatCurrency(log.old_amount)}</td>
+                    <td className="px-6 py-3 text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(log.new_amount)}</td>
+                    <td className="px-6 py-3 text-sm text-gray-600 dark:text-gray-400">{log.reason || '—'}</td>
+                    <td className="px-6 py-3 text-sm text-gray-500 dark:text-gray-400">{formatDate(log.created_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* การ์ดแนวตั้งที่ 375px */}
+          <div className="divide-y divide-gray-100 dark:divide-gray-800 sm:hidden">
             {logs.map((log) => (
-              <tr key={log.id} className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800">
-                <td className="px-6 py-3 font-mono text-xs text-gray-700 dark:text-gray-300">{log.transaction_id || '—'}</td>
-                <td className="px-6 py-3 text-sm text-gray-500 dark:text-gray-400">{formatCurrency(log.old_amount)}</td>
-                <td className="px-6 py-3 text-sm font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(log.new_amount)}</td>
-                <td className="px-6 py-3 text-sm text-gray-600 dark:text-gray-400">{log.reason || '—'}</td>
-                <td className="px-6 py-3 text-sm text-gray-500 dark:text-gray-400">{formatDate(log.created_at)}</td>
-              </tr>
+              <div key={log.id} className="space-y-2 p-4">
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100">{formatCurrency(log.new_amount)}</p>
+                  <p className="shrink-0 text-sm text-gray-500 line-through dark:text-gray-400">{formatCurrency(log.old_amount)}</p>
+                </div>
+                <p className="text-base text-gray-600 dark:text-gray-400">{log.reason || '—'}</p>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400">
+                  <span>{formatDate(log.created_at)}</span>
+                  <span className="break-all font-mono">บิล {log.transaction_id || '—'}</span>
+                </div>
+              </div>
             ))}
-          </tbody>
-        </table>
+          </div>
+        </>
       )}
     </div>
   )
@@ -859,15 +882,15 @@ function AuditLogPage() {
 
 function PDPAConsentModal({ onAccept }) {
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" />
-      <div className="relative w-full max-w-md rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-2xl">
+      <div className="relative max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white dark:bg-gray-900 p-6 shadow-2xl sm:max-h-[90vh] sm:max-w-md sm:rounded-2xl">
         <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/30">
           <Icon name="building" className="h-6 w-6" />
         </div>
         <h2 className="mt-4 text-lg font-bold text-gray-900 dark:text-gray-100">การยินยอมข้อมูลส่วนบุคคล (PDPA)</h2>
         <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-gray-400">ระบบจะเก็บข้อมูลชื่อ-ที่อยู่-ยอดเงินของผู้เช่าเพื่อการทวงเงินตามกฎหมาย PDPA</p>
-        <button type="button" onClick={onAccept} className="mt-5 w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500">
+        <button type="button" onClick={onAccept} className="mt-5 w-full rounded-xl bg-indigo-600 px-4 py-4 text-base font-semibold text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500 lg:py-2.5 lg:text-sm">
           ยินยอม
         </button>
       </div>
@@ -981,6 +1004,113 @@ function Sidebar({ businessName, membership }) {
   )
 }
 
+// แถบนำทางล่างสำหรับมือถือ/แท็บเล็ต — สูง 56px (h-14) ซ่อนที่ lg ขึ้นไปเพราะมี Sidebar แล้ว
+// founder ได้ปุ่มที่ 5 (ผู้ดูแล) — คนอื่นเห็น 4 ปุ่ม
+const BOTTOM_NAV_ITEMS = [
+  { to: '/', label: 'หน้าแรก', icon: 'home' },
+  { to: '/assets', label: 'สินทรัพย์', icon: 'building' },
+  { to: '/membership', label: 'สมาชิก', icon: 'gem' },
+  { to: '/settings', label: 'ตั้งค่า', icon: 'cog' },
+  { to: '/admin', label: 'ผู้ดูแล', icon: 'shield', founderOnly: true },
+]
+
+function BottomNav({ membership }) {
+  const isFounder = String(membership?.plan ?? '').toLowerCase() === 'founder'
+  const items = isFounder ? BOTTOM_NAV_ITEMS : BOTTOM_NAV_ITEMS.filter((item) => !item.founderOnly)
+  return (
+    <nav
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 backdrop-blur lg:hidden"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      aria-label="เมนูหลัก"
+    >
+      <div className="flex h-14 items-stretch">
+        {items.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.to === '/'}
+            className={({ isActive }) =>
+              `flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors ${
+                isActive
+                  ? 'text-indigo-600 dark:text-indigo-400'
+                  : 'text-gray-500 dark:text-gray-400 active:bg-gray-50 dark:active:bg-gray-800'
+              }`
+            }
+          >
+            <Icon name={item.icon} className="h-5 w-5" />
+            <span className="max-w-full truncate leading-none">{item.label}</span>
+          </NavLink>
+        ))}
+      </div>
+    </nav>
+  )
+}
+
+// เมนู ⋯ ของ header มือถือ/แท็บเล็ต — รวบปุ่มรองที่เคยเรียงยาวจนล้นจอไว้ที่นี่
+// (Export CSV / รีเฟรช / ตัวอักษรขยาย / ธีม / ประวัติแก้ไข / ออกจากระบบ)
+function HeaderOverflowMenu({ onExportCsv, onRefresh, loading, lastUpdated, largeText, onToggleLargeText, theme, onToggleTheme }) {
+  const [open, setOpen] = useState(false)
+  const itemClass =
+    'flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-300 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800'
+  const close = () => setOpen(false)
+  return (
+    <div className="relative lg:hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex h-11 w-11 items-center justify-center rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800"
+        aria-label="เมนูเพิ่มเติม"
+        aria-expanded={open}
+      >
+        <span aria-hidden="true" className="text-xl font-bold leading-none">⋯</span>
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={close} aria-hidden="true" />
+          <div className="absolute right-0 z-50 mt-2 w-60 overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl">
+            {onExportCsv && (
+              <button type="button" onClick={() => { close(); onExportCsv() }} className={itemClass}>
+                <span aria-hidden="true">⬇️</span> Export CSV
+              </button>
+            )}
+            <button type="button" onClick={() => { close(); onRefresh() }} disabled={loading} className={`${itemClass} disabled:opacity-60`}>
+              <Icon name="refresh" className={`h-5 w-5 ${loading ? 'animate-spin' : ''}`} />
+              รีเฟรชข้อมูล
+            </button>
+            <button type="button" onClick={onToggleLargeText} aria-pressed={largeText} className={itemClass}>
+              <span aria-hidden="true" className="text-base font-extrabold leading-none">
+                A<span className="align-super text-[0.6em]">+</span>
+              </span>
+              {largeText ? 'ปิดตัวอักษรขยาย' : 'เปิดตัวอักษรขยาย'}
+            </button>
+            <button type="button" onClick={onToggleTheme} className={itemClass}>
+              <span aria-hidden="true">{theme === 'dark' ? '☀️' : '🌙'}</span>
+              {theme === 'dark' ? 'โหมดสว่าง' : 'โหมดมืด'}
+            </button>
+            <NavLink to="/audit" onClick={close} className={itemClass}>
+              <Icon name="document" className="h-5 w-5" />
+              ประวัติแก้ไข
+            </NavLink>
+            <button
+              type="button"
+              onClick={() => { close(); supabase.auth.signOut() }}
+              className="flex w-full items-center gap-3 border-t border-gray-100 dark:border-gray-800 px-4 py-3 text-left text-sm font-semibold text-rose-600 dark:text-rose-400 transition-colors hover:bg-rose-50 dark:hover:bg-rose-900/30"
+            >
+              <Icon name="warning" className="h-5 w-5" />
+              ออกจากระบบ
+            </button>
+            {lastUpdated && (
+              <p className="border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-4 py-2.5 text-xs text-gray-400">
+                อัปเดตล่าสุด {lastUpdated.toLocaleTimeString('th-TH')}
+              </p>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 function TableSkeleton() {
   return (
     <div className="animate-pulse space-y-3 p-6">
@@ -993,7 +1123,7 @@ function TableSkeleton() {
 
 const MENU_WIDTH = 208 // w-52 = 13rem
 
-function RowActionsMenu({ onViewDetails, onBillRequest, onRenew, onMoveOut, onDelete }) {
+function RowActionsMenu({ onViewDetails, onBillRequest, onRenew, onMoveOut, onDelete, fullWidth = false }) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState(null)
   const buttonRef = useRef(null)
@@ -1014,6 +1144,12 @@ function RowActionsMenu({ onViewDetails, onBillRequest, onRenew, onMoveOut, onDe
     }
     const rect = buttonRef.current?.getBoundingClientRect()
     if (!rect) {
+      setOpen(true)
+      return
+    }
+    // ปุ่มเต็มความกว้าง (การ์ดมือถือ): เมนูกว้างเท่าปุ่มและชิดขอบซ้ายของปุ่ม
+    if (fullWidth) {
+      setPos({ left: Math.round(rect.left), top: Math.round(rect.bottom + 4), width: Math.round(rect.width) })
       setOpen(true)
       return
     }
@@ -1060,11 +1196,18 @@ function RowActionsMenu({ onViewDetails, onBillRequest, onRenew, onMoveOut, onDe
         aria-label="เมนูจัดการ"
         aria-expanded={open}
         className={
-          open
-            ? 'relative z-[70] rounded-lg bg-gray-100 dark:bg-gray-800 p-2 text-gray-700 dark:text-gray-300'
-            : 'rounded-lg p-2 text-gray-500 dark:text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300'
+          fullWidth
+            ? `inline-flex w-full items-center justify-center gap-2 rounded-xl border border-gray-300 dark:border-gray-600 px-4 py-3 text-base font-semibold transition-colors ${
+                open
+                  ? 'relative z-[70] bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                  : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+              }`
+            : open
+              ? 'relative z-[70] flex h-11 w-11 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 lg:h-auto lg:w-auto lg:p-2'
+              : 'flex h-11 w-11 items-center justify-center rounded-lg text-gray-500 dark:text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-700 dark:hover:text-gray-300 lg:h-auto lg:w-auto lg:p-2'
         }
       >
+        {fullWidth && <span>จัดการ</span>}
         <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
           <circle cx="12" cy="5" r="1.5" />
           <circle cx="12" cy="12" r="1.5" />
@@ -1077,15 +1220,15 @@ function RowActionsMenu({ onViewDetails, onBillRequest, onRenew, onMoveOut, onDe
           <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} aria-hidden="true" />
           <div
             ref={menuRef}
-            style={{ left: pos.left, top: pos.top }}
-            className="fixed z-[61] w-52 overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 py-1.5 shadow-xl"
+            style={{ left: pos.left, top: pos.top, width: pos.width }}
+            className={`fixed z-[61] overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 py-1.5 shadow-xl ${pos.width ? '' : 'w-52'}`}
           >
             {items.map((item) => (
               <button
                 key={item.label}
                 type="button"
                 onClick={() => { setOpen(false); item.onClick() }}
-                className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-base font-medium transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 ${item.className}`}
+                className={`flex w-full items-center gap-3 px-4 py-3 text-left text-base font-medium transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 ${item.className}`}
               >
                 <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
@@ -1173,12 +1316,15 @@ function AssetsView({ rentals, loading, error, search, onRetry, onBillRequest, o
         </div>
       </div>
 
-      {/* แท็ปกรองตามประเภทสินทรัพย์ */}
-      <div className="flex flex-wrap gap-2 border-b border-gray-100 dark:border-gray-800 px-6 py-3">
+      {/* แท็ปกรองตามประเภทสินทรัพย์ — เลื่อนแนวนอนได้ที่จอเล็ก ไม่ดันหน้าให้ล้น */}
+      <div
+        className="flex gap-2 overflow-x-auto border-b border-gray-100 dark:border-gray-800 px-4 py-3 sm:px-6 lg:flex-wrap lg:overflow-visible"
+        data-allow-overflow
+      >
         <button
           type="button"
           onClick={() => setBizTab('all')}
-          className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors ${
+          className={`shrink-0 whitespace-nowrap rounded-full px-4 py-3 text-sm font-semibold transition-colors lg:px-3.5 lg:py-1.5 ${
             bizTab === 'all' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
           }`}
         >
@@ -1189,7 +1335,7 @@ function AssetsView({ rentals, loading, error, search, onRetry, onBillRequest, o
             key={t.value}
             type="button"
             onClick={() => setBizTab(t.value)}
-            className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition-colors ${
+            className={`shrink-0 whitespace-nowrap rounded-full px-4 py-3 text-sm font-semibold transition-colors lg:px-3.5 lg:py-1.5 ${
               bizTab === t.value ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
             }`}
           >
@@ -1210,7 +1356,7 @@ function AssetsView({ rentals, loading, error, search, onRetry, onBillRequest, o
           <button
             type="button"
             onClick={onRetry}
-            className="mt-5 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+            className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-base font-semibold text-white shadow-sm hover:bg-indigo-500 lg:py-2.5 lg:text-sm"
           >
             <Icon name="refresh" className="h-4 w-4" />
             ลองอีกครั้ง
@@ -1227,7 +1373,7 @@ function AssetsView({ rentals, loading, error, search, onRetry, onBillRequest, o
       ) : (
         <>
           {/* ตารางเดสก์ท็อป */}
-          <div className="hidden overflow-x-auto md:block">
+          <div className="hidden overflow-x-auto lg:block">
             <table className="w-full min-w-[720px] divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-950">
                 <tr className="text-left text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
@@ -1266,29 +1412,34 @@ function AssetsView({ rentals, loading, error, search, onRetry, onBillRequest, o
             </table>
           </div>
 
-          {/* การ์ดมือถือ */}
-          <div className="divide-y divide-gray-100 dark:divide-gray-800 md:hidden">
+          {/* การ์ดมือถือ/แท็บเล็ต — 1 คอลัมน์ที่ 375px, 2 คอลัมน์ที่ 768px */}
+          <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:hidden">
             {filtered.map((row, index) => (
-              <div key={row.id ?? index} className="p-4">
-                <div role="button" tabIndex={0} onClick={() => onViewDetails(row)} onKeyDown={(e) => { if (e.key === 'Enter') onViewDetails(row) }} className="cursor-pointer">
+              <div key={row.id ?? index} className="flex flex-col rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 shadow-sm">
+                <div role="button" tabIndex={0} onClick={() => onViewDetails(row)} onKeyDown={(e) => { if (e.key === 'Enter') onViewDetails(row) }} className="flex-1 cursor-pointer">
                   <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <FirstColumnCell row={row} fallback="ไม่ระบุ" bold />
-                        </div>
+                    <div className="min-w-0 flex-1">
+                      <FirstColumnCell row={row} fallback="ไม่ระบุ" bold />
+                    </div>
                     <AssetStatusBadge status={row.room_status} />
                   </div>
                   <p className="mt-1.5 truncate text-base text-gray-600 dark:text-gray-400">
                     ผู้เช่า: <span className="font-medium text-gray-800 dark:text-gray-200">{row.cust_name || '—'}</span>
                   </p>
-                  <p className="mt-1 text-lg font-bold tabular-nums text-gray-900 dark:text-gray-100">
+                  <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100">
                     {formatCurrency(row.amount)}
                   </p>
                 </div>
-                <div className="mt-3 flex items-center justify-end border-t border-gray-100 dark:border-gray-800 pt-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-gray-500 dark:text-gray-400">จัดการ</span>
-                    {actions(row)}
-                  </div>
+                {/* ปุ่มจัดการเต็มความกว้าง — เดิมเป็นไอคอน ⋯ เล็กมุมขวาซึ่งกดยากบนมือถือ */}
+                <div className="mt-3 border-t border-gray-100 dark:border-gray-800 pt-3">
+                  <RowActionsMenu
+                    fullWidth
+                    onViewDetails={() => onViewDetails(row)}
+                    onBillRequest={() => onBillRequest(row)}
+                    onRenew={() => onRenew(row)}
+                    onMoveOut={() => onMoveOut(row)}
+                    onDelete={() => onDelete(row)}
+                  />
                 </div>
               </div>
             ))}
@@ -1483,7 +1634,7 @@ function SettingsPage({ onSaved }) {
                 </div>
               )}
 
-              <button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500 disabled:opacity-60">
+              <button type="submit" disabled={saving} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-4 text-base font-semibold text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500 disabled:opacity-60 lg:w-auto lg:py-2.5 lg:text-sm">
                 {saving ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}
               </button>
             </>
@@ -1609,9 +1760,9 @@ function MembershipOrderModal({ open, plan, months, amount, systemPromptpay, onC
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={handleClose} />
-      <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white dark:bg-gray-900 p-6 shadow-2xl">
+      <div className="relative max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white dark:bg-gray-900 p-6 shadow-2xl sm:max-h-[90vh] sm:max-w-md sm:rounded-2xl">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">สั่งซื้อแพ็กเกจ</h2>
@@ -1654,12 +1805,12 @@ function MembershipOrderModal({ open, plan, months, amount, systemPromptpay, onC
           {slipFile && <span className="text-xs text-gray-400">{slipFile.name}</span>}
         </label>
 
-        <div className="mt-5 flex gap-3">
+        <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row">
           <button
             type="button"
             onClick={handleClose}
             disabled={submitting}
-            className="flex-1 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-4 text-base font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-1 lg:py-2.5 lg:text-sm"
           >
             ยกเลิก
           </button>
@@ -1667,7 +1818,7 @@ function MembershipOrderModal({ open, plan, months, amount, systemPromptpay, onC
             type="button"
             onClick={handleSubmitSlip}
             disabled={!slipFile || submitting}
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-4 text-base font-semibold text-white shadow-lg shadow-indigo-600/30 transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-1 lg:py-2.5 lg:text-sm"
           >
             {submitting ? (
               <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -1910,7 +2061,7 @@ function MembershipPage({ membership, onToast, onRefreshMembership }) {
             <button
               type="button"
               onClick={fetchHistory}
-              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500"
+              className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 lg:py-2.5 lg:text-sm"
             >
               <Icon name="refresh" className="h-4 w-4" />
               ลองอีกครั้ง
@@ -1925,7 +2076,8 @@ function MembershipPage({ membership, onToast, onRefreshMembership }) {
             <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">เลือกแพ็กเกจด้านบนแล้วส่งสลิปเพื่อต่ออายุครั้งแรก</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="hidden overflow-x-auto sm:block">
             <table className="min-w-full divide-y divide-gray-100 dark:divide-gray-800 text-sm">
               <thead className="bg-gray-50 dark:bg-gray-950 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                 <tr>
@@ -1974,6 +2126,43 @@ function MembershipPage({ membership, onToast, onRefreshMembership }) {
               </tbody>
             </table>
           </div>
+
+          {/* การ์ดแนวตั้งที่ 375px */}
+          <div className="divide-y divide-gray-100 dark:divide-gray-800 sm:hidden">
+            {history.map((row) => {
+              const statusKey = String(row.status ?? '').toLowerCase()
+              const statusMeta = MEMBERSHIP_PAYMENT_STATUS[statusKey] || { label: row.status || '—', cls: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 ring-gray-200 dark:ring-gray-700', dot: 'bg-gray-400' }
+              const pkgMeta = MEMBERSHIP_PACKAGES.find((p) => p.type === row.plan_type)
+              return (
+                <div key={row.id} className="flex items-start gap-3 p-4">
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <p className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                      {pkgMeta?.label || row.plan_type || '—'} · {row.duration_months} เดือน
+                    </p>
+                    <p className="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100">{formatCurrency(row.amount)}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${statusMeta.cls}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${statusMeta.dot}`} />
+                        {statusMeta.label}
+                      </span>
+                      <span className="text-xs text-gray-400">ส่งเมื่อ {formatDate(row.created_at)}</span>
+                    </div>
+                  </div>
+                  {row.slip_image_url ? (
+                    <button
+                      type="button"
+                      onClick={() => setPreviewSlip(row.slip_image_url)}
+                      className="shrink-0 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700 transition-colors hover:border-indigo-300"
+                      aria-label="ดูสลิปเต็มจอ"
+                    >
+                      <img src={row.slip_image_url} alt="สลิปโอนเงิน" className="h-14 w-14 object-cover" loading="lazy" />
+                    </button>
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+          </>
         )}
       </section>
 
@@ -2139,7 +2328,7 @@ function AdminPage({ onToast }) {
           type="button"
           onClick={() => { fetchMembers(); fetchPending() }}
           disabled={refreshing}
-          className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 lg:py-2.5 lg:text-sm"
         >
           <Icon name="refresh" className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
           รีเฟรชข้อมูล
@@ -2179,7 +2368,7 @@ function AdminPage({ onToast }) {
             <button
               type="button"
               onClick={fetchPending}
-              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-400"
+              className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-3 text-base font-semibold text-white shadow-sm hover:bg-amber-400 lg:py-2.5 lg:text-sm"
             >
               <Icon name="refresh" className="h-4 w-4" />
               ลองอีกครั้ง
@@ -2244,7 +2433,7 @@ function AdminPage({ onToast }) {
                     </div>
                   )}
 
-                  <div className="mt-auto grid grid-cols-2 gap-3">
+                  <div className="mt-auto flex flex-col gap-3 sm:grid sm:grid-cols-2">
                     <button
                       type="button"
                       onClick={() => handleApprove(item)}
@@ -2309,7 +2498,7 @@ function AdminPage({ onToast }) {
             <button
               type="button"
               onClick={fetchMembers}
-              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500"
+              className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 lg:py-2.5 lg:text-sm"
             >
               <Icon name="refresh" className="h-4 w-4" />
               ลองอีกครั้ง
@@ -2324,7 +2513,8 @@ function AdminPage({ onToast }) {
             <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">สมาชิกจะปรากฏที่นี่เมื่อเริ่มใช้งานแพ็กเกจ</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="hidden overflow-x-auto sm:block">
             <table className="min-w-full divide-y divide-gray-100 dark:divide-gray-800 text-sm">
               <thead className="bg-gray-50 dark:bg-gray-950 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                 <tr>
@@ -2374,6 +2564,42 @@ function AdminPage({ onToast }) {
               </tbody>
             </table>
           </div>
+
+          {/* การ์ดแนวตั้งที่ 375px */}
+          <div className="divide-y divide-gray-100 dark:divide-gray-800 sm:hidden">
+            {sortedMembers.map((row) => {
+              const planKey = String(row.plan ?? '').toLowerCase()
+              const planMeta = MEMBERSHIP_PLANS[planKey] || { label: row.plan || '—', cls: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 ring-gray-200 dark:ring-gray-700' }
+              const expired = String(row.status ?? '').toLowerCase() === 'expired'
+              const roomLimit = Number(row.room_limit) || 0
+              const roomsUsed = Number(row.rooms_used) || 0
+              return (
+                <div key={`${row.email}-${row.created_at ?? ''}`} className={`space-y-2 p-4 ${expired ? 'bg-rose-50/60 dark:bg-rose-950/30' : ''}`}>
+                  <p className={`break-all text-base font-semibold ${expired ? 'text-rose-700 dark:text-rose-300' : 'text-gray-900 dark:text-gray-100'}`}>
+                    {row.email || '—'}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${planMeta.cls}`}>
+                      {planMeta.label}
+                    </span>
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${
+                        expired ? 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-800/70' : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-800/70'
+                      }`}
+                    >
+                      <span className={`h-1.5 w-1.5 rounded-full ${expired ? 'bg-rose-500' : 'bg-emerald-500'}`} />
+                      {expired ? 'หมดอายุ' : 'ใช้งานได้'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 text-sm text-gray-600 dark:text-gray-400">
+                    <span>หมดอายุ {row.expire_date ? formatDate(row.expire_date) : '—'}</span>
+                    <span className="shrink-0 tabular-nums">{roomsUsed}/{roomLimit > 0 ? roomLimit : '∞'} ห้อง</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          </>
         )}
       </section>
 
@@ -2428,7 +2654,7 @@ function PendingReviewSection({ items, loading, error, reviewing, onApprove, onR
           <button
             type="button"
             onClick={onRetry}
-            className="mt-5 inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-400"
+            className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-3 text-base font-semibold text-white shadow-sm hover:bg-amber-400 lg:py-2.5 lg:text-sm"
           >
             <Icon name="refresh" className="h-4 w-4" />
             ลองอีกครั้ง
@@ -2499,7 +2725,7 @@ function PendingReviewSection({ items, loading, error, reviewing, onApprove, onR
                   </div>
                 )}
 
-                <div className="mt-auto grid grid-cols-2 gap-3">
+                <div className="mt-auto flex flex-col gap-3 sm:grid sm:grid-cols-2">
                   <button
                     type="button"
                     onClick={() => onApprove(item.id)}
@@ -2598,7 +2824,7 @@ const EMPTY_FORM = {
 }
 
 const inputClass =
-  'w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 shadow-sm transition placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20'
+  'w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-3 text-base lg:py-2.5 lg:text-sm text-gray-900 dark:text-gray-100 shadow-sm transition placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20'
 
 function CollapsibleSection({ title, subtitle, icon, defaultOpen = false, children }) {
   const [open, setOpen] = useState(defaultOpen)
@@ -2742,10 +2968,10 @@ function AddRentalModal({ open, onClose, onCreated, onToast }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
 
-      <div className="relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white dark:bg-gray-900 shadow-2xl">
+      <div className="relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white dark:bg-gray-900 shadow-2xl sm:max-h-[90vh] sm:max-w-lg sm:rounded-2xl">
         <div className="flex items-start justify-between border-b border-gray-100 dark:border-gray-800 px-6 py-5">
           <div>
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">เพิ่มสินทรัพย์ใหม่</h2>
@@ -2754,7 +2980,7 @@ function AddRentalModal({ open, onClose, onCreated, onToast }) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300"
+            className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 lg:mr-0 lg:h-auto lg:w-auto lg:p-1.5"
             aria-label="ปิด"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -2985,19 +3211,19 @@ function AddRentalModal({ open, onClose, onCreated, onToast }) {
             )}
           </div>
 
-          <div className="flex items-center justify-end gap-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-6 py-4">
+          <div className="flex flex-col-reverse gap-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-6 py-4 sm:flex-row sm:items-center sm:justify-end">
             <button
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60"
+              className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-4 text-base font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm"
             >
               ยกเลิก
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-4 text-base font-semibold text-white shadow-sm transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm"
             >
               {saving ? (
                 <>
@@ -3040,17 +3266,17 @@ function LineBindingModal({ code, custName, onClose }) {
   ]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
 
-      <div className="relative w-full max-w-lg overflow-hidden rounded-2xl bg-white dark:bg-gray-900 shadow-2xl">
+      <div className="relative flex max-h-[92vh] w-full flex-col overflow-y-auto overflow-x-hidden rounded-t-3xl bg-white dark:bg-gray-900 shadow-2xl sm:max-h-[90vh] sm:max-w-lg sm:rounded-2xl">
         <div className="relative bg-gradient-to-br from-emerald-600 to-teal-600 px-6 py-6 text-white">
           <p className="text-xs font-semibold uppercase tracking-wider text-emerald-100">เพิ่มสินทรัพย์สำเร็จ</p>
           <h2 className="mt-1 text-xl font-bold tracking-tight">ผูกกลุ่มไลน์สำหรับทวงหนี้อัตโนมัติ</h2>
           <button
             type="button"
             onClick={onClose}
-            className="absolute right-4 top-4 rounded-lg p-1.5 text-emerald-100 transition-colors hover:bg-white/10 hover:text-white"
+            className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-lg text-emerald-100 transition-colors hover:bg-white/10 hover:text-white lg:right-4 lg:top-4 lg:h-auto lg:w-auto lg:p-1.5"
             aria-label="ปิด"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -3072,7 +3298,7 @@ function LineBindingModal({ code, custName, onClose }) {
             <button
               type="button"
               onClick={copyCode}
-              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500"
+              className="mt-4 inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500 lg:min-h-0 lg:px-3 lg:py-1.5 lg:text-xs"
             >
               {copied ? '✓ คัดลอกแล้ว' : 'คัดลอกรหัส'}
             </button>
@@ -3095,7 +3321,7 @@ function LineBindingModal({ code, custName, onClose }) {
           <button
             type="button"
             onClick={onClose}
-            className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500"
+            className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-indigo-600 px-4 py-4 text-base font-semibold text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500 sm:py-3 sm:text-sm"
           >
             เข้าใจแล้ว
           </button>
@@ -3189,9 +3415,9 @@ function MeterBillModal({ rental, onClose, onConfirm }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
-      <div className="relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white dark:bg-gray-900 shadow-2xl">
+      <div className="relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white dark:bg-gray-900 shadow-2xl sm:max-h-[90vh] sm:max-w-lg sm:rounded-2xl">
         <div className="flex items-start justify-between border-b border-gray-100 dark:border-gray-800 px-6 py-5">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-600/30">
@@ -3202,7 +3428,7 @@ function MeterBillModal({ rental, onClose, onConfirm }) {
               <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">{rental.cust_name} · {displayAssetName(rental)}</p>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300" aria-label="ปิด">
+          <button type="button" onClick={onClose} className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 lg:mr-0 lg:h-auto lg:w-auto lg:p-1.5" aria-label="ปิด">
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
           </button>
         </div>
@@ -3265,18 +3491,18 @@ function MeterBillModal({ rental, onClose, onConfirm }) {
         </div>
 
         <div className="flex flex-col gap-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+          <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium text-gray-700 dark:text-gray-300 lg:min-h-0 lg:gap-2">
             <input
               type="checkbox"
               checked={sendToLine}
               onChange={(e) => setSendToLine(e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 dark:text-blue-400 focus:ring-blue-500"
+              className="h-6 w-6 rounded border-gray-300 dark:border-gray-600 text-blue-600 dark:text-blue-400 focus:ring-blue-500 lg:h-4 lg:w-4"
             />
             📥 ส่งบิลเข้าไลน์อัตโนมัติ
           </label>
-          <div className="flex items-center justify-end gap-3">
-            <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60">ยกเลิก</button>
-            <button type="button" onClick={handleConfirm} disabled={saving || periodHasBill} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60">
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+            <button type="button" onClick={onClose} disabled={saving} className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-4 text-base font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm">ยกเลิก</button>
+            <button type="button" onClick={handleConfirm} disabled={saving || periodHasBill} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-4 text-base font-semibold text-white shadow-sm transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm">
               {saving ? (<><svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" /></svg>กำลังสร้างบิล...</>) : periodHasBill ? 'งวดนี้มีบิลแล้ว' : 'สร้างบิล'}
             </button>
           </div>
@@ -3311,25 +3537,25 @@ function RenewModal({ rental, onClose, onConfirm }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
-      <div className="relative w-full max-w-sm overflow-hidden rounded-2xl bg-white dark:bg-gray-900 shadow-2xl">
+      <div className="relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white dark:bg-gray-900 shadow-2xl sm:max-h-[90vh] sm:max-w-sm sm:rounded-2xl">
         <div className="flex items-start justify-between border-b border-gray-100 dark:border-gray-800 px-6 py-5">
           <div>
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">ต่อสัญญา</h2>
             <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">{rental.cust_name} · {displayAssetName(rental)}</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300" aria-label="ปิด">
+          <button type="button" onClick={onClose} className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 lg:mr-0 lg:h-auto lg:w-auto lg:p-1.5" aria-label="ปิด">
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
           </button>
         </div>
-        <div className="px-6 py-5">
+        <div className="flex-1 overflow-y-auto px-6 py-5">
           <label htmlFor="renew_lease_end" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">วันสิ้นสุดสัญญาใหม่</label>
           <input id="renew_lease_end" type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
         </div>
-        <div className="flex items-center justify-end gap-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-6 py-4">
-          <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60">ยกเลิก</button>
-          <button type="button" onClick={handleConfirm} disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60">
+        <div className="flex flex-col-reverse gap-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-6 py-4 sm:flex-row sm:items-center sm:justify-end">
+          <button type="button" onClick={onClose} disabled={saving} className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-4 text-base font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm">ยกเลิก</button>
+          <button type="button" onClick={handleConfirm} disabled={saving} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-4 text-base font-semibold text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm">
             {saving ? 'กำลังบันทึก...' : 'บันทึก'}
           </button>
         </div>
@@ -3368,14 +3594,14 @@ function LeaseActionModal({ rental, mode, onClose, onConfirm }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
-      <div className="relative w-full max-w-sm overflow-hidden rounded-2xl bg-white dark:bg-gray-900 shadow-2xl">
+      <div className="relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white dark:bg-gray-900 shadow-2xl sm:max-h-[90vh] sm:max-w-sm sm:rounded-2xl">
         <div className={`px-6 py-5 text-white ${isDelete ? 'bg-rose-600' : 'bg-amber-500'}`}>
           <h2 className="text-lg font-bold">{title}</h2>
           <p className="mt-0.5 text-sm opacity-90">{rental.cust_name} · {displayAssetName(rental)}</p>
         </div>
-        <div className="space-y-4 px-6 py-6">
+        <div className="flex-1 space-y-4 overflow-y-auto px-6 py-6">
           <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-400">{message}</p>
           {!isDelete && (
             <>
@@ -3389,9 +3615,9 @@ function LeaseActionModal({ rental, mode, onClose, onConfirm }) {
             </>
           )}
         </div>
-        <div className="flex items-center justify-end gap-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-6 py-4">
-          <button type="button" onClick={onClose} disabled={saving} className="rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60">ยกเลิก</button>
-          <button type="button" onClick={handleConfirm} disabled={saving} className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${isDelete ? 'bg-rose-600 hover:bg-rose-500' : 'bg-amber-500 hover:bg-amber-400'}`}>
+        <div className="flex flex-col-reverse gap-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-6 py-4 sm:flex-row sm:items-center sm:justify-end">
+          <button type="button" onClick={onClose} disabled={saving} className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-4 text-base font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm">ยกเลิก</button>
+          <button type="button" onClick={handleConfirm} disabled={saving} className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-4 text-base font-semibold text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm ${isDelete ? 'bg-rose-600 hover:bg-rose-500' : 'bg-amber-500 hover:bg-amber-400'}`}>
             {saving ? 'กำลังดำเนินการ...' : confirmLabel}
           </button>
         </div>
@@ -3483,10 +3709,10 @@ function AssetDetailModal({ rental, onClose, onToast }) {
   ]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
 
-      <div className="relative flex max-h-[85vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white dark:bg-gray-900 shadow-2xl">
+      <div className="relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white dark:bg-gray-900 shadow-2xl sm:max-h-[85vh] sm:max-w-lg sm:rounded-2xl">
         <div className="flex items-start justify-between border-b border-gray-100 dark:border-gray-800 px-6 py-5">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/30">
@@ -3500,7 +3726,7 @@ function AssetDetailModal({ rental, onClose, onToast }) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300"
+            className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 lg:mr-0 lg:h-auto lg:w-auto lg:p-1.5"
             aria-label="ปิด"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -3522,7 +3748,7 @@ function AssetDetailModal({ rental, onClose, onToast }) {
                 <button
                   type="button"
                   onClick={copyBindingCode}
-                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500"
+                  className="mt-3 inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500 lg:min-h-0 lg:px-3 lg:py-1.5 lg:text-xs"
                 >
                   {copied ? '✓ คัดลอกแล้ว' : 'คัดลอกรหัส'}
                 </button>
@@ -3590,7 +3816,7 @@ function AssetDetailModal({ rental, onClose, onToast }) {
           <button
             type="button"
             onClick={onClose}
-            className="w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500"
+            className="w-full rounded-xl bg-indigo-600 px-4 py-4 text-base font-semibold text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500 lg:py-2.5 lg:text-sm"
           >
             ปิด
           </button>
@@ -3725,10 +3951,10 @@ function SettingsModal({ open, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
 
-      <div className="relative flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white dark:bg-gray-900 shadow-2xl">
+      <div className="relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white dark:bg-gray-900 shadow-2xl sm:max-h-[90vh] sm:max-w-lg sm:rounded-2xl">
         <div className="flex items-start justify-between border-b border-gray-100 dark:border-gray-800 px-6 py-5">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/30">
@@ -3742,7 +3968,7 @@ function SettingsModal({ open, onClose, onSaved }) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300"
+            className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 lg:mr-0 lg:h-auto lg:w-auto lg:p-1.5"
             aria-label="ปิด"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -3881,19 +4107,19 @@ function SettingsModal({ open, onClose, onSaved }) {
             )}
           </div>
 
-          <div className="flex items-center justify-end gap-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-6 py-4">
+          <div className="flex flex-col-reverse gap-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-6 py-4 sm:flex-row sm:items-center sm:justify-end">
             <button
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-4 text-base font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm"
             >
               ยกเลิก
             </button>
             <button
               type="submit"
               disabled={saving || loading}
-              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-4 text-base font-semibold text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm"
             >
               {saving ? (
                 <>
@@ -4028,16 +4254,16 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine, 
   const editPreviewTotal = (Number(invoice.baseAmount) || 0) + (Number(editForm.water) || 0) + (Number(editForm.elec) || 0) + (Number(editForm.extra) || 0)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
-      <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white dark:bg-gray-900 shadow-2xl">
+      <div className="relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white dark:bg-gray-900 shadow-2xl sm:max-h-[90vh] sm:max-w-md sm:rounded-2xl">
         <div className="relative bg-gradient-to-br from-indigo-600 to-violet-600 px-6 py-6 text-white">
           <p className="text-sm font-medium text-indigo-100">ใบแจ้งหนี้ / INVOICE</p>
           <h2 className="mt-1 text-xl font-bold tracking-tight">PayRentPro</h2>
           <button
             type="button"
             onClick={onClose}
-            className="absolute right-4 top-4 rounded-lg p-1.5 text-indigo-100 transition-colors hover:bg-white/10 hover:text-white"
+            className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-lg text-indigo-100 transition-colors hover:bg-white/10 hover:text-white lg:right-4 lg:top-4 lg:h-auto lg:w-auto lg:p-1.5"
             aria-label="ปิด"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -4045,7 +4271,7 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine, 
             </svg>
           </button>
         </div>
-        <div className="px-6 py-6">
+        <div className="flex-1 overflow-y-auto px-6 py-6">
           {editing ? (
             <div className="space-y-4">
               <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 px-4 py-3">
@@ -4223,7 +4449,7 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine, 
             <button
               type="button"
               onClick={startEdit}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-indigo-200 dark:border-indigo-800/70 bg-indigo-50 dark:bg-indigo-950/30 px-4 py-2.5 text-sm font-semibold text-indigo-700 dark:text-indigo-300 shadow-sm transition-colors hover:bg-indigo-100 dark:hover:bg-indigo-800/50"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-indigo-200 dark:border-indigo-800/70 bg-indigo-50 dark:bg-indigo-950/30 px-4 py-4 text-base font-semibold text-indigo-700 dark:text-indigo-300 shadow-sm transition-colors hover:bg-indigo-100 dark:hover:bg-indigo-800/50 lg:py-2.5 lg:text-sm"
             >
               ✏️ แก้ไขยอดบิล
             </button>
@@ -4250,7 +4476,7 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine, 
             type="button"
             onClick={handleSendToLine}
             disabled={invoice.sent || sending}
-            className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+            className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-4 text-base font-semibold text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 lg:py-2.5 lg:text-sm ${
               invoice.sent ? 'bg-emerald-500' : 'bg-green-600 hover:bg-green-500'
             }`}
           >
@@ -4275,7 +4501,7 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine, 
               <a
                 href={qrDataUrl}
                 download="promptpay-qr.png"
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-4 text-base font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 lg:py-2.5 lg:text-sm"
               >
                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h2.25M3 7.5V5.25A2.25 2.25 0 0 1 5.25 3h2.25M21 16.5v2.25A2.25 2.25 0 0 1 18.75 21h-2.25M21 7.5V5.25A2.25 2.25 0 0 0 18.75 3h-2.25M12 7.5v9m0 0-3-3m3 3 3-3" />
@@ -4286,7 +4512,7 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine, 
             <button
               type="button"
               onClick={onCopyLink}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-indigo-200 dark:border-indigo-800/70 bg-indigo-50 dark:bg-indigo-950/30 px-3 py-2.5 text-sm font-semibold text-indigo-700 dark:text-indigo-300 shadow-sm transition-colors hover:bg-indigo-100 dark:hover:bg-indigo-800/50"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-indigo-200 dark:border-indigo-800/70 bg-indigo-50 dark:bg-indigo-950/30 px-3 py-4 text-base font-semibold text-indigo-700 dark:text-indigo-300 shadow-sm transition-colors hover:bg-indigo-100 dark:hover:bg-indigo-800/50 lg:py-2.5 lg:text-sm"
             >
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
@@ -4298,7 +4524,7 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine, 
             type="button"
             onClick={handleMarkPaid}
             disabled={isPaid || marking}
-            className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+            className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-4 text-base font-semibold text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 lg:py-2.5 lg:text-sm ${
               isPaid ? 'bg-emerald-500' : 'bg-blue-600 hover:bg-blue-500'
             }`}
           >
@@ -5335,39 +5561,59 @@ function Dashboard() {
 
       <div className="lg:pl-64">
         <header className="sticky top-0 z-30 border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 backdrop-blur">
-          <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 lg:hidden">
+          <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 py-3 sm:gap-4 sm:px-6 sm:py-4 lg:px-8">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 lg:hidden">
                 <Icon name="building" className="h-6 w-6" />
               </div>
-              <div>
-                <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100 sm:text-2xl">
+              <div className="min-w-0">
+                {/* มือถือ/แท็บเล็ต: โชว์ชื่อธุรกิจ — เดสก์ท็อปคงหัวข้อหน้าเดิมไว้ */}
+                <h1 className="truncate text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100 sm:text-2xl lg:hidden">
+                  {paymentInfo.business_name || 'PayRentPro'}
+                </h1>
+                <h1 className="hidden text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100 sm:text-2xl lg:block">
                   {isAudit ? 'ประวัติแก้ไข' : isSettings ? 'ตั้งค่าบัญชี' : isAssets ? 'รายการสินทรัพย์' : isMembership ? 'สมาชิกของฉัน' : isAdmin ? 'ผู้ดูแลระบบ' : 'แดชบอร์ด'}
                 </h1>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="hidden text-sm text-gray-500 dark:text-gray-400 lg:block">
                   {isAudit ? 'บันทึกการแก้ไขยอดและเหตุผล' : isSettings ? 'ตั้งค่าเลขพร้อมเพย์ / บัญชีธนาคารสำหรับรับเงิน' : isAssets ? 'จัดการสัญญาเช่าและสินทรัพย์ทั้งหมด' : isMembership ? 'แพ็กเกจ การใช้งาน และการต่ออายุ' : isAdmin ? 'จัดการสมาชิกและค่าสมาชิกรอตรวจทั้งหมด' : 'ภาพรวมการเก็บค่าเช่าและการติดตามหนี้'}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            {/* whitespace-nowrap กันข้อความปุ่มตัดบรรทัด (ทำให้ header สูงขึ้น)
+                แต่ไม่ใส่ shrink-0 เพื่อให้ช่องค้นหาหน้า Assets ย่อได้ ไม่ดันจนล้นที่ 1280 */}
+            <div className="flex min-w-0 items-center gap-2 whitespace-nowrap sm:gap-3">
               <NotificationsBell pendingReviews={pendingReviews} expiringLeases={expiringLeases} />
+
+              {/* มือถือ/แท็บเล็ต: ปุ่มรองทั้งหมดยุบเข้าเมนู ⋯ (เหลือ ชื่อ + กระดิ่ง + ⋯) */}
+              <HeaderOverflowMenu
+                onExportCsv={!isAssets && !isSettings && !isAudit && !isMembership && !isAdmin ? handleExportCsv : null}
+                onRefresh={() => { fetchRentals(); fetchSummary(); fetchPendingReviews(); fetchTxInsights() }}
+                loading={loading}
+                lastUpdated={lastUpdated}
+                largeText={largeText}
+                onToggleLargeText={toggleLargeText}
+                theme={theme}
+                onToggleTheme={toggleTheme}
+              />
+
+              {/* เดสก์ท็อป (lg+): แถวปุ่มเดิมทั้งหมด ไม่แตะ */}
               {!isAssets && !isSettings && !isAudit && !isMembership && !isAdmin && (
                 <button
                   type="button"
                   onClick={handleExportCsv}
-                  className="inline-flex items-center gap-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800"
+                  className="hidden items-center gap-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 lg:inline-flex"
                 >
                   ⬇️ Export CSV
                 </button>
               )}
               {lastUpdated && (
-                <p className="hidden text-xs text-gray-400 sm:block">
+                <p className="hidden text-xs text-gray-400 lg:block">
                   อัปเดตล่าสุด {lastUpdated.toLocaleTimeString('th-TH')}
                 </p>
               )}
               {isAssets && (
-                <div className="relative hidden min-w-0 flex-1 sm:block sm:max-w-xs md:max-w-sm">
+                <div className="relative hidden min-w-0 flex-1 lg:block lg:max-w-xs xl:max-w-sm">
                   <svg className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
                   </svg>
@@ -5384,7 +5630,7 @@ function Dashboard() {
                 <button
                   type="button"
                   onClick={handleOpenAddForm}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-base font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-500"
+                  className="hidden shrink-0 items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-base font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-500 lg:inline-flex"
                 >
                   <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -5396,7 +5642,7 @@ function Dashboard() {
                 type="button"
                 onClick={() => { fetchRentals(); fetchSummary(); fetchPendingReviews(); fetchTxInsights() }}
                 disabled={loading}
-                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+                className="hidden items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 lg:inline-flex"
               >
                 <Icon name="refresh" className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                 <span className="hidden xl:inline">รีเฟรชข้อมูล</span>
@@ -5407,7 +5653,7 @@ function Dashboard() {
                 title={largeText ? 'ปิดโหมดตัวอักษรขยาย' : 'เปิดโหมดตัวอักษรขยาย'}
                 aria-label={largeText ? 'ปิดโหมดตัวอักษรขยาย' : 'เปิดโหมดตัวอักษรขยาย'}
                 aria-pressed={largeText}
-                className={`inline-flex items-center justify-center rounded-xl border px-4 py-2.5 text-base shadow-sm transition-colors ${
+                className={`hidden items-center justify-center rounded-xl border px-4 py-2.5 text-base shadow-sm transition-colors lg:inline-flex ${
                   largeText
                     ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 underline decoration-2 underline-offset-4'
                     : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
@@ -5422,14 +5668,14 @@ function Dashboard() {
                 onClick={toggleTheme}
                 title={theme === 'dark' ? 'สลับเป็นโหมดสว่าง' : 'สลับเป็นโหมดมืด'}
                 aria-label={theme === 'dark' ? 'สลับเป็นโหมดสว่าง' : 'สลับเป็นโหมดมืด'}
-                className="inline-flex items-center justify-center rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-2.5 text-base shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800"
+                className="hidden items-center justify-center rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-2.5 text-base shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 lg:inline-flex"
               >
                 <span className="leading-none">{theme === 'dark' ? '☀️' : '🌙'}</span>
               </button>
               <button
                 type="button"
                 onClick={() => supabase.auth.signOut()}
-                className="inline-flex items-center gap-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800"
+                className="hidden items-center gap-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 lg:inline-flex"
               >
                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
@@ -5440,7 +5686,23 @@ function Dashboard() {
           </div>
         </header>
 
-        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {/* ปุ่มเพิ่มสินทรัพย์ของหน้า Assets — มือถือ/แท็บเล็ตวางเป็นแถวเต็มความกว้างใต้ header */}
+        {isAssets && (
+          <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:hidden">
+            <button
+              type="button"
+              onClick={handleOpenAddForm}
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-3 text-base font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-500"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              เพิ่มสินทรัพย์
+            </button>
+          </div>
+        )}
+
+        <main className="mx-auto max-w-7xl px-4 py-6 pb-24 sm:px-6 sm:py-8 lg:px-8 lg:pb-8">
           {isAudit ? (
             <AuditLogPage />
           ) : isSettings ? (
@@ -5451,7 +5713,7 @@ function Dashboard() {
             <AdminPage onToast={setToast} />
           ) : isAssets ? (
             <>
-              <div className="relative sm:hidden">
+              <div className="relative lg:hidden">
                 <svg className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
                 </svg>
@@ -5485,7 +5747,7 @@ function Dashboard() {
             </>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-5">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 xl:grid-cols-5">
                 {statCards.map((card) => (
                   <StatCard key={card.label} {...card} />
                 ))}
@@ -5523,6 +5785,8 @@ function Dashboard() {
           )}
         </main>
       </div>
+
+      <BottomNav membership={membership} />
 
       {!pdpAccepted && <PDPAConsentModal onAccept={handleAcceptPDPA} />}
 

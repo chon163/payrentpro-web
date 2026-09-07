@@ -361,7 +361,7 @@ function BillPage() {
                   <a
                     href={qrDataUrl}
                     download="promptpay-qr.png"
-                    className="mt-3 block text-center text-xs font-medium text-indigo-500 underline underline-offset-2"
+                    className="mt-2 flex h-11 items-center justify-center text-center text-xs font-medium text-indigo-500 underline underline-offset-2"
                   >
                     บันทึกรูป QR Code
                   </a>

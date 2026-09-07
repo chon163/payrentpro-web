@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 
+// โหมดเทสชั่วคราว (คืนก่อนขายจริง): ทำงานเฉพาะเมื่อ VITE_DEV_LOGIN=true ใน env ท้องถิ่น
+const DEV_LOGIN = import.meta.env.VITE_DEV_LOGIN === 'true'
+
 export default function AuthPage() {
   const [email, setEmail] = useState('')
   const [step, setStep] = useState('email')
@@ -19,11 +22,16 @@ export default function AuthPage() {
     setLoading(true)
     setError(null)
     try {
-      const { error: sendError } = await supabase.auth.signInWithOtp({
+      const { data, error: sendError } = await supabase.auth.signInWithOtp({
         email: email.trim(),
         options: { emailRedirectTo: window.location.origin },
       })
       if (sendError) throw sendError
+      // โหมดเทส: ถ้าปิด confirm email ใน Supabase จะได้ session กลับมาใน response → เข้าเว็บได้ทันที
+      if (DEV_LOGIN && data?.session) {
+        await supabase.auth.setSession(data.session)
+        return
+      }
       setStep('sent')
       setResendIn(60)
     } catch (err) {
