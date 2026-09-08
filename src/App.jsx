@@ -398,33 +398,216 @@ function renderDetailValue(key, value) {
   return renderCell(key, value)
 }
 
-const CARD_TONES = {
-  blue: { card: 'border-blue-100 dark:border-blue-800/50 bg-blue-50 dark:bg-blue-950/30', text: 'text-blue-600 dark:text-blue-400', icon: 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400' },
-  green: { card: 'border-green-100 dark:border-green-800/50 bg-green-50 dark:bg-green-950/30', text: 'text-green-600 dark:text-green-400', icon: 'bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400' },
-  red: { card: 'border-red-100 dark:border-red-800/50 bg-red-50 dark:bg-red-950/30', text: 'text-red-600 dark:text-red-400', icon: 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400' },
-  orange: { card: 'border-orange-100 dark:border-orange-800/50 bg-orange-50 dark:bg-orange-950/30', text: 'text-orange-600 dark:text-orange-400', icon: 'bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-400' },
-  yellow: { card: 'border-yellow-200 dark:border-yellow-800/70 bg-yellow-50 dark:bg-yellow-950/30', text: 'text-yellow-700 dark:text-yellow-300', icon: 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300' },
+// การ์ด KPI แถวบนสุดของแดชบอร์ด — พื้นขาว แถบสีทางซ้าย ไอคอนมุมขวา (ดู tmp/dashboard-guide.md)
+const KPI_TONES = {
+  indigo: { bar: 'bg-indigo-500', icon: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-300' },
+  green: { bar: 'bg-emerald-500', icon: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300' },
+  red: { bar: 'bg-rose-500', icon: 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-300' },
+  orange: { bar: 'bg-amber-500', icon: 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-300' },
+  yellow: { bar: 'bg-yellow-400', icon: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-950/40 dark:text-yellow-300' },
 }
 
-function StatCard({ icon, label, value, tone = 'blue', onClick }) {
-  const t = CARD_TONES[tone] || CARD_TONES.blue
+function KpiCard({ icon, label, value, hint, tone = 'indigo', onClick }) {
+  const t = KPI_TONES[tone] || KPI_TONES.indigo
   const inner = (
-    <div className="flex items-center justify-between">
-      <div>
-        <p className={`text-sm font-semibold ${t.text}`}>{label}</p>
-        <p className={`mt-2 text-2xl font-bold tracking-tight ${t.text}`}>{value}</p>
+    <>
+      <span className={`absolute inset-y-0 left-0 w-1.5 ${t.bar}`} aria-hidden="true" />
+      <div className="flex items-start justify-between gap-2 pl-2.5">
+        <div className="min-w-0">
+          <p className="truncate text-xs font-semibold text-gray-500 dark:text-gray-400 sm:text-sm">{label}</p>
+          <p className="mt-1.5 text-2xl font-bold tabular-nums tracking-tight text-gray-900 dark:text-gray-50 sm:text-3xl">{value}</p>
+          {hint ? <p className="mt-1 truncate text-xs text-gray-400 dark:text-gray-500">{hint}</p> : null}
+        </div>
+        {/* ไอคอนย่อลงที่ 375px เพื่อให้ตัวเลขคงขนาดได้ในการ์ด 2 คอลัมน์ */}
+        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-11 sm:w-11 ${t.icon}`}>
+          <Icon name={icon} className="h-5 w-5 sm:h-6 sm:w-6" />
+        </div>
       </div>
-      {/* ไอคอนย่อลงที่ 375px เพื่อให้ตัวเลขคง text-2xl ได้ในการ์ด 2 คอลัมน์ */}
-      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl sm:h-12 sm:w-12 ${t.icon}`}>
-        <Icon name={icon} className="h-5 w-5 sm:h-6 sm:w-6" />
-      </div>
-    </div>
+    </>
   )
-  const cls = `w-full rounded-2xl border p-4 text-left shadow-sm transition-shadow hover:shadow-md sm:p-5 ${t.card}`
+  const cls =
+    'relative w-full overflow-hidden rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-sm transition-shadow hover:shadow-md dark:border-gray-800 dark:bg-gray-900 sm:p-5'
   if (onClick) {
     return <button type="button" onClick={onClick} className={cls}>{inner}</button>
   }
   return <div className={cls}>{inner}</div>
+}
+
+// การ์ดสถานะห้อง — พื้นไล่สีทึบ ตัวอักษรขาว (แถวที่สองของแดชบอร์ด)
+const ROOM_TONES = {
+  green: 'from-emerald-500 to-green-600 shadow-emerald-500/25',
+  red: 'from-rose-500 to-red-600 shadow-rose-500/25',
+  orange: 'from-amber-500 to-orange-600 shadow-amber-500/25',
+  slate: 'from-slate-500 to-gray-600 shadow-slate-500/25',
+}
+
+function RoomStatusCard({ icon, label, value, hint, tone = 'slate', onClick }) {
+  const grad = ROOM_TONES[tone] || ROOM_TONES.slate
+  const inner = (
+    <div className="flex items-start justify-between gap-2">
+      <div className="min-w-0">
+        <p className="truncate text-xs font-semibold text-white/80 sm:text-sm">{label}</p>
+        <p className="mt-1.5 text-2xl font-bold tabular-nums tracking-tight text-white sm:text-3xl">{value}</p>
+        {hint ? <p className="mt-1 truncate text-xs text-white/70">{hint}</p> : null}
+      </div>
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/20 text-white sm:h-11 sm:w-11">
+        <Icon name={icon} className="h-5 w-5 sm:h-6 sm:w-6" />
+      </div>
+    </div>
+  )
+  const cls = `w-full rounded-2xl bg-gradient-to-br p-4 text-left shadow-lg transition-transform hover:-translate-y-0.5 sm:p-5 ${grad}`
+  if (onClick) {
+    return <button type="button" onClick={onClick} className={cls}>{inner}</button>
+  }
+  return <div className={cls}>{inner}</div>
+}
+
+// กรอบการ์ดมาตรฐานของแดชบอร์ด — หัวเรื่อง + คำอธิบาย + ลิงก์ "ดูทั้งหมด" มุมขวา
+function PanelCard({ title, subtitle, action, children, className = '' }) {
+  return (
+    <section className={`flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900 ${className}`}>
+      <div className="flex items-start justify-between gap-3 border-b border-gray-100 px-4 py-4 dark:border-gray-800 sm:px-5">
+        <div className="min-w-0">
+          <h3 className="text-base font-bold tracking-tight text-gray-900 dark:text-gray-100">{title}</h3>
+          {subtitle ? <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{subtitle}</p> : null}
+        </div>
+        {action}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function PanelLink({ to, children }) {
+  return (
+    <NavLink
+      to={to}
+      // 44px ที่ touch (375/768) — ย่อเป็น compact เฉพาะ lg+ ตามเกณฑ์ tap target ของโปรเจกต์
+      className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-lg px-3 text-xs font-semibold text-indigo-600 transition-colors hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-950/40 lg:min-h-0 lg:px-2 lg:py-1"
+    >
+      {children}
+      <span aria-hidden="true">→</span>
+    </NavLink>
+  )
+}
+
+// "สรุปด่วน" — รายการแถวพื้นสีอ่อน กดแล้วไปยังส่วนที่เกี่ยวข้อง
+const QUICK_TONES = {
+  amber: { row: 'bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/25 dark:hover:bg-amber-950/40', icon: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300', value: 'text-amber-700 dark:text-amber-300' },
+  rose: { row: 'bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/25 dark:hover:bg-rose-950/40', icon: 'bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-300', value: 'text-rose-700 dark:text-rose-300' },
+  sky: { row: 'bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/25 dark:hover:bg-sky-950/40', icon: 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300', value: 'text-sky-700 dark:text-sky-300' },
+  emerald: { row: 'bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/25 dark:hover:bg-emerald-950/40', icon: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300', value: 'text-emerald-700 dark:text-emerald-300' },
+}
+
+function QuickSummaryCard({ items }) {
+  return (
+    <PanelCard title="สรุปด่วน" subtitle="งานที่ต้องจัดการวันนี้">
+      <div className="flex flex-col gap-2.5 p-4 sm:p-5">
+        {items.map((it) => {
+          const t = QUICK_TONES[it.tone] || QUICK_TONES.sky
+          return (
+            <button
+              key={it.label}
+              type="button"
+              onClick={it.onClick}
+              className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors ${t.row}`}
+            >
+              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${t.icon}`}>
+                <Icon name={it.icon} className="h-5 w-5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-gray-800 dark:text-gray-100">{it.label}</span>
+                {it.hint ? <span className="block truncate text-xs text-gray-500 dark:text-gray-400">{it.hint}</span> : null}
+              </span>
+              <span className={`shrink-0 text-lg font-bold tabular-nums ${t.value}`}>{it.value}</span>
+              <span aria-hidden="true" className="shrink-0 text-gray-400 dark:text-gray-500">›</span>
+            </button>
+          )
+        })}
+      </div>
+    </PanelCard>
+  )
+}
+
+// รายการว่างในการ์ด — ใช้ร่วมกันระหว่าง "ชำระเงินล่าสุด" และ "คำขอซ่อมล่าสุด"
+function PanelEmpty({ children }) {
+  return (
+    <div className="flex flex-1 items-center justify-center px-4 py-10">
+      <p className="text-sm text-gray-400 dark:text-gray-500">{children}</p>
+    </div>
+  )
+}
+
+function RecentPaymentsCard({ items }) {
+  return (
+    <PanelCard
+      title="ชำระเงินล่าสุด"
+      subtitle="บิลที่ยืนยันการชำระแล้ว"
+      action={<PanelLink to="/assets">ดูทั้งหมด</PanelLink>}
+    >
+      {items.length === 0 ? (
+        <PanelEmpty>ยังไม่มีรายการชำระเงิน</PanelEmpty>
+      ) : (
+        <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+          {items.map((tx) => {
+            const rental = Array.isArray(tx.rentals) ? tx.rentals[0] : tx.rentals
+            return (
+              <li key={tx.id} className="flex items-center gap-3 px-4 py-3 sm:px-5">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                  <Icon name="check" className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">{rental?.cust_name || 'ไม่ระบุ'}</p>
+                  <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                    {displayAssetName(rental || {})} · {formatPeriod(tx.period) || formatDate(tx.created_at)}
+                  </p>
+                </div>
+                <p className="shrink-0 text-sm font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{formatCurrency(txAmount(tx))}</p>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </PanelCard>
+  )
+}
+
+const RECENT_REPAIR_BADGE = {
+  open: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
+  in_progress: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  done: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+}
+
+const RECENT_REPAIR_LABEL = { open: 'เปิดใหม่', in_progress: 'กำลังซ่อม', done: 'เสร็จแล้ว' }
+
+function RecentRepairsCard({ items }) {
+  return (
+    <PanelCard title="คำขอซ่อมล่าสุด" subtitle="ผู้เช่าแจ้งผ่าน LINE">
+      {items.length === 0 ? (
+        <PanelEmpty>ยังไม่มีคำขอซ่อม</PanelEmpty>
+      ) : (
+        <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+          {items.map((t) => {
+            const rental = Array.isArray(t.rentals) ? t.rentals[0] : t.rentals
+            return (
+              <li key={t.id} className="flex items-center gap-3 px-4 py-3 sm:px-5">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-100 text-base dark:bg-sky-900/40">🔧</span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">{t.description}</p>
+                  <p className="truncate text-xs text-gray-500 dark:text-gray-400">
+                    {rental?.cust_name || 'ไม่ระบุ'} · {displayAssetName(rental || {})} · {formatDate(t.created_at)}
+                  </p>
+                </div>
+                <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${RECENT_REPAIR_BADGE[t.status] || RECENT_REPAIR_BADGE.open}`}>
+                  {RECENT_REPAIR_LABEL[t.status] || t.status}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </PanelCard>
+  )
 }
 
 function MonthlyBreakdownModal({ monthly, onClose }) {
@@ -5740,13 +5923,44 @@ function Dashboard() {
     return buckets
   }, [txInsights])
 
-  const statCards = [
-    { icon: 'banknotes', label: 'รายรับเดือนนี้', value: formatCurrency(summary.paidThisMonth), tone: 'green', onClick: () => setShowMonthly(true) },
-    { icon: 'chart', label: 'อัตราเก็บเงินได้', value: collectionRate === null ? '—' : `${Math.round(collectionRate)}%`, tone: collectionRate === null ? 'blue' : collectionRate >= 90 ? 'green' : collectionRate >= 70 ? 'yellow' : 'red' },
-    { icon: 'warning', label: 'ยอดค้างชำระรวม', value: formatCurrency(summary.outstanding), tone: 'red' },
-    { icon: 'home', label: 'ห้องค้างชำระเกิน 15 วัน', value: overdueBills.length, tone: 'orange' },
-    { icon: 'check', label: 'รอตรวจสลิป', value: pendingReviews.length, tone: pendingReviews.length > 0 ? 'yellow' : 'green' },
+  // แถว KPI บนสุด — เงิน/อัตราเก็บได้ (แถวสถานะห้องแยกไปอีกชุดด้านล่าง)
+  const kpiCards = [
+    { icon: 'banknotes', label: 'รายรับเดือนนี้', value: formatCurrency(summary.paidThisMonth), hint: 'แตะเพื่อดูแยกรายเดือน', tone: 'green', onClick: () => setShowMonthly(true) },
+    { icon: 'chart', label: 'อัตราเก็บเงินได้', value: collectionRate === null ? '—' : `${Math.round(collectionRate)}%`, hint: 'ยอดชำระ ÷ ยอดบิลเดือนนี้', tone: collectionRate === null ? 'indigo' : collectionRate >= 90 ? 'green' : collectionRate >= 70 ? 'yellow' : 'red' },
+    { icon: 'warning', label: 'ยอดค้างชำระรวม', value: formatCurrency(summary.outstanding), hint: 'บิลที่ยังไม่ได้รับชำระ', tone: 'red' },
+    { icon: 'building', label: 'สินทรัพย์ทั้งหมด', value: stats.total, hint: `มีผู้เช่า ${stats.occupied} · ว่าง ${stats.vacant}`, tone: 'indigo' },
   ]
+
+  // แถวสถานะห้อง — การ์ดไล่สีทึบ
+  const roomCards = [
+    { icon: 'home', label: 'ห้องว่าง', value: stats.vacant, hint: 'พร้อมปล่อยเช่า', tone: 'green' },
+    { icon: 'warning', label: 'ค้างชำระเกิน 15 วัน', value: overdueBills.length, hint: 'ต้องติดตามทวง', tone: 'red' },
+    { icon: 'document', label: 'สัญญาใกล้หมดอายุ', value: stats.expiringSoon, hint: 'ภายใน 30 วัน', tone: 'orange' },
+    { icon: 'check', label: 'มีผู้เช่า', value: stats.occupied, hint: 'สัญญาที่ยังใช้งาน', tone: 'slate' },
+  ]
+
+  // สรุปด่วน — กดแล้วเลื่อนไปยังการ์ดที่จัดการเรื่องนั้นจริง
+  const scrollToId = (id) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+  const activeRepairCount = repairTickets.filter((t) => t.status !== 'done').length
+  const quickItems = [
+    { icon: 'check', label: 'รอตรวจสลิป', hint: 'ผู้เช่าส่งหลักฐานการโอน', value: pendingReviews.length, tone: 'amber', onClick: () => scrollToId('dash-pending') },
+    { icon: 'warning', label: 'ค้างชำระเกินกำหนด', hint: 'ส่งบิล/แจ้งเตือนซ้ำ', value: overdueBills.length, tone: 'rose', onClick: () => scrollToId('dash-urgent') },
+    { icon: 'cog', label: 'งานซ่อมค้าง', hint: 'คำขอที่ยังไม่ปิดงาน', value: activeRepairCount, tone: 'sky', onClick: () => scrollToId('dash-repair') },
+    { icon: 'document', label: 'สัญญาใกล้หมดอายุ', hint: 'ต่อสัญญาหรือแจ้งย้ายออก', value: stats.expiringSoon, tone: 'emerald', onClick: () => scrollToId('dash-lease') },
+  ]
+
+  // ตารางล่าง — 5 รายการล่าสุดของแต่ละฝั่ง
+  const recentPayments = txInsights
+    .filter((tx) => String(tx?.status ?? '').toLowerCase() === 'paid')
+    .slice()
+    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+    .slice(0, 5)
+  const recentRepairs = repairTickets
+    .slice()
+    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+    .slice(0, 5)
 
   // membership gate: กำลังโหลดสถานะ → จอว่าง, ยังไม่มีแถวสมาชิก → หน้าเริ่มทดลองใช้ฟรี
   if (!membership) {
@@ -5977,48 +6191,87 @@ function Dashboard() {
             </>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 xl:grid-cols-5">
-                {statCards.map((card) => (
-                  <StatCard key={card.label} {...card} />
+              {/* หัวเรื่องหน้า — เดสก์ท็อปมีหัวเรื่องใน header อยู่แล้ว จึงโชว์เฉพาะบรรทัดข้อมูล ณ เวลา */}
+              <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-50 sm:text-2xl">ภาพรวมระบบ</h2>
+                  <p className="mt-1 truncate text-sm text-gray-500 dark:text-gray-400">
+                    {lastUpdated ? `ข้อมูล ณ ${lastUpdated.toLocaleString('th-TH')}` : 'กำลังโหลดข้อมูล'}
+                    {paymentInfo.business_name ? ` · ${paymentInfo.business_name}` : ''}
+                  </p>
+                </div>
+              </div>
+
+              {/* 1. KPI การ์ดขาว แถบสีซ้าย */}
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+                {kpiCards.map((card) => (
+                  <KpiCard key={card.label} {...card} />
                 ))}
               </div>
 
-              <LeaseExpiryBand rentals={rentals} onViewDetails={setDetailRental} />
-
-              <PendingReviewSection
-                items={pendingReviews}
-                loading={pendingLoading}
-                error={pendingError}
-                reviewing={reviewing}
-                onApprove={(id) => handleApproveWithReceipt(pendingReviews.find((t) => t.id === id))}
-                onReject={(id) => handleReviewTransaction(id, 'unpaid')}
-                onRetry={fetchPendingReviews}
-              />
-
-              <RepairSection
-                items={repairTickets}
-                loading={repairLoading}
-                error={repairError}
-                completingId={completingRepairId}
-                onComplete={handleCompleteRepair}
-                onRetry={fetchRepairTickets}
-              />
-
-              <UrgentChaseSection
-                overdue={overdueBills}
-                sendingId={sendingBillId}
-                onSendBill={handleSendOverdueBill}
-                sendingReminder={sendingReminder}
-                onSendReminders={handleSendDueSoonReminders}
-              />
-
-              <div className="mt-6">
-                <AgingBarChart buckets={agingBuckets} />
+              {/* 2. สถานะห้อง การ์ดไล่สีทึบ */}
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+                {roomCards.map((card) => (
+                  <RoomStatusCard key={card.label} {...card} />
+                ))}
               </div>
 
-              <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+              {/* 3. กราฟ (กว้าง) + สรุปด่วน (ราง) */}
+              <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+                <div className="lg:col-span-2">
+                  <RevenueBar monthly={monthlyByType} />
+                </div>
+                <QuickSummaryCard items={quickItems} />
+              </div>
+
+              {/* 4. ตารางล่าสุด สองคอลัมน์ */}
+              <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <RecentPaymentsCard items={recentPayments} />
+                <RecentRepairsCard items={recentRepairs} />
+              </div>
+
+              {/* 5. กราฟรองสองคอลัมน์ */}
+              <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <AgingBarChart buckets={agingBuckets} />
                 <OccupancyDonut occupied={stats.occupied} vacant={stats.vacant} />
-                <RevenueBar monthly={monthlyByType} />
+              </div>
+
+              {/* ส่วนจัดการงาน — id ใช้เป็นเป้าหมายของปุ่มในการ์ดสรุปด่วน */}
+              <div id="dash-lease" className="scroll-mt-24">
+                <LeaseExpiryBand rentals={rentals} onViewDetails={setDetailRental} />
+              </div>
+
+              <div id="dash-pending" className="scroll-mt-24">
+                <PendingReviewSection
+                  items={pendingReviews}
+                  loading={pendingLoading}
+                  error={pendingError}
+                  reviewing={reviewing}
+                  onApprove={(id) => handleApproveWithReceipt(pendingReviews.find((t) => t.id === id))}
+                  onReject={(id) => handleReviewTransaction(id, 'unpaid')}
+                  onRetry={fetchPendingReviews}
+                />
+              </div>
+
+              <div id="dash-repair" className="scroll-mt-24">
+                <RepairSection
+                  items={repairTickets}
+                  loading={repairLoading}
+                  error={repairError}
+                  completingId={completingRepairId}
+                  onComplete={handleCompleteRepair}
+                  onRetry={fetchRepairTickets}
+                />
+              </div>
+
+              <div id="dash-urgent" className="scroll-mt-24">
+                <UrgentChaseSection
+                  overdue={overdueBills}
+                  sendingId={sendingBillId}
+                  onSendBill={handleSendOverdueBill}
+                  sendingReminder={sendingReminder}
+                  onSendReminders={handleSendDueSoonReminders}
+                />
               </div>
             </>
           )}
