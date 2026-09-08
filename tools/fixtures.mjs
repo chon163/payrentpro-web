@@ -54,6 +54,20 @@ export const AUDIT = [
   { id: 'al2', transaction_id: 't4', old_amount: 15000, new_amount: 14500, reason: 'ส่วนลดลูกค้าเก่า', created_at: iso(now - 9 * DAY) },
 ]
 
+// กล่องแจ้งซ่อม: ครอบทุกสถานะ + มี/ไม่มีรูป (รูปเป็น data-URL เพื่อไม่ต้องยิงเน็ต)
+const REPAIR_PHOTO =
+  'data:image/svg+xml;base64,' +
+  Buffer.from(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200"><rect width="320" height="200" fill="#bae6fd"/><text x="160" y="110" font-size="20" text-anchor="middle" fill="#0c4a6e">repair photo</text></svg>',
+  ).toString('base64')
+
+export const REPAIR_TICKETS = [
+  { id: 'rt1', rental_id: 'r1', description: 'แอร์ไม่เย็น มีน้ำหยดลงพื้น', status: 'open', photo_url: REPAIR_PHOTO, created_at: iso(now - 1 * DAY), done_at: null, rentals: [RENTALS[0]] },
+  { id: 'rt2', rental_id: 'r2', description: 'ก๊อกน้ำในห้องน้ำรั่ว ปิดไม่สนิท', status: 'open', photo_url: null, created_at: iso(now - 2 * DAY), done_at: null, rentals: [RENTALS[1]] },
+  { id: 'rt3', rental_id: 'r4', description: 'หลอดไฟหน้าห้องไม่ติด', status: 'in_progress', photo_url: null, created_at: iso(now - 4 * DAY), done_at: null, rentals: [RENTALS[3]] },
+  { id: 'rt4', rental_id: 'r5', description: 'ประตูห้องปิดไม่สนิท', status: 'done', photo_url: null, created_at: iso(now - 9 * DAY), done_at: iso(now - 7 * DAY), rentals: [RENTALS[4]] },
+]
+
 export const BILL = {
   id: 'tok-bill-0001', rental_id: 'r1', period: '2026-09',
   base_amount: 6500, water_amount: 320, electric_amount: 780, extra_amount: 0,
@@ -73,6 +87,7 @@ export const TABLES = {
   membership_payments: MEMBERSHIP_PAYMENTS,
   audit_logs: AUDIT,
   system_settings: [{ key: 'promptpay', value: '0899999999' }],
+  repair_tickets: REPAIR_TICKETS,
 }
 
 export const SESSION = {
@@ -151,6 +166,14 @@ export async function installStubs(context) {
     get_my_admin_id: 'a1',
     get_bill_by_token: BILL,
     send_bill_to_line: { ok: true },
+    notify_repair_done: { ok: true },
+    // ประวัติบิลของห้องบนหน้าบิล public (แท็บ "ประวัติทั้งหมด")
+    get_room_bills: [
+      { period: '2026-09', total_amount: 7600, paid_amount: 0, status: 'unpaid', created_at: iso(now - 3 * DAY), is_current: true },
+      { period: '2026-08', total_amount: 7420, paid_amount: 7420, status: 'paid', created_at: iso(now - 33 * DAY), is_current: false },
+      { period: '2026-07', total_amount: 7180, paid_amount: 7180, status: 'paid', created_at: iso(now - 63 * DAY), is_current: false },
+      { period: '2026-06', total_amount: 7050, paid_amount: 7050, status: 'paid', created_at: iso(now - 93 * DAY), is_current: false },
+    ],
   }
   await context.route('**/rest/v1/rpc/*', (route) => {
     const name = route.request().url().split('/rpc/')[1].split('?')[0]

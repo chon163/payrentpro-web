@@ -32,6 +32,124 @@ function isSettled(status) {
   return s === 'paid' || s === 'pending_review' || s === 'pending'
 }
 
+// badge ย่อสำหรับตารางประวัติ (แคบกว่า statusBadge ของหัวการ์ด)
+function historyBadge(status) {
+  const s = String(status ?? '').toLowerCase()
+  if (s === 'paid') return { label: 'ชำระแล้ว', cls: 'bg-green-100 text-green-700' }
+  if (s === 'pending_review' || s === 'pending') return { label: 'รอตรวจสอบ', cls: 'bg-sky-100 text-sky-700' }
+  return { label: 'รอชำระ', cls: 'bg-orange-100 text-orange-700' }
+}
+
+// แท็บสลับ "บิลงวดนี้" / "ประวัติทั้งหมด" — ปุ่มสูง 44px กดง่ายบนมือถือ 375px
+function TabBar({ tab, onChange }) {
+  const base =
+    'flex h-11 flex-1 items-center justify-center gap-1.5 rounded-xl text-sm font-bold transition-colors'
+  return (
+    <div className="flex gap-2 rounded-2xl border border-gray-100 bg-white p-1.5 shadow-sm">
+      <button
+        type="button"
+        onClick={() => onChange('bill')}
+        className={tab === 'bill' ? `${base} bg-indigo-600 text-white shadow-sm` : `${base} text-gray-500 hover:bg-gray-50`}
+      >
+        🧾 บิลงวดนี้
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange('history')}
+        className={tab === 'history' ? `${base} bg-indigo-600 text-white shadow-sm` : `${base} text-gray-500 hover:bg-gray-50`}
+      >
+        📚 ประวัติทั้งหมด
+      </button>
+    </div>
+  )
+}
+
+// ตารางประวัติบิลทุกงวด — ข้อมูลจาก RPC get_room_bills (สาธารณะ: งวด/ยอด/สถานะ)
+function HistoryPanel({ rows, loading, error, onRetry }) {
+  if (loading) {
+    return (
+      <div className="space-y-3 rounded-3xl border border-gray-100 bg-white px-5 py-5 shadow-sm">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="h-14 animate-pulse rounded-xl bg-gray-100" />
+        ))}
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-3xl border border-gray-100 bg-white px-6 py-8 text-center shadow-sm">
+        <p className="text-3xl">📭</p>
+        <p className="mt-2 text-sm font-semibold text-gray-700">ไม่สามารถโหลดประวัติได้</p>
+        <p className="mt-1 text-xs text-gray-400">{error}</p>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-4 inline-flex h-11 items-center justify-center rounded-xl bg-indigo-600 px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-indigo-500"
+        >
+          ลองอีกครั้ง
+        </button>
+      </div>
+    )
+  }
+
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-3xl border border-gray-100 bg-white px-6 py-10 text-center shadow-sm">
+        <p className="text-3xl">📭</p>
+        <p className="mt-2 text-sm font-semibold text-gray-700">ยังไม่มีประวัติบิล</p>
+      </div>
+    )
+  }
+
+  const paidTotal = rows
+    .filter((r) => String(r.status ?? '').toLowerCase() === 'paid')
+    .reduce((sum, r) => sum + (Number(r.paid_amount) || Number(r.total_amount) || 0), 0)
+  const unpaidCount = rows.filter((r) => !isSettled(r.status)).length
+
+  return (
+    <div className="space-y-4">
+      {/* สรุปหัวตาราง: 2 การ์ดพอดีจอ 375px */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+          <p className="text-xs font-semibold text-emerald-700">ชำระแล้วรวม</p>
+          <p className="mt-1 text-lg font-bold tabular-nums text-emerald-700">{formatCurrency(paidTotal)}</p>
+        </div>
+        <div className="rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3">
+          <p className="text-xs font-semibold text-orange-700">ยังค้างชำระ</p>
+          <p className="mt-1 text-lg font-bold tabular-nums text-orange-700">{unpaidCount} งวด</p>
+        </div>
+      </div>
+
+      <ul className="divide-y divide-gray-50 overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
+        {rows.map((row, i) => {
+          const b = historyBadge(row.status)
+          return (
+            <li
+              key={`${row.period ?? 'x'}-${i}`}
+              className={`flex items-center justify-between gap-3 px-5 py-3.5 ${row.is_current ? 'bg-indigo-50/60' : ''}`}
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold text-gray-900">
+                  งวด {formatPeriod(row.period)}
+                  {row.is_current ? <span className="ml-1.5 text-xs font-semibold text-indigo-600">· งวดนี้</span> : null}
+                </p>
+                <p className="mt-0.5 text-xs text-gray-400">ออกบิล {formatDate(row.created_at)}</p>
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="text-sm font-bold tabular-nums text-gray-900">{formatCurrency(row.total_amount)}</p>
+                <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-bold ${b.cls}`}>
+                  {b.label}
+                </span>
+              </div>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
 function BillPage() {
   const { secure_token } = useParams()
   const [bill, setBill] = useState(null)
@@ -43,6 +161,11 @@ function BillPage() {
   const [customAmount, setCustomAmount] = useState('')
   const [toast, setToast] = useState(null)
   const [business, setBusiness] = useState(null)
+  // แท็บประวัติ: เปิดจากลิงก์ #history ที่บอท LINE ส่งให้ (คำสั่ง "ประวัติ")
+  const [tab, setTab] = useState(() => (window.location.hash === '#history' ? 'history' : 'bill'))
+  const [history, setHistory] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState(null)
   const paySectionRef = useRef(null)
 
   const fetchBill = useCallback(async () => {
@@ -68,6 +191,42 @@ function BillPage() {
   useEffect(() => {
     fetchBill()
   }, [fetchBill])
+
+  // ประวัติบิลทุกงวดของห้อง — โหลดครั้งแรกที่เปิดแท็บประวัติ
+  const fetchHistory = useCallback(async () => {
+    setHistoryLoading(true)
+    setHistoryError(null)
+    try {
+      const { data, error } = await supabase.rpc('get_room_bills', { p_token: secure_token })
+      if (error) throw error
+      setHistory(Array.isArray(data) ? data : [])
+    } catch (err) {
+      console.error('Bill history fetch error:', err)
+      setHistoryError(err?.message || 'ไม่สามารถโหลดประวัติได้')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [secure_token])
+
+  useEffect(() => {
+    if (tab === 'history' && history.length === 0 && !historyLoading && !historyError) {
+      fetchHistory()
+    }
+  }, [tab, history.length, historyLoading, historyError, fetchHistory])
+
+  // ให้ปุ่ม back/forward ของเบราว์เซอร์สลับแท็บตาม hash ได้
+  useEffect(() => {
+    const onHashChange = () => setTab(window.location.hash === '#history' ? 'history' : 'bill')
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
+
+  const switchTab = (next) => {
+    setTab(next)
+    // เขียน hash ให้ตรงกับแท็บ เพื่อให้ลิงก์ #history ที่บอทส่งใช้ซ้ำได้
+    const url = next === 'history' ? '#history' : window.location.pathname
+    window.history.replaceState(null, '', url)
+  }
 
   useEffect(() => {
     if (bill) {
@@ -191,6 +350,30 @@ function BillPage() {
     ...(Number(bill.extra_charges) > 0 ? [{ label: 'ค่าใช้จ่ายอื่นๆ', value: formatCurrency(bill.extra_charges) }] : []),
   ]
 
+  // ── แท็บประวัติ: ต้องมาก่อนหน้า "ชำระแล้ว" เพื่อให้ลิงก์ #history
+  //    ที่บอทส่งให้ใช้ได้ทุกสถานะบิล (ไม่ติด early return ด้านล่าง) ──
+  if (tab === 'history') {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-indigo-50 via-violet-50 to-rose-50 text-gray-900">
+        <div className="mx-auto max-w-md space-y-4 px-4 py-6">
+          <div className="rounded-3xl bg-gradient-to-br from-indigo-500 to-violet-500 px-6 py-6 text-white shadow-lg shadow-indigo-200/70">
+            <p className="text-base font-medium text-indigo-100">ประวัติการชำระเงิน 📚</p>
+            <p className="mt-1 text-xl font-bold">{custName}</p>
+            <p className="mt-3 text-sm text-indigo-100">{itemDetails}</p>
+          </div>
+
+          <TabBar tab={tab} onChange={switchTab} />
+
+          <HistoryPanel rows={history} loading={historyLoading} error={historyError} onRetry={fetchHistory} />
+
+          <div className="pt-2 text-center">
+            <p className="text-xs text-gray-400">จัดการโดย PayRentPro 🏠</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // ── ชำระแล้ว: หน้าขอบคุณ ─────────────────────────────────
   if (isPaid) {
     return (
@@ -210,6 +393,11 @@ function BillPage() {
             </div>
             <p className="mt-5 text-xs text-emerald-50/80">เลขที่บิล INV-{(bill.id || '').slice(0, 8).toUpperCase()} · งวด {formatPeriod(bill.period)}</p>
           </div>
+
+          <div className="mt-4">
+            <TabBar tab={tab} onChange={switchTab} />
+          </div>
+
           <p className="mt-6 text-center text-xs text-gray-400">จัดการโดย PayRentPro 🏠</p>
         </div>
       </div>
@@ -233,6 +421,8 @@ function BillPage() {
           </div>
           <p className="mt-3 text-sm text-indigo-100">{itemDetails} · งวด {formatPeriod(bill.period)}</p>
         </div>
+
+        <TabBar tab={tab} onChange={switchTab} />
 
         {/* 2) ฮีโร่ยอดเงิน */}
         <div className="rounded-3xl border border-gray-100 bg-white px-6 py-6 text-center shadow-sm">

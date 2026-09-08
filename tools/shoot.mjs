@@ -18,6 +18,8 @@ const PAGES = [
   { name: '05-membership', path: '/membership' },
   { name: '06-admin', path: '/admin' },
   { name: '07-bill', path: '/bill/tok-bill-0001' },
+  // แท็บประวัติของหน้าบิล — บอท LINE ส่งลิงก์ #history ให้ผู้เช่า
+  { name: '08-bill-history', path: '/bill/tok-bill-0001#history' },
 ]
 
 const run = async () => {

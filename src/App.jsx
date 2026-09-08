@@ -2797,6 +2797,180 @@ function PendingReviewSection({ items, loading, error, reviewing, onApprove, onR
   )
 }
 
+// กล่องแจ้งซ่อม — ticket มาจากคำสั่ง "แจ้งซ่อม" ในกลุ่ม LINE ของผู้เช่า
+// รายการที่โชว์: เปิดใหม่ (open) + กำลังดำเนินการ (in_progress) — ที่เสร็จแล้วนับในการ์ดสรุปเท่านั้น
+const REPAIR_TONES = {
+  open: { card: 'border-rose-200 dark:border-rose-800/70 bg-rose-50 dark:bg-rose-950/30', text: 'text-rose-700 dark:text-rose-300' },
+  in_progress: { card: 'border-amber-200 dark:border-amber-800/70 bg-amber-50 dark:bg-amber-950/30', text: 'text-amber-700 dark:text-amber-300' },
+  done: { card: 'border-emerald-200 dark:border-emerald-800/70 bg-emerald-50 dark:bg-emerald-950/30', text: 'text-emerald-700 dark:text-emerald-300' },
+}
+
+function RepairSection({ items, loading, error, completingId, onComplete, onRetry }) {
+  const [previewPhoto, setPreviewPhoto] = useState(null)
+
+  const counts = {
+    open: items.filter((t) => t.status === 'open').length,
+    in_progress: items.filter((t) => t.status === 'in_progress').length,
+    done: items.filter((t) => t.status === 'done').length,
+  }
+  // เปิดก่อนเสร็จ — เรียงใหม่สุดขึ้นก่อน
+  const active = items.filter((t) => t.status !== 'done')
+
+  const summary = [
+    { key: 'open', label: 'เปิดใหม่', value: counts.open },
+    { key: 'in_progress', label: 'กำลังดำเนินการ', value: counts.in_progress },
+    { key: 'done', label: 'เสร็จแล้ว', value: counts.done },
+  ]
+
+  return (
+    <section className="mt-8 overflow-hidden rounded-2xl border border-sky-200 dark:border-sky-800/70 bg-white dark:bg-gray-900 shadow-lg shadow-sky-100/70 dark:shadow-none">
+      <div className="flex items-center justify-between gap-4 border-b border-sky-100 dark:border-sky-800/50 bg-gradient-to-r from-sky-50 dark:from-sky-950/30 to-cyan-50 dark:to-cyan-950/30 px-4 py-4 sm:px-6 sm:py-5">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-500 text-xl text-white shadow-lg shadow-sky-500/40">
+            🔧
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100">แจ้งซ่อม</h2>
+            <p className="truncate text-sm text-sky-700 dark:text-sky-300">ผู้เช่าแจ้งผ่าน LINE ด้วยคำสั่ง &quot;แจ้งซ่อม&quot;</p>
+          </div>
+        </div>
+        <span className="inline-flex shrink-0 items-center rounded-full bg-sky-100 dark:bg-sky-900/40 px-3 py-1 text-xs font-semibold text-sky-800 dark:text-sky-200 ring-1 ring-inset ring-sky-200 dark:ring-sky-800/70">
+          {loading ? 'กำลังโหลด...' : `${active.length} รายการค้าง`}
+        </span>
+      </div>
+
+      {/* การ์ดสรุป 3 ใบ — 3 คอลัมน์พอดีจอ 375px */}
+      <div className="grid grid-cols-3 gap-2.5 px-4 pt-4 sm:gap-4 sm:px-6 sm:pt-5">
+        {summary.map((s) => {
+          const tone = REPAIR_TONES[s.key]
+          return (
+            <div key={s.key} className={`rounded-2xl border p-3 sm:p-4 ${tone.card}`}>
+              <p className={`text-xs font-semibold sm:text-sm ${tone.text}`}>{s.label}</p>
+              <p className={`mt-1 text-2xl font-bold tabular-nums tracking-tight ${tone.text}`}>{s.value}</p>
+            </div>
+          )
+        })}
+      </div>
+
+      {loading ? (
+        <div className="space-y-3 p-4 sm:p-6">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={i} className="h-24 animate-pulse rounded-xl bg-sky-50 dark:bg-sky-950/30" />
+          ))}
+        </div>
+      ) : error ? (
+        <div className="p-8 text-center sm:p-10">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400">
+            <Icon name="warning" className="h-6 w-6" />
+          </div>
+          <h3 className="mt-4 text-base font-semibold text-gray-900 dark:text-gray-100">ไม่สามารถโหลดรายการแจ้งซ่อมได้</h3>
+          <p className="mx-auto mt-2 max-w-md text-sm text-gray-500 dark:text-gray-400">{error}</p>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-sky-500 lg:py-2.5 lg:text-sm"
+          >
+            <Icon name="refresh" className="h-4 w-4" />
+            ลองอีกครั้ง
+          </button>
+        </div>
+      ) : active.length === 0 ? (
+        <div className="p-8 text-center sm:p-10">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400">
+            <Icon name="check" className="h-6 w-6" />
+          </div>
+          <h3 className="mt-4 text-base font-semibold text-gray-900 dark:text-gray-100">ไม่มีงานซ่อมค้าง</h3>
+          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">ผู้เช่ายังไม่มีคำขอซ่อมใหม่ในขณะนี้</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 sm:p-5">
+          {active.map((t) => {
+            const rental = Array.isArray(t.rentals) ? t.rentals[0] : t.rentals
+            const itemDetails = displayAssetName(rental || {})
+            const custName = rental?.cust_name || 'ไม่ระบุ'
+            const isCompleting = completingId === t.id
+            const tone = REPAIR_TONES[t.status] || REPAIR_TONES.open
+            return (
+              <div
+                key={t.id}
+                className="flex flex-col gap-3 rounded-2xl border border-sky-200 dark:border-sky-800/70 bg-white dark:bg-gray-900 p-4 shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-bold text-gray-900 dark:text-gray-100">{itemDetails}</p>
+                    <p className="mt-0.5 truncate text-sm text-gray-600 dark:text-gray-400">{custName}</p>
+                  </div>
+                  <span className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${tone.card} ${tone.text}`}>
+                    {t.status === 'in_progress' ? 'กำลังซ่อม' : 'เปิดใหม่'}
+                  </span>
+                </div>
+
+                <p className="text-base leading-relaxed text-gray-800 dark:text-gray-200">{t.description}</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500">แจ้งเมื่อ {formatDate(t.created_at)}</p>
+
+                {t.photo_url ? (
+                  <button
+                    type="button"
+                    onClick={() => setPreviewPhoto(t.photo_url)}
+                    className="group relative block overflow-hidden rounded-xl border border-sky-200 dark:border-sky-800/70"
+                    aria-label="ดูรูปแจ้งซ่อมเต็มจอ"
+                  >
+                    <img src={t.photo_url} alt="รูปแจ้งซ่อม" className="h-40 w-full object-cover" loading="lazy" />
+                    <span className="absolute inset-x-0 bottom-0 bg-gray-900/60 px-3 py-1.5 text-center text-sm font-semibold text-white">
+                      แตะเพื่อดูรูปเต็มจอ
+                    </span>
+                  </button>
+                ) : (
+                  <div className="flex h-20 items-center justify-center rounded-xl border border-dashed border-sky-200 dark:border-sky-800/70 bg-sky-50/60 dark:bg-sky-950/30 text-sm text-sky-600 dark:text-sky-400">
+                    ไม่มีรูปประกอบ
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => onComplete(t)}
+                  disabled={isCompleting}
+                  className="mt-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-base font-semibold text-white shadow-sm shadow-emerald-600/30 transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isCompleting ? (
+                    <>
+                      <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
+                      </svg>
+                      กำลังบันทึก...
+                    </>
+                  ) : (
+                    '✅ เสร็จแล้ว'
+                  )}
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {previewPhoto ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-4" onClick={() => setPreviewPhoto(null)}>
+          <div className="relative max-h-[90vh] max-w-3xl" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setPreviewPhoto(null)}
+              className="absolute -right-3 -top-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 shadow-lg transition-colors hover:text-gray-900 dark:hover:text-gray-100"
+              aria-label="ปิด"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <img src={previewPhoto} alt="รูปแจ้งซ่อม" className="max-h-[90vh] max-w-full rounded-xl object-contain shadow-2xl" />
+          </div>
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
 const EMPTY_FORM = {
   biz_type: '',
   cust_name: '',
@@ -4764,6 +4938,10 @@ function Dashboard() {
   const [summary, setSummary] = useState({ paidIncome: 0, paidThisMonth: 0, outstanding: 0, monthly: [] })
   const [showMonthly, setShowMonthly] = useState(false)
   const [overdueBills, setOverdueBills] = useState([])
+  const [repairTickets, setRepairTickets] = useState([])
+  const [repairLoading, setRepairLoading] = useState(true)
+  const [repairError, setRepairError] = useState(null)
+  const [completingRepairId, setCompletingRepairId] = useState(null)
   const [txInsights, setTxInsights] = useState([])
   const knownPendingIdsRef = useRef(null)
   const [paymentInfo, setPaymentInfo] = useState({
@@ -4873,6 +5051,56 @@ function Dashboard() {
       if (!silent) setPendingLoading(false)
     }
   }, [])
+
+  // รายการแจ้งซ่อม — RLS กรองให้เห็นเฉพาะห้องที่ตัวเองเป็นเจ้าของแล้ว
+  const fetchRepairTickets = useCallback(async (silent = false) => {
+    if (!silent) {
+      setRepairLoading(true)
+      setRepairError(null)
+    }
+    try {
+      const { data, error } = await supabase
+        .from('repair_tickets')
+        .select('id, description, status, photo_url, created_at, rentals(cust_name, item_details, sub_label)')
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      setRepairTickets(Array.isArray(data) ? data : [])
+    } catch (err) {
+      if (!silent) setRepairError(err?.message || 'เกิดข้อผิดพลาดในการดึงข้อมูล')
+    } finally {
+      if (!silent) setRepairLoading(false)
+    }
+  }, [])
+
+  // ปิดงานซ่อม → update status แล้วให้ RPC push แจ้งกลุ่ม LINE
+  const handleCompleteRepair = useCallback(async (ticket) => {
+    if (!ticket?.id) return
+    setCompletingRepairId(ticket.id)
+    try {
+      const { error } = await supabase
+        .from('repair_tickets')
+        .update({ status: 'done', done_at: new Date().toISOString() })
+        .eq('id', ticket.id)
+      if (error) throw error
+
+      // แจ้งกลุ่ม LINE — ถ้าห้องยังไม่ผูกกลุ่มก็ถือว่าปิดงานสำเร็จแล้ว
+      const { data: notifyResult, error: notifyError } = await supabase.rpc('notify_repair_done', {
+        p_ticket_id: ticket.id,
+      })
+      if (notifyError) throw notifyError
+
+      if (notifyResult?.ok === false && notifyResult?.error === 'no_group') {
+        setToast({ type: 'warning', message: 'ปิดงานซ่อมแล้ว — ห้องนี้ยังไม่ได้ผูกกลุ่ม LINE' })
+      } else {
+        setToast({ type: 'success', message: 'ปิดงานซ่อมแล้ว แจ้งผู้เช่าใน LINE เรียบร้อย' })
+      }
+      await fetchRepairTickets(true)
+    } catch (err) {
+      setToast({ type: 'error', message: err?.message || 'ปิดงานซ่อมไม่สำเร็จ' })
+    } finally {
+      setCompletingRepairId(null)
+    }
+  }, [fetchRepairTickets])
 
   const fetchSummary = useCallback(async () => {
     try {
@@ -4985,7 +5213,8 @@ function Dashboard() {
     fetchSummary()
     fetchOverdue()
     fetchTxInsights()
-  }, [fetchPendingReviews, fetchSummary, fetchOverdue, fetchTxInsights])
+    fetchRepairTickets()
+  }, [fetchPendingReviews, fetchSummary, fetchOverdue, fetchTxInsights, fetchRepairTickets])
 
   // polling แบบเรียลไทม์ (ทุก 20 วินาที) — รีเฟรชการ์ดสรุป + สินทรัพย์ด้วย
   useEffect(() => {
@@ -4995,9 +5224,10 @@ function Dashboard() {
       fetchRentals(true)
       fetchOverdue()
       fetchTxInsights()
+      fetchRepairTickets(true)
     }, 20000)
     return () => clearInterval(timer)
-  }, [fetchPendingReviews, fetchSummary, fetchRentals, fetchOverdue, fetchTxInsights])
+  }, [fetchPendingReviews, fetchSummary, fetchRentals, fetchOverdue, fetchTxInsights, fetchRepairTickets])
 
   const handleReviewTransaction = async (id, newStatus) => {
     if (!id) return false
@@ -5588,7 +5818,7 @@ function Dashboard() {
               {/* มือถือ/แท็บเล็ต: ปุ่มรองทั้งหมดยุบเข้าเมนู ⋯ (เหลือ ชื่อ + กระดิ่ง + ⋯) */}
               <HeaderOverflowMenu
                 onExportCsv={!isAssets && !isSettings && !isAudit && !isMembership && !isAdmin ? handleExportCsv : null}
-                onRefresh={() => { fetchRentals(); fetchSummary(); fetchPendingReviews(); fetchTxInsights() }}
+                onRefresh={() => { fetchRentals(); fetchSummary(); fetchPendingReviews(); fetchTxInsights(); fetchRepairTickets() }}
                 loading={loading}
                 lastUpdated={lastUpdated}
                 largeText={largeText}
@@ -5640,7 +5870,7 @@ function Dashboard() {
               )}
               <button
                 type="button"
-                onClick={() => { fetchRentals(); fetchSummary(); fetchPendingReviews(); fetchTxInsights() }}
+                onClick={() => { fetchRentals(); fetchSummary(); fetchPendingReviews(); fetchTxInsights(); fetchRepairTickets() }}
                 disabled={loading}
                 className="hidden items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 lg:inline-flex"
               >
@@ -5763,6 +5993,15 @@ function Dashboard() {
                 onApprove={(id) => handleApproveWithReceipt(pendingReviews.find((t) => t.id === id))}
                 onReject={(id) => handleReviewTransaction(id, 'unpaid')}
                 onRetry={fetchPendingReviews}
+              />
+
+              <RepairSection
+                items={repairTickets}
+                loading={repairLoading}
+                error={repairError}
+                completingId={completingRepairId}
+                onComplete={handleCompleteRepair}
+                onRetry={fetchRepairTickets}
               />
 
               <UrgentChaseSection
