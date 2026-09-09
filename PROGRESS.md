@@ -25,8 +25,16 @@
 - **D8**: เริ่มจากโมดูลที่ไม่พึ่งโครงอาคาร
 
 ### ลำดับงาน
-- [ ] **2a. กลุ่มการเงิน** — `expense_categories`, `expenses`, `income` + หน้ากำไรสุทธิ์
-      (จุดขายที่เขาโฆษณาบนหน้า login และเราไม่มีเลย · ผูก `landlord_id` ตรง ๆ ไม่ต้องรออะไร)
+- [x] **2a. กลุ่มการเงิน** ✅ — `expense_categories`, `expenses`, `other_income`
+      + หน้า `/finance` (แท็บ ภาพรวมกำไร / รายจ่าย / รายรับอื่น)
+      - migration `20260909100000_finance_expenses_income.sql` — 3 ตาราง + RLS ครบ 12 policy
+        + RPC `get_profit_summary`, `get_profit_trend`, `seed_expense_categories`, `is_my_landlord`
+      - หน้าใหม่ `src/pages/FinancePage.jsx` — CRUD ครบ + กราฟ 6 เดือน + รายจ่ายตามหมวด
+      - แชร์คอมโพเนนต์ `src/components/ui.jsx` + `styles.js` + `src/utils/format.js`
+      - แตะ `App.jsx` แค่ 5 จุด (import, NAV_ITEMS, isFinance, หัวเรื่อง, render) ตาม D5
+      - harness ใหม่ `tools/verify-finance.mjs` — ตรวจ 3 แท็บ × 3 ความกว้าง + 2 modal
+      - **ผลทดสอบ**: PASS ทุกช่อง · 375/768 = 0 small targets · oxlint 0 errors · build ผ่าน
+      - นับ warnings ลดจาก 22 → 19 (แยก constants ออกจากไฟล์คอมโพเนนต์)
 - [ ] **2b. กลุ่มสื่อสาร** — `announcements`, `notes` (sticky note มี color/pinned), `documents`
 - [ ] **2c. กลุ่มซ่อมบำรุง** — `vendors`, `inventory` (มี reorder_level), `fixed_assets`
       + ขยาย `repair_tickets` เดิมให้มี priority/parts_cost/labor_cost/charge_to/vendor
@@ -34,6 +42,11 @@
 - [ ] **2e. บิล/มิเตอร์** — หน้าจดมิเตอร์ทั้งตึก, `common_fees`, ออกบิลเป็นรอบ
 - [ ] **2f. 3D** — viewer ก่อน (คุ้มค่ากว่า) แล้วค่อย designer ถ้าเวลาเหลือ
 - [ ] **2g. อื่น ๆ** — `bookings`, role/permission, หน้ารวมการแจ้งเตือน
+
+### ⚠️ ต้องรัน migration ก่อนใช้งานจริง
+`supabase/migrations/20260909100000_finance_expenses_income.sql` ยังไม่ได้รันบน DB จริง
+หน้า `/finance` จะ error จนกว่าจะรัน (`supabase db push` หรือวางใน SQL Editor)
+ทดสอบที่ผ่านมาใช้ fixture stub ใน `tools/fixtures.mjs` ไม่ได้ยิง DB จริง
 
 ## Phase 3 — ธีมเขียวอ่อน ⬜ ยังไม่เริ่ม
 รวมสีเป็น token ชุดเดียวก่อน แล้วเปลี่ยน indigo/violet → เขียวอ่อน (D4)

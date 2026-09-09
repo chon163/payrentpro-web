@@ -10,48 +10,9 @@ import { createReceiptPdf } from './utils/receipt'
 import { THAI_MONTHS, currentPeriod, formatPeriod } from './utils/period'
 import { displayAssetName } from './utils/assetName'
 import { useTheme, useChartTheme } from './theme'
+import { Icon } from './components/ui'
+import FinancePage from './pages/FinancePage'
 
-const ICONS = {
-  building:
-    'M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21',
-  home:
-    'M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75',
-  document:
-    'M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z',
-  banknotes:
-    'M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z',
-  warning:
-    'M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z',
-  check:
-    'M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
-  bell:
-    'M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0',
-  chart:
-    'M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z',
-  refresh:
-    'M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99',
-  gem:
-    'M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456ZM16.894 20.567 16.5 21.75l-.394-1.183a2.25 2.25 0 0 0-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 0 0 1.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 0 0 1.423 1.423l1.183.394-1.183.394a2.25 2.25 0 0 0-1.423 1.423Z',
-  shield:
-    'M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z',
-  cog:
-    'M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 0 1 0 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 0 1 0-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281Z',
-}
-
-function Icon({ name, className = 'h-6 w-6' }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.5}
-      aria-hidden="true"
-    >
-      <path strokeLinecap="round" strokeLinejoin="round" d={ICONS[name]} />
-    </svg>
-  )
-}
 
 const STATUS_LABELS = {
   paid: 'ชำระแล้ว',
@@ -656,12 +617,12 @@ function MonthlyBreakdownModal({ monthly, onClose }) {
 }
 
 // /admin เห็นเฉพาะ founder — Sidebar กรองออกให้คนอื่น (ดูที่ membership.plan)
+// เรื่องบัญชีส่วนตัว (สมาชิก / ตั้งค่าบัญชี / ประวัติแก้ไข / ออกจากระบบ) ย้ายไปเมนูโปรไฟล์
+// มุมขวาบนแล้ว (ProfileMenu) — sidebar เหลือเฉพาะการนำทางหลัก
 const NAV_ITEMS = [
   { to: '/', label: 'แดชบอร์ด', icon: 'home' },
   { to: '/assets', label: 'รายการสินทรัพย์', icon: 'building' },
-  { to: '/settings', label: 'ตั้งค่าบัญชี', icon: 'cog' },
-  { to: '/audit', label: 'ประวัติแก้ไข', icon: 'document' },
-  { to: '/membership', label: '💎 สมาชิก', icon: 'gem' },
+  { to: '/finance', label: 'กำไรสุทธิ์', icon: 'chart' },
   { to: '/admin', label: '🛡️ ผู้ดูแล', icon: 'shield', founderOnly: true },
 ]
 
@@ -1109,20 +1070,32 @@ const MEMBERSHIP_PAYMENT_STATUS = {
   rejected: { label: 'ไม่ผ่านการตรวจสอบ', cls: 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-800/70', dot: 'bg-rose-500' },
 }
 
+// สรุปสถานะสมาชิกแบบสั้น — ใช้ร่วมกันระหว่าง badge ใน sidebar, เมนูโปรไฟล์
+// และการ์ด "สมาชิก" บนหน้าตั้งค่ามือถือ เพื่อให้กฎ "แดงเมื่อ <=3 วัน/หมดอายุ" อยู่ที่เดียว
+function membershipSummary(membership) {
+  const expired = String(membership?.status ?? '').toLowerCase() === 'expired'
+  const plan = String(membership?.plan ?? '').toLowerCase()
+  const meta = MEMBERSHIP_PLANS[plan] || { label: plan || '—', cls: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 ring-gray-200 dark:ring-gray-700' }
+  const daysLeft = Number(membership?.days_left)
+  const hasExpiry = !expired && Boolean(membership?.expire_date) && Number.isFinite(daysLeft)
+  return {
+    planLabel: expired ? 'หมดอายุ' : meta.label,
+    cls: meta.cls,
+    daysLeft,
+    hasExpiry,
+    // ใกล้หมดอายุ (<= 3 วัน) หรือหมดอายุแล้ว → เปลี่ยนเป็นสีแดง
+    urgent: expired || (hasExpiry && daysLeft <= 3),
+  }
+}
+
 function MembershipBadge({ membership }) {
   if (!membership?.ok) return null
-  const expired = String(membership.status ?? '').toLowerCase() === 'expired'
-  const plan = String(membership.plan ?? '').toLowerCase()
-  const meta = MEMBERSHIP_PLANS[plan] || { label: plan || '—', cls: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 ring-gray-200 dark:ring-gray-700' }
-  const daysLeft = Number(membership.days_left)
-  const hasExpiry = !expired && Boolean(membership.expire_date) && Number.isFinite(daysLeft)
-  // ใกล้หมดอายุ (<= 3 วัน) หรือหมดอายุแล้ว → เปลี่ยนเป็นสีแดงทั้ง badge
-  const urgent = hasExpiry && daysLeft <= 3
+  const { planLabel, cls, daysLeft, hasExpiry, urgent } = membershipSummary(membership)
   return (
     <span className={`mb-1 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold ring-1 ring-inset ${
-      expired || urgent ? 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-800/70' : meta.cls
+      urgent ? 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-800/70' : cls
     }`}>
-      {expired ? 'หมดอายุ' : meta.label}
+      {planLabel}
       {hasExpiry && <span>· เหลือ {daysLeft} วัน</span>}
     </span>
   )
@@ -1160,15 +1133,6 @@ function Sidebar({ businessName, membership }) {
             {item.label}
           </NavLink>
         ))}
-
-        <button
-          type="button"
-          onClick={() => supabase.auth.signOut()}
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-400 transition-colors hover:bg-rose-50 dark:hover:bg-rose-900/30 hover:text-rose-700 dark:hover:text-rose-300"
-        >
-          <Icon name="warning" className="h-5 w-5" />
-          ออกจากระบบ
-        </button>
       </nav>
 
       <div className="border-t border-gray-100 dark:border-gray-800 p-4">
@@ -1188,11 +1152,11 @@ function Sidebar({ businessName, membership }) {
 }
 
 // แถบนำทางล่างสำหรับมือถือ/แท็บเล็ต — สูง 56px (h-14) ซ่อนที่ lg ขึ้นไปเพราะมี Sidebar แล้ว
-// founder ได้ปุ่มที่ 5 (ผู้ดูแล) — คนอื่นเห็น 4 ปุ่ม
+// เหลือ 3 ปุ่มหลัก (หน้าแรก/สินทรัพย์/ตั้งค่า) — "สมาชิก" ไปอยู่ในเมนูโปรไฟล์ที่ header
+// และมีการ์ดลิงก์บนสุดของหน้าตั้งค่ามือถือกันคนหาไม่เจอ / founder ได้ปุ่มที่ 4 (ผู้ดูแล)
 const BOTTOM_NAV_ITEMS = [
   { to: '/', label: 'หน้าแรก', icon: 'home' },
   { to: '/assets', label: 'สินทรัพย์', icon: 'building' },
-  { to: '/membership', label: 'สมาชิก', icon: 'gem' },
   { to: '/settings', label: 'ตั้งค่า', icon: 'cog' },
   { to: '/admin', label: 'ผู้ดูแล', icon: 'shield', founderOnly: true },
 ]
@@ -1229,8 +1193,155 @@ function BottomNav({ membership }) {
   )
 }
 
-// เมนู ⋯ ของ header มือถือ/แท็บเล็ต — รวบปุ่มรองที่เคยเรียงยาวจนล้นจอไว้ที่นี่
-// (Export CSV / รีเฟรช / ตัวอักษรขยาย / ธีม / ประวัติแก้ไข / ออกจากระบบ)
+// เมนูโปรไฟล์มุมขวาบน (ใช้ร่วมกันทั้ง desktop และ header มือถือ) — รวบเรื่องบัญชีส่วนตัว
+// ที่เคยกระจายอยู่ใน sidebar/bottom-nav: อีเมล / สมาชิก / ตั้งค่าบัญชี / ออกจากระบบ
+// pattern เดียวกับ RowActionsMenu: createPortal + fixed + กดนอกปิด + flip กันขอบจอ
+const PROFILE_MENU_WIDTH = 256 // w-64 = 16rem
+
+function ProfileMenu({ email, membership }) {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState(null)
+  const buttonRef = useRef(null)
+  const menuRef = useRef(null)
+  const navigate = useNavigate()
+
+  const addr = String(email ?? '').trim()
+  // ปุ่มโชว์แค่ 2 ตัวแรกของอีเมล (ไม่ให้ header ยาวจนล้น) — ไม่มีอีเมลก็ใช้ไอคอนแทน
+  const short = addr ? `${addr.slice(0, 2)}…` : ''
+  const summary = membership?.ok ? membershipSummary(membership) : null
+
+  const toggleMenu = () => {
+    if (open) {
+      setOpen(false)
+      return
+    }
+    const rect = buttonRef.current?.getBoundingClientRect()
+    if (!rect) {
+      setOpen(true)
+      return
+    }
+    // ปุ่มอยู่ขวาสุดของ header → เปิดชิดขวาของปุ่ม แล้วหนีขอบจอทั้งสองข้าง
+    const left = Math.max(8, Math.min(rect.right - PROFILE_MENU_WIDTH, window.innerWidth - PROFILE_MENU_WIDTH - 8))
+    setPos({ left: Math.round(left), top: Math.round(rect.bottom + 6) })
+    setOpen(true)
+  }
+
+  // วัดความสูงจริงหลัง render แล้ว flip ขึ้นถ้าใกล้ขอบล่างของจอ (เหมือน RowActionsMenu)
+  useLayoutEffect(() => {
+    if (!open || !menuRef.current || !buttonRef.current) return
+    const menu = menuRef.current
+    const update = () => {
+      const rect = buttonRef.current.getBoundingClientRect()
+      const menuH = menu.offsetHeight
+      const spaceBelow = window.innerHeight - 8 - rect.bottom
+      if (menuH > spaceBelow) {
+        const target = Math.max(8, Math.round(rect.top - 6 - menuH))
+        setPos((prev) => (prev.top === target ? prev : { ...prev, top: target }))
+      }
+    }
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(menu)
+    return () => observer.disconnect()
+  }, [open])
+
+  // เมนูเป็น fixed ไม่เลื่อนตาม header จึงปิดให้เมื่อผู้ใช้เลื่อนหน้าจอ
+  useEffect(() => {
+    if (!open) return
+    const close = () => setOpen(false)
+    window.addEventListener('scroll', close, true)
+    return () => window.removeEventListener('scroll', close, true)
+  }, [open])
+
+  const go = (to) => { setOpen(false); navigate(to) }
+  const itemClass =
+    'flex min-h-[44px] w-full items-center gap-3 px-4 py-3 text-left text-sm font-semibold transition-colors hover:bg-gray-50 dark:hover:bg-gray-800'
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={toggleMenu}
+        aria-label="เมนูโปรไฟล์"
+        aria-expanded={open}
+        className={`flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold shadow-sm transition-colors ${
+          open
+            ? 'relative z-[70] border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+            : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+        }`}
+      >
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-xs font-bold text-white">
+          {short ? short.slice(0, 2) : <span aria-hidden="true">👤</span>}
+        </span>
+        {/* จุดแดงเตือนเมื่อสมาชิกใกล้หมด/หมดอายุ — เห็นได้แม้ไม่เปิดเมนู */}
+        {summary?.urgent && <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-rose-500" />}
+        <svg className="h-4 w-4 shrink-0 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+        </svg>
+      </button>
+
+      {open && pos && createPortal(
+        <>
+          <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} aria-hidden="true" />
+          <div
+            ref={menuRef}
+            style={{ left: pos.left, top: pos.top, width: PROFILE_MENU_WIDTH }}
+            className="fixed z-[61] overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 py-1.5 shadow-xl"
+          >
+            {/* อีเมลเต็ม — อ่านอย่างเดียว ไม่ใช่ปุ่ม */}
+            <p className="break-all px-4 py-2 text-xs text-gray-500 dark:text-gray-400">{addr || 'ยังไม่มีอีเมล'}</p>
+
+            <div className="my-1 border-t border-gray-100 dark:border-gray-800" />
+
+            <button type="button" onClick={() => go('/membership')} className={`${itemClass} text-gray-700 dark:text-gray-300`}>
+              <span aria-hidden="true" className="shrink-0 text-base leading-none">🪪</span>
+              <span className="min-w-0 flex-1">
+                <span className="block">สมาชิก</span>
+                {summary && (
+                  <span className={`block text-xs font-medium ${
+                    summary.urgent ? 'text-rose-600 dark:text-rose-400' : 'text-gray-500 dark:text-gray-400'
+                  }`}>
+                    {summary.planLabel}
+                    {summary.hasExpiry && ` · เหลือ ${summary.daysLeft} วัน`}
+                  </span>
+                )}
+              </span>
+            </button>
+
+            <button type="button" onClick={() => go('/settings')} className={`${itemClass} text-gray-700 dark:text-gray-300`}>
+              <span aria-hidden="true" className="shrink-0 text-base leading-none">⚙️</span>
+              ตั้งค่าบัญชี
+            </button>
+
+            {/* /audit ไม่มีที่อยู่ใน sidebar แล้ว (เหลือ หน้าแรก/สินทรัพย์/ผู้ดูแล)
+                และเมนู ⋯ เป็น lg:hidden — ถ้าไม่วางไว้ที่นี่ เดสก์ท็อปจะเข้าหน้านี้ไม่ได้เลย */}
+            <button type="button" onClick={() => go('/audit')} className={`${itemClass} text-gray-700 dark:text-gray-300`}>
+              <span aria-hidden="true" className="shrink-0 text-base leading-none">📜</span>
+              ประวัติแก้ไข
+            </button>
+
+            <div className="my-1 border-t border-gray-100 dark:border-gray-800" />
+
+            <button
+              type="button"
+              onClick={() => { setOpen(false); supabase.auth.signOut() }}
+              className={`${itemClass} text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30`}
+            >
+              <span aria-hidden="true" className="shrink-0 text-base leading-none">🚪</span>
+              ออกจากระบบ
+            </button>
+          </div>
+        </>,
+        document.body
+      )}
+    </>
+  )
+}
+
+// เมนู ⋯ ของ header มือถือ/แท็บเล็ต — เหลือเฉพาะ "เครื่องมือมุมมอง"
+// (Export CSV / รีเฟรช / ตัวอักษรขยาย / ธีม) — เรื่องบัญชี (ประวัติแก้ไข / ออกจากระบบ)
+// ย้ายไป ProfileMenu ที่อยู่ติดกันแล้ว จึงไม่ซ้ำสองเมนูข้างกัน
 function HeaderOverflowMenu({ onExportCsv, onRefresh, loading, lastUpdated, largeText, onToggleLargeText, theme, onToggleTheme }) {
   const [open, setOpen] = useState(false)
   const itemClass =
@@ -1269,18 +1380,6 @@ function HeaderOverflowMenu({ onExportCsv, onRefresh, loading, lastUpdated, larg
             <button type="button" onClick={onToggleTheme} className={itemClass}>
               <span aria-hidden="true">{theme === 'dark' ? '☀️' : '🌙'}</span>
               {theme === 'dark' ? 'โหมดสว่าง' : 'โหมดมืด'}
-            </button>
-            <NavLink to="/audit" onClick={close} className={itemClass}>
-              <Icon name="document" className="h-5 w-5" />
-              ประวัติแก้ไข
-            </NavLink>
-            <button
-              type="button"
-              onClick={() => { close(); supabase.auth.signOut() }}
-              className="flex w-full items-center gap-3 border-t border-gray-100 dark:border-gray-800 px-4 py-3 text-left text-sm font-semibold text-rose-600 dark:text-rose-400 transition-colors hover:bg-rose-50 dark:hover:bg-rose-900/30"
-            >
-              <Icon name="warning" className="h-5 w-5" />
-              ออกจากระบบ
             </button>
             {lastUpdated && (
               <p className="border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-4 py-2.5 text-xs text-gray-400">
@@ -1683,7 +1782,42 @@ function LeaseExpirySection({ rentals, onRenew, onMoveOut }) {
   )
 }
 
-function SettingsPage({ onSaved }) {
+// การ์ด "สมาชิก" บนสุดของหน้าตั้งค่า — เฉพาะมือถือ/แท็บเล็ต (lg:hidden)
+// bottom-nav เหลือ 3 ปุ่มแล้ว ไม่มีปุ่มสมาชิก การ์ดนี้เลยเป็นทางเข้าที่หาง่ายที่สุด
+// (อีกทางคือเมนูโปรไฟล์ใน header)
+function MembershipSettingsLink({ membership }) {
+  const navigate = useNavigate()
+  const summary = membership?.ok ? membershipSummary(membership) : null
+  return (
+    <button
+      type="button"
+      onClick={() => navigate('/membership')}
+      className="mb-4 flex min-h-[44px] w-full items-center gap-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-4 text-left shadow-sm transition-colors active:bg-gray-50 dark:active:bg-gray-800 lg:hidden"
+    >
+      <span aria-hidden="true" className="shrink-0 text-xl leading-none">🪪</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-base font-bold text-gray-900 dark:text-gray-100">สมาชิก</span>
+        <span className="mt-1 block">
+          {summary ? (
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold ring-1 ring-inset ${
+              summary.urgent ? 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-800/70' : summary.cls
+            }`}>
+              {summary.planLabel}
+              {summary.hasExpiry && <span>· เหลือ {summary.daysLeft} วัน</span>}
+            </span>
+          ) : (
+            <span className="text-xs text-gray-500 dark:text-gray-400">แพ็กเกจ การใช้งาน และการต่ออายุ</span>
+          )}
+        </span>
+      </span>
+      <svg className="h-5 w-5 shrink-0 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+      </svg>
+    </button>
+  )
+}
+
+function SettingsPage({ onSaved, membership }) {
   const [form, setForm] = useState({ business_name: '', owner_name: '', address: '', payment_type: 'promptpay', promptpay: '', promptpay_name: '', bank_code: '', bank_account: '' })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -1746,6 +1880,8 @@ function SettingsPage({ onSaved }) {
 
   return (
     <div className="mx-auto max-w-2xl">
+      <MembershipSettingsLink membership={membership} />
+
       <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm">
         <div className="border-b border-gray-100 dark:border-gray-800 px-6 py-5">
           <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">ตั้งค่าบัญชีรับเงิน</h2>
@@ -5094,10 +5230,10 @@ function App() {
     return <AuthPage />
   }
 
-  return <Dashboard />
+  return <Dashboard userEmail={session.user?.email ?? ''} />
 }
 
-function Dashboard() {
+function Dashboard({ userEmail = '' }) {
   const { theme, toggleTheme, largeText, toggleLargeText } = useTheme()
   const [rentals, setRentals] = useState([])
   const [loading, setLoading] = useState(true)
@@ -5845,6 +5981,7 @@ function Dashboard() {
 
   const location = useLocation()
   const isAssets = location.pathname === '/assets'
+  const isFinance = location.pathname === '/finance'
   const isSettings = location.pathname === '/settings'
   const isAudit = location.pathname === '/audit'
   const isMembership = location.pathname === '/membership'
@@ -6016,10 +6153,10 @@ function Dashboard() {
                   {paymentInfo.business_name || 'PayRentPro'}
                 </h1>
                 <h1 className="hidden text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100 sm:text-2xl lg:block">
-                  {isAudit ? 'ประวัติแก้ไข' : isSettings ? 'ตั้งค่าบัญชี' : isAssets ? 'รายการสินทรัพย์' : isMembership ? 'สมาชิกของฉัน' : isAdmin ? 'ผู้ดูแลระบบ' : 'แดชบอร์ด'}
+                  {isAudit ? 'ประวัติแก้ไข' : isSettings ? 'ตั้งค่าบัญชี' : isAssets ? 'รายการสินทรัพย์' : isFinance ? 'กำไรสุทธิ์' : isMembership ? 'สมาชิกของฉัน' : isAdmin ? 'ผู้ดูแลระบบ' : 'แดชบอร์ด'}
                 </h1>
                 <p className="hidden text-sm text-gray-500 dark:text-gray-400 lg:block">
-                  {isAudit ? 'บันทึกการแก้ไขยอดและเหตุผล' : isSettings ? 'ตั้งค่าเลขพร้อมเพย์ / บัญชีธนาคารสำหรับรับเงิน' : isAssets ? 'จัดการสัญญาเช่าและสินทรัพย์ทั้งหมด' : isMembership ? 'แพ็กเกจ การใช้งาน และการต่ออายุ' : isAdmin ? 'จัดการสมาชิกและค่าสมาชิกรอตรวจทั้งหมด' : 'ภาพรวมการเก็บค่าเช่าและการติดตามหนี้'}
+                  {isAudit ? 'บันทึกการแก้ไขยอดและเหตุผล' : isSettings ? 'ตั้งค่าเลขพร้อมเพย์ / บัญชีธนาคารสำหรับรับเงิน' : isAssets ? 'จัดการสัญญาเช่าและสินทรัพย์ทั้งหมด' : isFinance ? 'รายรับ รายจ่าย และกำไรสุทธิ์ของแต่ละเดือน' : isMembership ? 'แพ็กเกจ การใช้งาน และการต่ออายุ' : isAdmin ? 'จัดการสมาชิกและค่าสมาชิกรอตรวจทั้งหมด' : 'ภาพรวมการเก็บค่าเช่าและการติดตามหนี้'}
                 </p>
               </div>
             </div>
@@ -6029,9 +6166,9 @@ function Dashboard() {
             <div className="flex min-w-0 items-center gap-2 whitespace-nowrap sm:gap-3">
               <NotificationsBell pendingReviews={pendingReviews} expiringLeases={expiringLeases} />
 
-              {/* มือถือ/แท็บเล็ต: ปุ่มรองทั้งหมดยุบเข้าเมนู ⋯ (เหลือ ชื่อ + กระดิ่ง + ⋯) */}
+              {/* มือถือ/แท็บเล็ต: ปุ่มรองทั้งหมดยุบเข้าเมนู ⋯ (เหลือ ชื่อ + กระดิ่ง + โปรไฟล์ + ⋯) */}
               <HeaderOverflowMenu
-                onExportCsv={!isAssets && !isSettings && !isAudit && !isMembership && !isAdmin ? handleExportCsv : null}
+                onExportCsv={!isAssets && !isSettings && !isAudit && !isMembership && !isAdmin && !isFinance ? handleExportCsv : null}
                 onRefresh={() => { fetchRentals(); fetchSummary(); fetchPendingReviews(); fetchTxInsights(); fetchRepairTickets() }}
                 loading={loading}
                 lastUpdated={lastUpdated}
@@ -6116,16 +6253,10 @@ function Dashboard() {
               >
                 <span className="leading-none">{theme === 'dark' ? '☀️' : '🌙'}</span>
               </button>
-              <button
-                type="button"
-                onClick={() => supabase.auth.signOut()}
-                className="hidden items-center gap-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 lg:inline-flex"
-              >
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
-                </svg>
-                <span className="hidden xl:inline">ออกจากระบบ</span>
-              </button>
+
+              {/* เมนูโปรไฟล์ — ตัวเดียวใช้ทั้ง desktop และมือถือ (แทนปุ่มออกจากระบบเดิมของ header
+                  และแทนรายการ สมาชิก/ตั้งค่า ที่ถอดออกจาก sidebar) */}
+              <ProfileMenu email={userEmail} membership={membership} />
             </div>
           </div>
         </header>
@@ -6150,11 +6281,13 @@ function Dashboard() {
           {isAudit ? (
             <AuditLogPage />
           ) : isSettings ? (
-            <SettingsPage onSaved={fetchPaymentInfo} />
+            <SettingsPage onSaved={fetchPaymentInfo} membership={membership} />
           ) : isMembership ? (
             <MembershipPage membership={membership} onToast={setToast} onRefreshMembership={fetchMembership} />
           ) : isAdmin ? (
             <AdminPage onToast={setToast} />
+          ) : isFinance ? (
+            <FinancePage onToast={setToast} />
           ) : isAssets ? (
             <>
               <div className="relative lg:hidden">

@@ -68,6 +68,71 @@ export const REPAIR_TICKETS = [
   { id: 'rt4', rental_id: 'r5', description: 'ประตูห้องปิดไม่สนิท', status: 'done', photo_url: null, created_at: iso(now - 9 * DAY), done_at: iso(now - 7 * DAY), rentals: [RENTALS[4]] },
 ]
 
+// ── หน้าการเงิน (/finance) — รายจ่าย / รายรับอื่น / กำไรสุทธิ์ ──────
+// วันที่ต้องอยู่ในเดือนปัจจุบันเพราะหน้านี้กรอง gte/lt ตามงวดที่เลือก
+// (ค่าเริ่มต้น = เดือนนี้) ถ้า hardcode เดือนไว้ ตารางจะว่างเมื่อเวลาผ่านไป
+const dayInMonth = (d) => {
+  const t = new Date()
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+}
+
+export const EXPENSE_CATEGORIES = [
+  { id: 'ec1', landlord_id: 'a1', name: 'ค่าไฟ (บิลกรม)', color: '#f59e0b', sort_order: 1 },
+  { id: 'ec2', landlord_id: 'a1', name: 'ค่าน้ำ (บิลกรม)', color: '#0ea5e9', sort_order: 2 },
+  { id: 'ec3', landlord_id: 'a1', name: 'ค่าซ่อมแซม', color: '#ef4444', sort_order: 3 },
+  { id: 'ec4', landlord_id: 'a1', name: 'ค่าทำความสะอาด', color: '#22c55e', sort_order: 4 },
+]
+
+export const EXPENSES = [
+  { id: 'e1', landlord_id: 'a1', category_id: 'ec1', expense_date: dayInMonth(3), description: 'ค่าไฟบิลกรม อาคาร A', amount: 8420, vendor_name: 'กฟภ.', reference_no: 'PEA-88213', payment_method: 'transfer', notes: null, expense_categories: { name: 'ค่าไฟ (บิลกรม)', color: '#f59e0b' } },
+  { id: 'e2', landlord_id: 'a1', category_id: 'ec2', expense_date: dayInMonth(3), description: 'ค่าน้ำบิลกรม อาคาร A', amount: 2180, vendor_name: 'กปภ.', reference_no: 'PWA-11902', payment_method: 'transfer', notes: null, expense_categories: { name: 'ค่าน้ำ (บิลกรม)', color: '#0ea5e9' } },
+  { id: 'e3', landlord_id: 'a1', category_id: 'ec3', expense_date: dayInMonth(7), description: 'เปลี่ยนคอมเพรสเซอร์แอร์ ห้อง 101', amount: 4500, vendor_name: 'ร้านช่างสมชาย', reference_no: null, payment_method: 'cash', notes: null, expense_categories: { name: 'ค่าซ่อมแซม', color: '#ef4444' } },
+  { id: 'e4', landlord_id: 'a1', category_id: 'ec4', expense_date: dayInMonth(10), description: 'จ้างทำความสะอาดพื้นที่ส่วนกลาง', amount: 1500, vendor_name: 'แม่บ้านรายวัน', reference_no: null, payment_method: 'cash', notes: null, expense_categories: { name: 'ค่าทำความสะอาด', color: '#22c55e' } },
+  { id: 'e5', landlord_id: 'a1', category_id: null, expense_date: dayInMonth(12), description: 'ค่าอินเทอร์เน็ตส่วนกลาง', amount: 990, vendor_name: '3BB', reference_no: 'INV-4471', payment_method: 'credit_card', notes: null, expense_categories: null },
+]
+
+export const OTHER_INCOME = [
+  { id: 'oi1', landlord_id: 'a1', income_date: dayInMonth(5), description: 'ค่าปรับจ่ายช้า ห้อง 102', amount: 300, source: 'ค่าปรับ', notes: null },
+  { id: 'oi2', landlord_id: 'a1', income_date: dayInMonth(8), description: 'ค่าที่จอดรถเพิ่ม ห้อง 101', amount: 500, source: 'ค่าที่จอดรถ', notes: null },
+  { id: 'oi3', landlord_id: 'a1', income_date: dayInMonth(15), description: 'รายได้เครื่องซักผ้าหยอดเหรียญ', amount: 1840, source: 'เครื่องซักผ้า', notes: null },
+]
+
+export const PROFIT_SUMMARY = {
+  ok: true,
+  year: new Date().getFullYear(),
+  month: new Date().getMonth() + 1,
+  rent_income: 39000,
+  other_income: 2640,
+  total_income: 41640,
+  total_expense: 17590,
+  net_profit: 24050,
+  expense_by_category: [
+    { category_id: 'ec1', name: 'ค่าไฟ (บิลกรม)', color: '#f59e0b', total: 8420 },
+    { category_id: 'ec3', name: 'ค่าซ่อมแซม', color: '#ef4444', total: 4500 },
+    { category_id: 'ec2', name: 'ค่าน้ำ (บิลกรม)', color: '#0ea5e9', total: 2180 },
+    { category_id: 'ec4', name: 'ค่าทำความสะอาด', color: '#22c55e', total: 1500 },
+    { category_id: null, name: 'ไม่ระบุหมวด', color: '#94a3b8', total: 990 },
+  ],
+}
+
+// 6 เดือนล่าสุด — เดือนหนึ่งขาดทุนไว้ด้วย เพื่อให้เห็นว่าการ์ดสลับเป็นโทนแดงได้จริง
+export const PROFIT_TREND = (() => {
+  const t = new Date()
+  const rows = []
+  const figures = [
+    [36500, 21000], [38200, 19400], [37800, 41200], [40100, 18900], [39600, 20300], [41640, 17590],
+  ]
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(t.getFullYear(), t.getMonth() - i, 1)
+    const [income, expense] = figures[5 - i]
+    rows.push({
+      period: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+      income, expense, profit: income - expense,
+    })
+  }
+  return rows
+})()
+
 export const BILL = {
   id: 'tok-bill-0001', rental_id: 'r1', period: '2026-09',
   base_amount: 6500, water_amount: 320, electric_amount: 780, extra_amount: 0,
@@ -88,6 +153,9 @@ export const TABLES = {
   audit_logs: AUDIT,
   system_settings: [{ key: 'promptpay', value: '0899999999' }],
   repair_tickets: REPAIR_TICKETS,
+  expense_categories: EXPENSE_CATEGORIES,
+  expenses: EXPENSES,
+  other_income: OTHER_INCOME,
 }
 
 export const SESSION = {
@@ -167,6 +235,10 @@ export async function installStubs(context) {
     get_bill_by_token: BILL,
     send_bill_to_line: { ok: true },
     notify_repair_done: { ok: true },
+    // หน้าการเงิน (/finance)
+    get_profit_summary: PROFIT_SUMMARY,
+    get_profit_trend: PROFIT_TREND,
+    seed_expense_categories: 0,
     // ประวัติบิลของห้องบนหน้าบิล public (แท็บ "ประวัติทั้งหมด")
     get_room_bills: [
       { period: '2026-09', total_amount: 7600, paid_amount: 0, status: 'unpaid', created_at: iso(now - 3 * DAY), is_current: true },

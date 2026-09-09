@@ -13,6 +13,7 @@ const OUT = process.env.OUT_DIR || 'gui-test-screenshots/responsive'
 const PAGES = [
   { name: '01-dashboard', path: '/' },
   { name: '02-assets', path: '/assets' },
+  { name: '02b-finance', path: '/finance' },
   { name: '03-settings', path: '/settings' },
   { name: '04-audit', path: '/audit' },
   { name: '05-membership', path: '/membership' },
