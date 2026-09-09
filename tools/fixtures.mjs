@@ -133,6 +133,24 @@ export const PROFIT_TREND = (() => {
   return rows
 })()
 
+// ── หน้าประกาศ/บันทึก/เอกสาร (/comms) ───────────────────────────────
+export const ANNOUNCEMENTS = [
+  { id: 'an1', landlord_id: 'a1', title: 'แจ้งดับน้ำ วันเสาร์ 9-12 น.', content: 'การประปาแจ้งซ่อมท่อเมนหน้าซอย\nขอให้ผู้เช่าสำรองน้ำไว้ล่วงหน้าครับ', publish_date: dayInMonth(6), status: 'published', sent_to_line_at: iso(now - 2 * DAY), created_at: iso(now - 3 * DAY) },
+  { id: 'an2', landlord_id: 'a1', title: 'เก็บค่าเช่าเดือนนี้ ภายในวันที่ 5', content: 'โอนแล้วส่งสลิปเข้ากลุ่ม LINE ได้เลยครับ', publish_date: dayInMonth(1), status: 'published', sent_to_line_at: null, created_at: iso(now - 8 * DAY) },
+  { id: 'an3', landlord_id: 'a1', title: 'ร่าง: แจ้งขึ้นค่าส่วนกลางปีหน้า', content: '', publish_date: dayInMonth(20), status: 'draft', sent_to_line_at: null, created_at: iso(now - 1 * DAY) },
+]
+
+export const NOTES = [
+  { id: 'nt1', landlord_id: 'a1', title: 'นัดช่างแอร์', content: 'ล้างแอร์ห้อง 204 อาทิตย์หน้า\nเบอร์ช่าง 081-234-5678', color: '#fff7ed', pinned: true, created_at: iso(now - 3 * DAY), updated_at: iso(now - 1 * DAY) },
+  { id: 'nt2', landlord_id: 'a1', title: 'สั่งของ', content: 'หลอดไฟ LED 10 ดวง + ก๊อกน้ำ 2 ตัว', color: '#dcfce7', pinned: false, created_at: iso(now - 5 * DAY), updated_at: iso(now - 5 * DAY) },
+  { id: 'nt3', landlord_id: 'a1', title: 'ต่อประกันอาคาร', content: 'หมดอายุ 15 ธ.ค. ติดต่อตัวแทนล่วงหน้า 1 เดือน', color: '#e0f2fe', pinned: false, created_at: iso(now - 12 * DAY), updated_at: iso(now - 12 * DAY) },
+]
+
+export const DOCUMENTS = [
+  { id: 'dc1', landlord_id: 'a1', rental_id: 'r1', title: 'สำเนาสัญญา ห้อง 101', file_path: 'a1/uuid-contract-101.pdf', file_name: 'contract-101.pdf', file_size: 284120, mime_type: 'application/pdf', notes: null, created_at: iso(now - 20 * DAY) },
+  { id: 'dc2', landlord_id: 'a1', rental_id: null, title: 'ใบอนุญาตประกอบกิจการหอพัก', file_path: 'a1/uuid-license.pdf', file_name: 'license.pdf', file_size: 1048576, mime_type: 'application/pdf', notes: null, created_at: iso(now - 60 * DAY) },
+]
+
 export const BILL = {
   id: 'tok-bill-0001', rental_id: 'r1', period: '2026-09',
   base_amount: 6500, water_amount: 320, electric_amount: 780, extra_amount: 0,
@@ -156,6 +174,9 @@ export const TABLES = {
   expense_categories: EXPENSE_CATEGORIES,
   expenses: EXPENSES,
   other_income: OTHER_INCOME,
+  announcements: ANNOUNCEMENTS,
+  notes: NOTES,
+  documents: DOCUMENTS,
 }
 
 export const SESSION = {
@@ -239,6 +260,8 @@ export async function installStubs(context) {
     get_profit_summary: PROFIT_SUMMARY,
     get_profit_trend: PROFIT_TREND,
     seed_expense_categories: 0,
+    // หน้าประกาศ/เอกสาร (/comms)
+    broadcast_announcement: { ok: true, groups: 3 },
     // ประวัติบิลของห้องบนหน้าบิล public (แท็บ "ประวัติทั้งหมด")
     get_room_bills: [
       { period: '2026-09', total_amount: 7600, paid_amount: 0, status: 'unpaid', created_at: iso(now - 3 * DAY), is_current: true },

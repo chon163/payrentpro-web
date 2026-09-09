@@ -35,7 +35,20 @@
       - harness ใหม่ `tools/verify-finance.mjs` — ตรวจ 3 แท็บ × 3 ความกว้าง + 2 modal
       - **ผลทดสอบ**: PASS ทุกช่อง · 375/768 = 0 small targets · oxlint 0 errors · build ผ่าน
       - นับ warnings ลดจาก 22 → 19 (แยก constants ออกจากไฟล์คอมโพเนนต์)
-- [ ] **2b. กลุ่มสื่อสาร** — `announcements`, `notes` (sticky note มี color/pinned), `documents`
+- [x] **2b. กลุ่มสื่อสาร** ✅ — `announcements`, `notes`, `documents` + หน้า `/comms`
+      - migration `20260909110000_announcements_notes_documents.sql` — 3 ตาราง + RLS
+        + storage bucket `documents` (private) + policy กรองจาก `<landlord_id>/` ในพาธ
+        + trigger `touch_updated_at` ให้โน้ตที่แก้เด้งขึ้นบน
+        + RPC `broadcast_announcement` ส่งประกาศเข้ากลุ่ม LINE ทุกห้อง (ของแถม ต้นทางไม่มี)
+      - หน้าใหม่ `src/pages/CommsPage.jsx` — 3 แท็บ CRUD ครบ
+        · ประกาศ: draft/published/archived + ปุ่มส่งเข้า LINE
+        · บันทึก: sticky note มีสี 6 โทน + ปักหมุด (คุมชุดสีแทน color picker ของต้นทาง
+          เพราะเลือกสีเข้มแล้วตัวอักษรอ่านไม่ออก)
+        · เอกสาร: อัปโหลด ≤10MB, เปิดผ่าน signed URL อายุ 60 วิ (PDPA)
+      - harness `tools/verify-tabbed.mjs` (แทน verify-finance.mjs) ครอบทั้ง 2 หน้า
+        6 แท็บ + 5 modal × 3 ความกว้าง
+      - **ผลทดสอบ**: PASS ทุกช่อง · 375/768 = 0 small targets · 0 overflow
+        · oxlint 0 errors · build ผ่าน · shoot.mjs ทั้งชุดไม่ regress
 - [ ] **2c. กลุ่มซ่อมบำรุง** — `vendors`, `inventory` (มี reorder_level), `fixed_assets`
       + ขยาย `repair_tickets` เดิมให้มี priority/parts_cost/labor_cost/charge_to/vendor
 - [ ] **2d. โครงอาคาร** — `properties`, `floors`, `room_types`, `rooms` + property switcher
@@ -44,8 +57,11 @@
 - [ ] **2g. อื่น ๆ** — `bookings`, role/permission, หน้ารวมการแจ้งเตือน
 
 ### ⚠️ ต้องรัน migration ก่อนใช้งานจริง
-`supabase/migrations/20260909100000_finance_expenses_income.sql` ยังไม่ได้รันบน DB จริง
-หน้า `/finance` จะ error จนกว่าจะรัน (`supabase db push` หรือวางใน SQL Editor)
+ยังไม่ได้รันบน DB จริงทั้งสองไฟล์ — หน้า `/finance` และ `/comms` จะ error จนกว่าจะรัน
+(`supabase db push` หรือวางใน SQL Editor):
+- `20260909100000_finance_expenses_income.sql`
+- `20260909110000_announcements_notes_documents.sql`
+
 ทดสอบที่ผ่านมาใช้ fixture stub ใน `tools/fixtures.mjs` ไม่ได้ยิง DB จริง
 
 ## Phase 3 — ธีมเขียวอ่อน ⬜ ยังไม่เริ่ม

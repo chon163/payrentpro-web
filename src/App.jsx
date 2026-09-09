@@ -12,6 +12,7 @@ import { displayAssetName } from './utils/assetName'
 import { useTheme, useChartTheme } from './theme'
 import { Icon } from './components/ui'
 import FinancePage from './pages/FinancePage'
+import CommsPage from './pages/CommsPage'
 
 
 const STATUS_LABELS = {
@@ -623,6 +624,7 @@ const NAV_ITEMS = [
   { to: '/', label: 'แดชบอร์ด', icon: 'home' },
   { to: '/assets', label: 'รายการสินทรัพย์', icon: 'building' },
   { to: '/finance', label: 'กำไรสุทธิ์', icon: 'chart' },
+  { to: '/comms', label: 'ประกาศและเอกสาร', icon: 'megaphone' },
   { to: '/admin', label: '🛡️ ผู้ดูแล', icon: 'shield', founderOnly: true },
 ]
 
@@ -5982,6 +5984,7 @@ function Dashboard({ userEmail = '' }) {
   const location = useLocation()
   const isAssets = location.pathname === '/assets'
   const isFinance = location.pathname === '/finance'
+  const isComms = location.pathname === '/comms'
   const isSettings = location.pathname === '/settings'
   const isAudit = location.pathname === '/audit'
   const isMembership = location.pathname === '/membership'
@@ -6153,10 +6156,10 @@ function Dashboard({ userEmail = '' }) {
                   {paymentInfo.business_name || 'PayRentPro'}
                 </h1>
                 <h1 className="hidden text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100 sm:text-2xl lg:block">
-                  {isAudit ? 'ประวัติแก้ไข' : isSettings ? 'ตั้งค่าบัญชี' : isAssets ? 'รายการสินทรัพย์' : isFinance ? 'กำไรสุทธิ์' : isMembership ? 'สมาชิกของฉัน' : isAdmin ? 'ผู้ดูแลระบบ' : 'แดชบอร์ด'}
+                  {isAudit ? 'ประวัติแก้ไข' : isSettings ? 'ตั้งค่าบัญชี' : isAssets ? 'รายการสินทรัพย์' : isFinance ? 'กำไรสุทธิ์' : isComms ? 'ประกาศและเอกสาร' : isMembership ? 'สมาชิกของฉัน' : isAdmin ? 'ผู้ดูแลระบบ' : 'แดชบอร์ด'}
                 </h1>
                 <p className="hidden text-sm text-gray-500 dark:text-gray-400 lg:block">
-                  {isAudit ? 'บันทึกการแก้ไขยอดและเหตุผล' : isSettings ? 'ตั้งค่าเลขพร้อมเพย์ / บัญชีธนาคารสำหรับรับเงิน' : isAssets ? 'จัดการสัญญาเช่าและสินทรัพย์ทั้งหมด' : isFinance ? 'รายรับ รายจ่าย และกำไรสุทธิ์ของแต่ละเดือน' : isMembership ? 'แพ็กเกจ การใช้งาน และการต่ออายุ' : isAdmin ? 'จัดการสมาชิกและค่าสมาชิกรอตรวจทั้งหมด' : 'ภาพรวมการเก็บค่าเช่าและการติดตามหนี้'}
+                  {isAudit ? 'บันทึกการแก้ไขยอดและเหตุผล' : isSettings ? 'ตั้งค่าเลขพร้อมเพย์ / บัญชีธนาคารสำหรับรับเงิน' : isAssets ? 'จัดการสัญญาเช่าและสินทรัพย์ทั้งหมด' : isFinance ? 'รายรับ รายจ่าย และกำไรสุทธิ์ของแต่ละเดือน' : isComms ? 'แจ้งข่าวผู้เช่า จดบันทึก และเก็บไฟล์เอกสาร' : isMembership ? 'แพ็กเกจ การใช้งาน และการต่ออายุ' : isAdmin ? 'จัดการสมาชิกและค่าสมาชิกรอตรวจทั้งหมด' : 'ภาพรวมการเก็บค่าเช่าและการติดตามหนี้'}
                 </p>
               </div>
             </div>
@@ -6168,7 +6171,7 @@ function Dashboard({ userEmail = '' }) {
 
               {/* มือถือ/แท็บเล็ต: ปุ่มรองทั้งหมดยุบเข้าเมนู ⋯ (เหลือ ชื่อ + กระดิ่ง + โปรไฟล์ + ⋯) */}
               <HeaderOverflowMenu
-                onExportCsv={!isAssets && !isSettings && !isAudit && !isMembership && !isAdmin && !isFinance ? handleExportCsv : null}
+                onExportCsv={!isAssets && !isSettings && !isAudit && !isMembership && !isAdmin && !isFinance && !isComms ? handleExportCsv : null}
                 onRefresh={() => { fetchRentals(); fetchSummary(); fetchPendingReviews(); fetchTxInsights(); fetchRepairTickets() }}
                 loading={loading}
                 lastUpdated={lastUpdated}
@@ -6288,6 +6291,8 @@ function Dashboard({ userEmail = '' }) {
             <AdminPage onToast={setToast} />
           ) : isFinance ? (
             <FinancePage onToast={setToast} />
+          ) : isComms ? (
+            <CommsPage onToast={setToast} />
           ) : isAssets ? (
             <>
               <div className="relative lg:hidden">
