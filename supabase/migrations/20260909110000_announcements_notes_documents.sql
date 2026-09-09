@@ -132,17 +132,39 @@ on conflict (id) do nothing;
 
 -- เจ้าของเข้าถึงได้เฉพาะไฟล์ในโฟลเดอร์ของ landlord_id ตัวเอง
 -- โครงพาธที่ฝั่งเว็บใช้: <landlord_id>/<uuid>-<filename>
+--
+-- ทำไมต้องมี helper แยก ไม่ cast ตรง ๆ ใน policy:
+-- `split_part(name,'/',1)::uuid` จะ throw error 22P02 ถ้าส่วนแรกไม่ใช่ UUID
+-- และ Postgres **ไม่รับประกัน** ว่าจะประเมิน `bucket_id = 'documents'` ก่อน
+-- เงื่อนไขถัดไป → policy นี้อาจไปประเมินกับชื่อไฟล์ใน bucket 'receipts' เดิม
+-- แล้วพังการอัปโหลดสลิป/ใบเสร็จที่ใช้งานอยู่ ต้องกันด้วยการเช็ครูปแบบก่อน cast
+create or replace function public.storage_path_is_mine(p_name text)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path to 'public'
+as $function$
+declare
+  v_first text;
+begin
+  v_first := split_part(coalesce(p_name, ''), '/', 1);
+  -- ไม่ใช่รูป UUID → ไม่ใช่พาธของเรา ตอบ false ไม่ต้อง cast (กัน error)
+  if v_first !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+    return false;
+  end if;
+  return public.is_my_landlord(v_first::uuid);
+end;
+$function$;
+
+revoke all on function public.storage_path_is_mine(text) from public;
+grant execute on function public.storage_path_is_mine(text) to authenticated;
+
 drop policy if exists "documents_own_all" on storage.objects;
 create policy "documents_own_all" on storage.objects
   for all to authenticated
-  using (
-    bucket_id = 'documents'
-    and public.is_my_landlord(nullif(split_part(name, '/', 1), '')::uuid)
-  )
-  with check (
-    bucket_id = 'documents'
-    and public.is_my_landlord(nullif(split_part(name, '/', 1), '')::uuid)
-  );
+  using (bucket_id = 'documents' and public.storage_path_is_mine(name))
+  with check (bucket_id = 'documents' and public.storage_path_is_mine(name));
 
 -- ── 6) RPC ส่งประกาศเข้ากลุ่ม LINE ของผู้เช่าทุกห้อง ────────────────
 -- ของแถมที่ระบบต้นทางไม่มี — เรามี LINE binding อยู่แล้ว ประกาศที่ส่งไม่ถึง

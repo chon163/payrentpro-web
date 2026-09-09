@@ -246,7 +246,9 @@ begin
      and expense_date >= v_from
      and expense_date <  v_to;
 
-  select coalesce(jsonb_agg(x order by x->>'total' desc), '[]'::jsonb)
+  -- เรียงตาม total_num ที่เป็น numeric ไม่ใช่ x->>'total' ที่เป็น text
+  -- (ถ้าเรียงจาก text จะได้ 990 มาก่อน 8420 เพราะเทียบทีละตัวอักษร)
+  select coalesce(jsonb_agg(x order by total_num desc), '[]'::jsonb)
     into v_by_category
     from (
       select jsonb_build_object(
@@ -254,7 +256,8 @@ begin
                'name',  coalesce(c.name, 'ไม่ระบุหมวด'),
                'color', coalesce(c.color, '#94a3b8'),
                'total', sum(e.amount)
-             ) as x
+             ) as x,
+             sum(e.amount) as total_num
         from public.expenses e
         left join public.expense_categories c on c.id = e.category_id
        where e.landlord_id = v_landlord
