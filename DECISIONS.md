@@ -166,3 +166,46 @@ bucket เป็น public read เพราะ `repair_tickets.photo_url` เ�
 → เพิ่มแถบใน `RepairSection` โชว์ลิงก์เต็ม + ปุ่มคัดลอก + ปุ่มเปิดดู
 ลิงก์ใช้ `VITE_BILL_BASE_URL || window.location.origin` แบบเดียวกับลิงก์บิล
 เพื่อให้ได้โดเมนจริงแม้เปิดจาก localhost
+
+### D20 — บัญชีเดโม่ต้องมีข้อมูลชุดของตัวเอง ไม่ใช้ของเจ้าของ
+ต้นทางมี `demo001/12345678` ให้กดดูได้เลย ของเราไม่มี คนเข้ามาใหม่เจอหน้าว่าง
+
+ตอนแรก seed ข้อมูลจำลองผูกกับอีเมลเจ้าของ (`20260909130000`) แต่ทดสอบแล้วพบว่า
+**บัญชีอื่นเห็น 0 แถว** เพราะ RLS แยกข้อมูลตาม landlord — พิสูจน์ด้วยการสมัคร
+บัญชีใหม่แล้วยิง REST ได้ `rentals = []`
+→ สร้าง `admins` + ข้อมูลชุดแยกสำหรับ `demo@payrentpro.app` โดยเฉพาะ
+(`20260909150000_demo_account.sql`) ผูกด้วย **email** ไม่ใช่ `user_id`
+เพราะ RLS ยอม match ทั้งสองทาง ใช้ email จึงรันซ้ำได้แม้ลบ/สร้าง auth user ใหม่
+
+### D21 — คอลัมน์แพ็กเกจบน DB จริงชื่อ `plan_type` ไม่ใช่ `plan`
+`20260906150000_membership_gate.sql` เขียน `add column ... plan text` แต่ DB จริง
+ไม่มีคอลัมน์ `plan` — มี `plan_type` แทน และ `get_membership_status()` บน DB
+คืน key `plan_type` + `status` ซึ่งไม่ตรงกับเวอร์ชันในไฟล์เลย
+แปลว่า **DB จริงถูกแก้ตรงผ่าน SQL Editor ภายหลัง ไฟล์ migration ตามไม่ทัน**
+
+→ migration ใหม่อ่านชื่อคอลัมน์จาก `information_schema` แล้วประกอบ SQL ตอนรัน
+ทำงานได้ทั้ง `plan` และ `plan_type` — ไม่ไปแก้ไฟล์เก่าที่ถูก mark applied แล้ว
+เพราะจะทำให้ประวัติไม่ตรงกับสิ่งที่รันจริง
+
+**สิ่งที่ต้องระวังต่อไป**: schema ในไฟล์ migration กับ DB จริงไม่ตรงกันในหลายจุด
+ก่อนเขียน migration ที่อ้างคอลัมน์ของตารางเก่า ให้ยิง REST เช็คก่อนว่ามีจริง
+
+### D22 — `transactions` และ `rentals` ใช้ `current_landlord_id()` ไม่ใช่ `is_my_landlord()`
+บิลของเดโม่ถูกสร้าง 48 ใบสำเร็จแต่หน้าเว็บเห็น 0 — เพราะ policy `txs_owner`
+กรองด้วย `(landlord_id = current_landlord_id())` จากคอลัมน์ `transactions.landlord_id`
+**โดยตรง** ไม่ได้ join กลับไปหา `rentals` และ seed ไม่ได้ใส่ค่านั้น จึงเป็น NULL
+แล้วถูกซ่อนทั้งหมด (`20260909160000_fix_tx_landlord_id.sql` เติมย้อนหลังให้)
+
+กฎที่ต้องจำ: ตารางเก่า (`rentals`, `transactions`) ใช้ `current_landlord_id()`
+และต้องใส่ `landlord_id` เองทุกครั้งที่ insert ตรง — ต่างจากตารางที่เพิ่มใน
+Phase 2 ที่ใช้ `is_my_landlord()`
+
+### D23 — `.eq('user_id', null)` เป็นบั๊ก ต้องใช้ `.is()`
+เจอตอนอ่าน console ของ harness: `Link admin error: invalid input syntax for
+type uuid: "null"` — `.eq('user_id', null)` ส่ง `user_id=eq.null` ให้ PostgREST
+แล้ว Postgres cast สตริง `"null"` เป็น uuid ไม่ได้ (error 22P02)
+แปลว่าโค้ดผูกแถว `admins` เข้ากับ `user_id` อัตโนมัติ **ไม่เคยทำงานเลย**
+เป็นบั๊กที่มีอยู่ก่อนงานนี้ ไม่ได้เกิดจากโหมดเดโม่ → แก้เป็น `.is('user_id', null)`
+
+บทเรียน: อ่าน console error ของ harness ด้วย ไม่ใช่ดูแค่ PASS/FAIL
+— harness ผ่านทุกข้อทั้งที่มีบั๊กนี้อยู่

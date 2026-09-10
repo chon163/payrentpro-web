@@ -12,6 +12,14 @@ const DEV_LOGIN = import.meta.env.VITE_DEV_LOGIN === 'true'
 // → Redirect URLs ด้วย ไม่งั้น Supabase จะเด้งกลับไป Site URL แทน
 const OAUTH_REDIRECT_TO = import.meta.env.VITE_OAUTH_REDIRECT_TO || window.location.origin
 
+// บัญชีเดโม่ — กดปุ่มเดียวเข้าดูระบบพร้อมข้อมูลตัวอย่างครบทุกหน้า
+// (เทียบกับ demo001/12345678 ของ PropertyHub) ข้อมูลชุดนี้อยู่ใน
+// migration 20260909150000_demo_account.sql ผูกกับอีเมลนี้โดยเฉพาะ
+//
+// รหัสอยู่ในโค้ดฝั่งหน้าเว็บโดยเจตนา — ใครก็เข้าได้ ห้ามใส่ข้อมูลจริงลงบัญชีนี้
+const DEMO_EMAIL = 'demo@payrentpro.app'
+const DEMO_PASSWORD = 'demo12345678'
+
 // โลโก้ G สี่สีของ Google (ตาม brand guideline — ห้ามเปลี่ยนสี)
 function GoogleLogo() {
   return (
@@ -31,6 +39,24 @@ export default function AuthPage() {
   const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError] = useState(null)
   const [resendIn, setResendIn] = useState(0)
+  const [demoLoading, setDemoLoading] = useState(false)
+
+  // เข้าโหมดเดโม่ — login ด้วยบัญชีสาธารณะที่มีข้อมูลตัวอย่างครบทุกหน้า
+  // onAuthStateChange ใน HomeRoutes/App จะพาเข้าแดชบอร์ดเองหลังได้ session
+  const signInAsDemo = async () => {
+    setDemoLoading(true)
+    setError(null)
+    try {
+      const { error: demoError } = await supabase.auth.signInWithPassword({
+        email: DEMO_EMAIL,
+        password: DEMO_PASSWORD,
+      })
+      if (demoError) throw demoError
+    } catch (err) {
+      setError(err?.message || 'เข้าโหมดเดโม่ไม่สำเร็จ')
+      setDemoLoading(false)
+    }
+  }
 
   // นับถอยหลังปุ่มส่งอีเมลซ้ำ 60 วินาที
   useEffect(() => {
@@ -159,6 +185,26 @@ export default function AuthPage() {
                 {loading ? 'กำลังส่ง...' : 'ส่งลิงก์เข้าสู่ระบบ'}
               </button>
             </form>
+
+            {/* โหมดเดโม่ — ให้คนที่ยังไม่มีบัญชีกดดูระบบพร้อมข้อมูลจริงได้ทันที
+                วางไว้ล่างสุดเพราะไม่ใช่ทางเข้าหลัก แต่ยังเห็นได้ไม่ต้องเลื่อนหา */}
+            <div className="mt-6 rounded-xl border border-dashed border-emerald-300 bg-emerald-50/60 p-4 dark:border-emerald-800 dark:bg-emerald-950/20">
+              <p className="text-center text-xs text-emerald-900 dark:text-emerald-200">
+                อยากลองดูก่อน? เข้าโหมดเดโม่พร้อมข้อมูลตัวอย่างครบทุกหน้า
+              </p>
+              <button
+                type="button"
+                onClick={signInAsDemo}
+                disabled={demoLoading || loading || googleLoading}
+                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {demoLoading ? 'กำลังเข้าโหมดเดโม่...' : '👀 เข้าโหมดเดโม่ (ไม่ต้องสมัคร)'}
+              </button>
+              <p className="mt-2 text-center text-[11px] leading-relaxed text-emerald-700/70 dark:text-emerald-300/60">
+                12 ห้อง · บิล 6 เดือน · รายรับรายจ่าย · แจ้งซ่อม — เป็นบัญชีสาธารณะ
+                ใครก็เข้าได้ อย่าใส่ข้อมูลจริง
+              </p>
+            </div>
           </>
         ) : (
           <div className="space-y-4">

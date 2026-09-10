@@ -5266,9 +5266,12 @@ function App() {
   useEffect(() => {
     const user = session?.user
     if (!user) return
+    // ต้องใช้ .is() ไม่ใช่ .eq() กับ null — .eq('user_id', null) ส่งไปเป็น
+    // user_id=eq.null แล้ว Postgres cast สตริง "null" เป็น uuid ไม่ได้
+    // (error 22P02) ทำให้การผูกแถว admins กับ user_id ไม่เคยสำเร็จ
     supabase.from('admins')
       .update({ user_id: user.id })
-      .eq('user_id', null)
+      .is('user_id', null)
       .eq('email', user.email)
       .then(({ error }) => {
         if (error) console.error('Link admin error:', error)
