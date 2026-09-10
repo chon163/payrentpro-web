@@ -32,16 +32,19 @@ export const ADMINS = [{
   business_name: 'บ้านเช่าสุขใจ', owner_name: 'สมชาย ใจดี', address: '123 ถนนสุขุมวิท กรุงเทพฯ 10110',
 }]
 
+// ⚠️ คีย์แพ็กเกจต้องเป็น `plan_type` ให้ตรงกับ DB จริง (คอลัมน์ชื่อ plan_type
+// และ get_membership_status() ก็คืนคีย์นี้) — fixture ชุดแรกใช้ `plan` ทำให้
+// harness ผ่านทั้งที่ของจริงพัง: guard founder อ่านไม่เจอ /admin จึงหายไป
 export const MEMBERSHIP = {
-  id: 'm1', email: 'founder@payrentpro.com', plan: 'founder', status: 'active',
+  id: 'm1', email: 'founder@payrentpro.com', plan_type: 'founder', status: 'active',
   expire_date: iso(now + 300 * DAY), room_limit: 0, rooms_used: 6, created_at: iso(now - 100 * DAY),
 }
 
 export const MEMBERS = [
   MEMBERSHIP,
-  { email: 'user1@example.com', plan: 'pro', status: 'active', expire_date: iso(now + 40 * DAY), room_limit: 50, rooms_used: 23, created_at: iso(now - 60 * DAY) },
-  { email: 'user2@example.com', plan: 'basic', status: 'active', expire_date: iso(now + 8 * DAY), room_limit: 15, rooms_used: 12, created_at: iso(now - 30 * DAY) },
-  { email: 'expired@example.com', plan: 'basic', status: 'expired', expire_date: iso(now - 5 * DAY), room_limit: 15, rooms_used: 9, created_at: iso(now - 200 * DAY) },
+  { email: 'user1@example.com', plan_type: 'pro', status: 'active', expire_date: iso(now + 40 * DAY), room_limit: 50, rooms_used: 23, created_at: iso(now - 60 * DAY) },
+  { email: 'user2@example.com', plan_type: 'basic', status: 'active', expire_date: iso(now + 8 * DAY), room_limit: 15, rooms_used: 12, created_at: iso(now - 30 * DAY) },
+  { email: 'expired@example.com', plan_type: 'basic', status: 'expired', expire_date: iso(now - 5 * DAY), room_limit: 15, rooms_used: 9, created_at: iso(now - 200 * DAY) },
 ]
 
 export const MEMBERSHIP_PAYMENTS = [
@@ -52,6 +55,18 @@ export const MEMBERSHIP_PAYMENTS = [
 export const AUDIT = [
   { id: 'al1', transaction_id: 't3', old_amount: 7200, new_amount: 7500, reason: 'ค่าน้ำเพิ่มตามมิเตอร์', created_at: iso(now - 4 * DAY) },
   { id: 'al2', transaction_id: 't4', old_amount: 15000, new_amount: 14500, reason: 'ส่วนลดลูกค้าเก่า', created_at: iso(now - 9 * DAY) },
+]
+
+// ประวัติเข้าใช้งาน (/activity และแท็บใน /admin)
+// คละ login/logout + ครบทุกค่า detail ที่ ACTIVITY_DETAILS แปลเป็นไทย
+// แถว al-6 จงใจให้ ip เป็น null เพื่อทดสอบ fallback "—" ในตาราง
+export const ACTIVITY_LOGS = [
+  { id: 6, user_email: 'founder@payrentpro.com', action: 'login', detail: 'google', ip: '203.150.12.44', created_at: iso(now - 1 * 3600e3) },
+  { id: 5, user_email: 'user1@example.com', action: 'logout', detail: '', ip: '171.96.201.8', created_at: iso(now - 5 * 3600e3) },
+  { id: 4, user_email: 'user1@example.com', action: 'login', detail: 'email', ip: '171.96.201.8', created_at: iso(now - 9 * 3600e3) },
+  { id: 3, user_email: 'demo@payrentpro.app', action: 'login', detail: 'demo', ip: '184.22.77.130', created_at: iso(now - 1 * DAY) },
+  { id: 2, user_email: 'user2@example.com', action: 'logout', detail: '', ip: '49.229.145.62', created_at: iso(now - 2 * DAY) },
+  { id: 1, user_email: 'user2@example.com', action: 'login', detail: 'magic_link', ip: null, created_at: iso(now - 2 * DAY) },
 ]
 
 // กล่องแจ้งซ่อม: ครอบทุกสถานะ + มี/ไม่มีรูป (รูปเป็น data-URL เพื่อไม่ต้องยิงเน็ต)
@@ -256,6 +271,11 @@ export async function installStubs(context) {
     get_bill_by_token: BILL,
     send_bill_to_line: { ok: true },
     notify_repair_done: { ok: true },
+    // ประวัติเข้าใช้งาน (/activity + แท็บใน /admin)
+    // log_activity ต้องมีด้วย ไม่งั้น onAuthStateChange ยิงแล้วไม่ถูก fulfill
+    log_activity: { ok: true },
+    get_activity_logs: ACTIVITY_LOGS,
+    get_all_activity_logs: ACTIVITY_LOGS,
     // หน้าการเงิน (/finance)
     get_profit_summary: PROFIT_SUMMARY,
     get_profit_trend: PROFIT_TREND,

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
+import { DEMO_ACCOUNT_EMAIL, DEMO_ACCOUNT_PASSWORD } from './utils/demoAccount'
 
 // โหมดเทสชั่วคราว (คืนก่อนขายจริง): ทำงานเฉพาะเมื่อ VITE_DEV_LOGIN=true ใน env ท้องถิ่น
 const DEV_LOGIN = import.meta.env.VITE_DEV_LOGIN === 'true'
@@ -16,9 +17,10 @@ const OAUTH_REDIRECT_TO = import.meta.env.VITE_OAUTH_REDIRECT_TO || window.locat
 // (เทียบกับ demo001/12345678 ของ PropertyHub) ข้อมูลชุดนี้อยู่ใน
 // migration 20260909150000_demo_account.sql ผูกกับอีเมลนี้โดยเฉพาะ
 //
-// รหัสอยู่ในโค้ดฝั่งหน้าเว็บโดยเจตนา — ใครก็เข้าได้ ห้ามใส่ข้อมูลจริงลงบัญชีนี้
-const DEMO_EMAIL = 'demo@payrentpro.app'
-const DEMO_PASSWORD = 'demo12345678'
+// ค่าย้ายไป utils/demoAccount.js เพราะ App.jsx ต้องใช้อีเมลเดียวกัน
+// เพื่อระบุที่มาของการเข้าระบบ ('demo') ใน activity log
+const DEMO_EMAIL = DEMO_ACCOUNT_EMAIL
+const DEMO_PASSWORD = DEMO_ACCOUNT_PASSWORD
 
 // โลโก้ G สี่สีของ Google (ตาม brand guideline — ห้ามเปลี่ยนสี)
 function GoogleLogo() {

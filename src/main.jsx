@@ -20,6 +20,7 @@ createRoot(document.getElementById('root')).render(
         <Route path="/comms" element={<App />} />
         <Route path="/settings" element={<App />} />
         <Route path="/audit" element={<App />} />
+        <Route path="/activity" element={<App />} />
         <Route path="/membership" element={<App />} />
         <Route path="/admin" element={<App />} />
         <Route path="/bill/:secure_token" element={<BillPage />} />

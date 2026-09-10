@@ -17,6 +17,7 @@ const PAGES = [
   { name: '02c-comms', path: '/comms' },
   { name: '03-settings', path: '/settings' },
   { name: '04-audit', path: '/audit' },
+  { name: '04b-activity', path: '/activity' },
   { name: '05-membership', path: '/membership' },
   { name: '06-admin', path: '/admin' },
   { name: '07-bill', path: '/bill/tok-bill-0001' },

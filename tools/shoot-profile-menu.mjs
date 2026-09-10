@@ -18,10 +18,12 @@ const SIZES = [
 
 // fixtures.mjs ไม่มี ok/days_left (badge จึงไม่เคยขึ้นในภาพชุดเดิม) — override เฉพาะ harness นี้
 // เพื่อทดสอบทั้งสถานะปกติและสถานะใกล้หมดอายุ (<=3 วัน → ต้องเป็นแดง)
+// ⚠️ คีย์แพ็กเกจต้องเป็น plan_type ให้ตรงกับ MEMBERSHIP และ DB จริง — ถ้าใส่ `plan`
+// จะไม่ทับค่า plan_type:'founder' ที่ spread มา ทำให้ชุด normal/urgent กลายเป็น founder
 const STATES = {
-  normal: { ...MEMBERSHIP, ok: true, plan: 'starter', status: 'active', days_left: 42, room_limit: 20 },
-  urgent: { ...MEMBERSHIP, ok: true, plan: 'starter', status: 'active', days_left: 2, room_limit: 20 },
-  founder: { ...MEMBERSHIP, ok: true, plan: 'founder', status: 'active', days_left: 300, room_limit: 0 },
+  normal: { ...MEMBERSHIP, ok: true, plan_type: 'starter', status: 'active', days_left: 42, room_limit: 20 },
+  urgent: { ...MEMBERSHIP, ok: true, plan_type: 'starter', status: 'active', days_left: 2, room_limit: 20 },
+  founder: { ...MEMBERSHIP, ok: true, plan_type: 'founder', status: 'active', days_left: 300, room_limit: 0 },
 }
 
 // วันเหลือที่คาดหวังของแต่ละสถานะ — ใช้ตรวจข้อความ badge ทั้งใน dropdown และการ์ดตั้งค่า

@@ -9,8 +9,10 @@ import { createPromptpayQR } from './utils/promptpay'
 import { createReceiptPdf } from './utils/receipt'
 import { THAI_MONTHS, currentPeriod, formatPeriod } from './utils/period'
 import { displayAssetName } from './utils/assetName'
+import { DEMO_ACCOUNT_EMAIL } from './utils/demoAccount'
 import { useTheme, useChartTheme } from './theme'
 import { Icon } from './components/ui'
+import { MODAL_INPUT_CLS as inputClass } from './components/styles'
 import FinancePage from './pages/FinancePage'
 import CommsPage from './pages/CommsPage'
 import { BIZ_TYPES, CYCLE_LABELS, normalizeBizType, bizTypeMeta, countByStatus, isVacant, buildMoveOutPatch, buildMoveOutNote } from './utils/asset'
@@ -55,6 +57,43 @@ function formatDate(value) {
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return String(value)
   return new Intl.DateTimeFormat('th-TH', { day: '2-digit', month: 'short', year: 'numeric' }).format(d)
+}
+
+// วันที่ + เวลา (นาที) — ใช้ในประวัติเข้าใช้งาน ที่ต้องรู้ว่าเข้าตอนไหนของวัน
+// formatDate ให้แค่วันที่ จึงแยกฟังก์ชันไว้ ไม่ไปแก้ของเดิมที่ใช้อยู่หลายที่
+function formatDateTime(value) {
+  if (!value) return '—'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return String(value)
+  return new Intl.DateTimeFormat('th-TH', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  }).format(d)
+}
+
+// ป้ายการกระทำในประวัติเข้าใช้งาน — เข้า=เขียว ออก=เทา
+const ACTIVITY_ACTIONS = {
+  login: { label: 'เข้าสู่ระบบ', cls: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-800/70' },
+  logout: { label: 'ออกจากระบบ', cls: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 ring-gray-200 dark:ring-gray-700' },
+}
+
+// ที่มาของการเข้าระบบ (detail ที่ log_activity บันทึกไว้) → ข้อความไทย
+const ACTIVITY_DETAILS = {
+  google: 'Google',
+  email: 'ลิงก์ทางอีเมล',
+  magic_link: 'ลิงก์ทางอีเมล',
+  demo: 'โหมดเดโม่',
+}
+
+// log ก่อน signOut เพราะหลัง signOut ไม่มี JWT แล้ว เรียก RPC ไม่ได้อีก
+// (await ตัว log ก่อน แต่ห่อ try ไว้ — log ล้มต้องไม่ขัดการออกจากระบบ)
+async function signOutWithLog() {
+  try {
+    await supabase.rpc('log_activity', { p_action: 'logout' })
+  } catch (err) {
+    console.warn('Log logout failed:', err?.message)
+  }
+  await supabase.auth.signOut()
 }
 
 function generateSecureToken() {
@@ -911,6 +950,150 @@ function AuditLogPage() {
   )
 }
 
+// ตารางประวัติเข้าใช้งาน — ใช้ร่วมกันทั้งหน้า /activity (ของตัวเอง)
+// และแท็บใน /admin (ของทุกคน) จึงรับแค่ logs ไม่ดึงข้อมูลเอง
+// โครง "ตารางที่ >=768px + การ์ดแนวตั้งที่ 375px" ตามแบบเดียวกับ AuditLogPage
+function ActivityLogTable({ logs }) {
+  const actionMeta = (action) =>
+    ACTIVITY_ACTIONS[String(action ?? '').toLowerCase()] || {
+      label: action || '—',
+      cls: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 ring-gray-200 dark:ring-gray-700',
+    }
+  const detailText = (detail) => {
+    const key = String(detail ?? '').toLowerCase()
+    if (!key) return null
+    return ACTIVITY_DETAILS[key] || detail
+  }
+
+  return (
+    <>
+      {/* ตารางที่ 768px ขึ้นไป */}
+      <div className="hidden overflow-x-auto sm:block">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <thead className="bg-gray-50 dark:bg-gray-950">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">วันที่/เวลา</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">ผู้ใช้</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">การกระทำ</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">IP</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+            {logs.map((log) => {
+              const meta = actionMeta(log.action)
+              const detail = detailText(log.detail)
+              return (
+                <tr key={log.id} className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800">
+                  <td className="whitespace-nowrap px-6 py-3 text-sm text-gray-500 dark:text-gray-400">{formatDateTime(log.created_at)}</td>
+                  <td className="px-6 py-3 text-sm text-gray-700 dark:text-gray-300">{log.user_email || '—'}</td>
+                  <td className="px-6 py-3">
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${meta.cls}`}>
+                      {meta.label}
+                    </span>
+                    {detail ? <span className="ml-2 text-xs text-gray-400">{detail}</span> : null}
+                  </td>
+                  <td className="px-6 py-3 font-mono text-xs text-gray-500 dark:text-gray-400">{log.ip || '—'}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* การ์ดแนวตั้งที่ 375px */}
+      <div className="divide-y divide-gray-100 dark:divide-gray-800 sm:hidden">
+        {logs.map((log) => {
+          const meta = actionMeta(log.action)
+          const detail = detailText(log.detail)
+          return (
+            <div key={log.id} className="space-y-2 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <span className={`inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${meta.cls}`}>
+                  {meta.label}
+                </span>
+                <p className="text-right text-xs text-gray-500 dark:text-gray-400">{formatDateTime(log.created_at)}</p>
+              </div>
+              <p className="break-all text-base text-gray-700 dark:text-gray-300">{log.user_email || '—'}</p>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400">
+                <span className="font-mono">IP {log.ip || '—'}</span>
+                {detail ? <span>{detail}</span> : null}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </>
+  )
+}
+
+// หน้า /activity — เจ้าของที่ดูประวัติเข้า/ออกระบบของบัญชีตัวเอง
+// (RPC get_activity_logs คืนแค่แถวของ admin_id ตัวเอง — RLS คุมอีกชั้น)
+function ActivityLogPage() {
+  const [logs, setLogs] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const { data, error: rpcError } = await supabase.rpc('get_activity_logs', { p_limit: 200 })
+      if (rpcError) throw rpcError
+      setLogs(Array.isArray(data) ? data : [])
+    } catch (err) {
+      console.error('Fetch activity logs error:', err)
+      setError(err?.message || 'ไม่สามารถโหลดประวัติได้')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 dark:border-gray-800 px-6 py-5">
+        <div className="min-w-0">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">ประวัติเข้าใช้งาน</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">การเข้า-ออกระบบของบัญชีคุณ (เก็บย้อนหลัง 90 วัน)</p>
+        </div>
+        <button
+          type="button"
+          onClick={load}
+          disabled={loading}
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 text-sm font-semibold text-gray-700 dark:text-gray-200 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <Icon name="refresh" className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          รีเฟรช
+        </button>
+      </div>
+      {loading ? (
+        <TableSkeleton />
+      ) : error ? (
+        <div className="p-10 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400">
+            <Icon name="warning" className="h-6 w-6" />
+          </div>
+          <h3 className="mt-4 text-base font-semibold text-gray-900 dark:text-gray-100">ไม่สามารถโหลดประวัติได้</h3>
+          <p className="mx-auto mt-2 max-w-md text-sm text-gray-500 dark:text-gray-400">{error}</p>
+          <button
+            type="button"
+            onClick={load}
+            className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500"
+          >
+            <Icon name="refresh" className="h-4 w-4" />
+            ลองอีกครั้ง
+          </button>
+        </div>
+      ) : logs.length === 0 ? (
+        <div className="p-10 text-center text-sm text-gray-500 dark:text-gray-400">ยังไม่มีประวัติการเข้าใช้งาน</div>
+      ) : (
+        <ActivityLogTable logs={logs} />
+      )}
+    </div>
+  )
+}
+
 function PDPAConsentModal({ onAccept }) {
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-4">
@@ -932,6 +1115,10 @@ function PDPAConsentModal({ onAccept }) {
 const MEMBERSHIP_PLANS = {
   trial: { label: 'ทดลองใช้', cls: 'bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 ring-sky-200 dark:ring-sky-800/70' },
   starter: { label: 'Starter', cls: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-800/70' },
+  // pro = แพ็กเกจที่ขายอยู่จริงใน MEMBERSHIP_PACKAGES (บัญชีเดโม่ก็ใช้ค่านี้)
+  // basic = ค่าเก่าที่ยังมีในแถวสมาชิกบางราย — ไม่ใส่ไว้จะโชว์เป็นตัวพิมพ์เล็กดิบในตาราง /admin
+  pro: { label: 'Pro', cls: 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 ring-indigo-200 dark:ring-indigo-800/70' },
+  basic: { label: 'Basic', cls: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 ring-slate-200 dark:ring-slate-700' },
   founder: { label: 'ผู้ก่อตั้ง', cls: 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 ring-violet-200 dark:ring-violet-800/70' },
 }
 
@@ -957,11 +1144,24 @@ const MEMBERSHIP_PAYMENT_STATUS = {
   rejected: { label: 'ไม่ผ่านการตรวจสอบ', cls: 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-800/70', dot: 'bg-rose-500' },
 }
 
+// ชื่อแพ็กเกจของสมาชิก — คอลัมน์บน DB จริงชื่อ `plan_type` แต่ migration เก่า
+// (20260906150000_membership_gate.sql) เขียนเป็น `plan` เพราะ DB ถูกแก้ตรงผ่าน
+// SQL Editor ภายหลัง ทีนี้ get_membership_status() คืนคีย์ `plan_type` มา
+// โค้ดจึงต้องรับทั้งสองชื่อ ไม่ใช่ `plan` อย่างเดียว (ไม่งั้นได้ undefined
+// แล้ว isFounder เป็น false ตลอด → เมนู/หน้า /admin หายไปทั้งที่เป็น founder)
+function membershipPlan(membership) {
+  return String(membership?.plan_type ?? membership?.plan ?? '').toLowerCase()
+}
+
+function isFounderPlan(membership) {
+  return membershipPlan(membership) === 'founder'
+}
+
 // สรุปสถานะสมาชิกแบบสั้น — ใช้ร่วมกันระหว่าง badge ใน sidebar, เมนูโปรไฟล์
 // และการ์ด "สมาชิก" บนหน้าตั้งค่ามือถือ เพื่อให้กฎ "แดงเมื่อ <=3 วัน/หมดอายุ" อยู่ที่เดียว
 function membershipSummary(membership) {
   const expired = String(membership?.status ?? '').toLowerCase() === 'expired'
-  const plan = String(membership?.plan ?? '').toLowerCase()
+  const plan = membershipPlan(membership)
   const meta = MEMBERSHIP_PLANS[plan] || { label: plan || '—', cls: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 ring-gray-200 dark:ring-gray-700' }
   const daysLeft = Number(membership?.days_left)
   const hasExpiry = !expired && Boolean(membership?.expire_date) && Number.isFinite(daysLeft)
@@ -989,7 +1189,7 @@ function MembershipBadge({ membership }) {
 }
 
 function Sidebar({ businessName, membership }) {
-  const isFounder = String(membership?.plan ?? '').toLowerCase() === 'founder'
+  const isFounder = isFounderPlan(membership)
   const navItems = isFounder ? NAV_ITEMS : NAV_ITEMS.filter((item) => !item.founderOnly)
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 lg:flex">
@@ -1049,7 +1249,7 @@ const BOTTOM_NAV_ITEMS = [
 ]
 
 function BottomNav({ membership }) {
-  const isFounder = String(membership?.plan ?? '').toLowerCase() === 'founder'
+  const isFounder = isFounderPlan(membership)
   const items = isFounder ? BOTTOM_NAV_ITEMS : BOTTOM_NAV_ITEMS.filter((item) => !item.founderOnly)
   return (
     <nav
@@ -1201,18 +1401,23 @@ function ProfileMenu({ email, membership }) {
               ตั้งค่าบัญชี
             </button>
 
-            {/* /audit ไม่มีที่อยู่ใน sidebar แล้ว (เหลือ หน้าแรก/สินทรัพย์/ผู้ดูแล)
+            {/* /audit และ /activity ไม่มีที่อยู่ใน sidebar แล้ว (เหลือ หน้าแรก/สินทรัพย์/ผู้ดูแล)
                 และเมนู ⋯ เป็น lg:hidden — ถ้าไม่วางไว้ที่นี่ เดสก์ท็อปจะเข้าหน้านี้ไม่ได้เลย */}
             <button type="button" onClick={() => go('/audit')} className={`${itemClass} text-gray-700 dark:text-gray-300`}>
               <span aria-hidden="true" className="shrink-0 text-base leading-none">📜</span>
               ประวัติแก้ไข
             </button>
 
+            <button type="button" onClick={() => go('/activity')} className={`${itemClass} text-gray-700 dark:text-gray-300`}>
+              <span aria-hidden="true" className="shrink-0 text-base leading-none">🕘</span>
+              ประวัติเข้าใช้งาน
+            </button>
+
             <div className="my-1 border-t border-gray-100 dark:border-gray-800" />
 
             <button
               type="button"
-              onClick={() => { setOpen(false); supabase.auth.signOut() }}
+              onClick={() => { setOpen(false); signOutWithLog() }}
               className={`${itemClass} text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30`}
             >
               <span aria-hidden="true" className="shrink-0 text-base leading-none">🚪</span>
@@ -2082,7 +2287,7 @@ function MembershipPage({ membership, onToast, onRefreshMembership }) {
   const [previewSlip, setPreviewSlip] = useState(null)
 
   const expired = String(membership?.status ?? '').toLowerCase() === 'expired'
-  const planKey = String(membership?.plan ?? '').toLowerCase()
+  const planKey = membershipPlan(membership)
   const planMeta = MEMBERSHIP_PLANS[planKey] || { label: planKey || '—', cls: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 ring-gray-200 dark:ring-gray-700' }
   const daysLeft = Number(membership?.days_left)
   const hasExpiry = Boolean(membership?.expire_date) && Number.isFinite(daysLeft)
@@ -2448,6 +2653,11 @@ function AdminPage({ onToast }) {
   const [pendingError, setPendingError] = useState(null)
   const [reviewing, setReviewing] = useState(null)
   const [previewSlip, setPreviewSlip] = useState(null)
+  // แท็บ: 'members' = สมาชิก+ค่าสมาชิกรอตรวจ (เดิม) / 'activity' = ประวัติเข้าใช้งานของทุกคน
+  const [tab, setTab] = useState('members')
+  const [activity, setActivity] = useState([])
+  const [activityLoading, setActivityLoading] = useState(false)
+  const [activityError, setActivityError] = useState(null)
 
   // คืนแถวที่โหลดได้เพื่อใช้ต่อ (หาวันหมดอายุใหม่หลังอนุมัติ)
   const fetchMembers = useCallback(async () => {
@@ -2481,10 +2691,30 @@ function AdminPage({ onToast }) {
     }
   }, [])
 
+  // ประวัติเข้าใช้งานของสมาชิกทุกคน (founder เท่านั้น — guard อยู่ที่ตัว RPC)
+  const fetchActivity = useCallback(async () => {
+    setActivityLoading(true)
+    setActivityError(null)
+    try {
+      const { data, error } = await supabase.rpc('get_all_activity_logs', { p_limit: 500 })
+      if (error) throw error
+      setActivity(Array.isArray(data) ? data : [])
+    } catch (err) {
+      setActivityError(adminBackofficeError(err))
+    } finally {
+      setActivityLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     fetchMembers()
     fetchPending()
   }, [fetchMembers, fetchPending])
+
+  // โหลดประวัติตอนเปิดแท็บครั้งแรก (ไม่ดึงมาก่อน เพราะ 500 แถวไม่จำเป็นถ้าไม่เปิดดู)
+  useEffect(() => {
+    if (tab === 'activity') fetchActivity()
+  }, [tab, fetchActivity])
 
   // เรียงวันหมดอายุ: หมดเร็วสุดบนสุด, ไม่มีวันหมดอายุ (null) ไปอยู่ล่างสุด
   const sortedMembers = useMemo(() => {
@@ -2554,16 +2784,28 @@ function AdminPage({ onToast }) {
     }
   }
 
-  const refreshing = membersLoading || pendingLoading
+  // ปุ่มรีเฟรชหมุนตามงานของแท็บที่เปิดอยู่ (ไม่ใช่ของทั้งหน้า)
+  const refreshing = tab === 'activity' ? activityLoading : membersLoading || pendingLoading
+  const refreshCurrentTab = () => {
+    if (tab === 'activity') fetchActivity()
+    else { fetchMembers(); fetchPending() }
+  }
+
+  const ADMIN_TABS = [
+    { key: 'members', label: 'ค่าสมาชิก', icon: 'banknotes', count: pending.length },
+    { key: 'activity', label: 'ประวัติเข้าใช้งาน', icon: 'clock', count: 0 },
+  ]
 
   return (
     <div>
       {/* ปุ่มรีเฟรชหน้า */}
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-gray-500 dark:text-gray-400">ภาพรวมสมาชิกและค่าสมาชิกรอตรวจทั้งหมดในระบบ</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          {tab === 'activity' ? 'การเข้า-ออกระบบของสมาชิกทุกคน (เก็บย้อนหลัง 90 วัน)' : 'ภาพรวมสมาชิกและค่าสมาชิกรอตรวจทั้งหมดในระบบ'}
+        </p>
         <button
           type="button"
-          onClick={() => { fetchMembers(); fetchPending() }}
+          onClick={refreshCurrentTab}
           disabled={refreshing}
           className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 lg:py-2.5 lg:text-sm"
         >
@@ -2572,6 +2814,58 @@ function AdminPage({ onToast }) {
         </button>
       </div>
 
+      {/* แท็บ — โครงเดียวกับ CommsPage (min-h-11 ตามเกณฑ์ tap target) */}
+      <div className="mt-4 flex gap-1 overflow-x-auto rounded-xl border border-gray-200 bg-white p-1 dark:border-gray-800 dark:bg-gray-900">
+        {ADMIN_TABS.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setTab(t.key)}
+            className={`inline-flex min-h-11 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold transition-colors ${
+              tab === t.key
+                ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300'
+                : 'text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-800'
+            }`}
+          >
+            <Icon name={t.icon} className="h-4 w-4" />
+            {t.label}
+            {t.count > 0 ? <span className="text-xs font-normal opacity-70">({t.count})</span> : null}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'activity' ? (
+        <section className="mt-4 overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm">
+          <div className="border-b border-gray-100 dark:border-gray-800 px-6 py-5">
+            <h2 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100">ประวัติเข้าใช้งาน</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">วันที่/เวลา · อีเมลผู้ใช้ · การกระทำ · IP</p>
+          </div>
+          {activityLoading ? (
+            <TableSkeleton />
+          ) : activityError ? (
+            <div className="p-10 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400">
+                <Icon name="warning" className="h-6 w-6" />
+              </div>
+              <h3 className="mt-4 text-base font-semibold text-gray-900 dark:text-gray-100">ไม่สามารถโหลดประวัติได้</h3>
+              <p className="mx-auto mt-2 max-w-md text-sm text-gray-500 dark:text-gray-400">{activityError}</p>
+              <button
+                type="button"
+                onClick={fetchActivity}
+                className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
+              >
+                <Icon name="refresh" className="h-4 w-4" />
+                ลองอีกครั้ง
+              </button>
+            </div>
+          ) : activity.length === 0 ? (
+            <div className="p-10 text-center text-sm text-gray-500 dark:text-gray-400">ยังไม่มีประวัติการเข้าใช้งาน</div>
+          ) : (
+            <ActivityLogTable logs={activity} />
+          )}
+        </section>
+      ) : (
+      <>
       {/* ค่าสมาชิกรอตรวจ */}
       <section className="mt-4 overflow-hidden rounded-2xl border border-amber-200 dark:border-amber-800/70 bg-white dark:bg-gray-900 shadow-lg shadow-amber-100/70">
         <div className="flex items-center justify-between gap-4 border-b border-amber-100 dark:border-amber-800/50 bg-gradient-to-r from-amber-50 dark:from-amber-950/30 to-yellow-50 dark:to-yellow-950/30 px-6 py-5">
@@ -2764,8 +3058,8 @@ function AdminPage({ onToast }) {
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {sortedMembers.map((row) => {
-                  const planKey = String(row.plan ?? '').toLowerCase()
-                  const planMeta = MEMBERSHIP_PLANS[planKey] || { label: row.plan || '—', cls: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 ring-gray-200 dark:ring-gray-700' }
+                  const planKey = membershipPlan(row)
+                  const planMeta = MEMBERSHIP_PLANS[planKey] || { label: planKey || '—', cls: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 ring-gray-200 dark:ring-gray-700' }
                   const expired = String(row.status ?? '').toLowerCase() === 'expired'
                   const roomLimit = Number(row.room_limit) || 0
                   const roomsUsed = Number(row.rooms_used) || 0
@@ -2805,8 +3099,8 @@ function AdminPage({ onToast }) {
           {/* การ์ดแนวตั้งที่ 375px */}
           <div className="divide-y divide-gray-100 dark:divide-gray-800 sm:hidden">
             {sortedMembers.map((row) => {
-              const planKey = String(row.plan ?? '').toLowerCase()
-              const planMeta = MEMBERSHIP_PLANS[planKey] || { label: row.plan || '—', cls: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 ring-gray-200 dark:ring-gray-700' }
+              const planKey = membershipPlan(row)
+              const planMeta = MEMBERSHIP_PLANS[planKey] || { label: planKey || '—', cls: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 ring-gray-200 dark:ring-gray-700' }
               const expired = String(row.status ?? '').toLowerCase() === 'expired'
               const roomLimit = Number(row.room_limit) || 0
               const roomsUsed = Number(row.rooms_used) || 0
@@ -2839,6 +3133,8 @@ function AdminPage({ onToast }) {
           </>
         )}
       </section>
+      </>
+      )}
 
       {previewSlip && (
         <div
@@ -3360,7 +3656,7 @@ function MeterBillModal({ rental, onClose, onConfirm }) {
   const [elecCurrent, setElecCurrent] = useState('')
   const [sendToLine, setSendToLine] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [period, setPeriod] = useState(currentPeriod)
+  const [period, setPeriod] = useState(currentPeriod())
   const [existingPeriods, setExistingPeriods] = useState([])
 
   useEffect(() => {
@@ -4727,8 +5023,21 @@ function App() {
         })
     }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session)
+
+      // บันทึกการเข้าสู่ระบบ — fire-and-forget ไม่ให้ล้มแล้วบล็อกการใช้งาน
+      // SIGNED_IN ยิงซ้ำทุกครั้งที่ token refresh และทุกแท็บที่เปิดอยู่
+      // ตัวกันซ้ำจริงคือ unique index (session_id, action) ฝั่ง DB
+      if (event === 'SIGNED_IN' && session?.user) {
+        const user = session.user
+        const provider = String(user.email ?? '').toLowerCase() === DEMO_ACCOUNT_EMAIL
+          ? 'demo'
+          : (user.app_metadata?.provider || 'email')
+        supabase.rpc('log_activity', { p_action: 'login', p_detail: provider })
+          .then(({ error }) => { if (error) console.warn('Log login failed:', error.message) })
+          .catch((err) => console.warn('Log login failed:', err?.message))
+      }
     })
 
     return () => {
@@ -5555,6 +5864,7 @@ function Dashboard({ userEmail = '' }) {
   const isComms = location.pathname === '/comms'
   const isSettings = location.pathname === '/settings'
   const isAudit = location.pathname === '/audit'
+  const isActivity = location.pathname === '/activity'
   const isMembership = location.pathname === '/membership'
   const isAdmin = location.pathname === '/admin'
 
@@ -5686,7 +5996,7 @@ function Dashboard({ userEmail = '' }) {
           starting={startingTrial}
           notice={trialNotice}
           onStart={handleStartTrial}
-          onSignOut={() => supabase.auth.signOut()}
+          onSignOut={signOutWithLog}
         />
         <Toast toast={toast} onClose={closeToast} />
       </>
@@ -5700,7 +6010,7 @@ function Dashboard({ userEmail = '' }) {
       <>
         <ExpiredScreen
           promptpayNumber={paymentInfo.promptpay}
-          onSignOut={() => supabase.auth.signOut()}
+          onSignOut={signOutWithLog}
         />
         <Toast toast={toast} onClose={closeToast} />
       </>
@@ -5724,10 +6034,10 @@ function Dashboard({ userEmail = '' }) {
                   {paymentInfo.business_name || 'PayRentPro'}
                 </h1>
                 <h1 className="hidden text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100 sm:text-2xl lg:block">
-                  {isAudit ? 'ประวัติแก้ไข' : isSettings ? 'ตั้งค่าบัญชี' : isAssets ? 'รายการสินทรัพย์' : isFinance ? 'กำไรสุทธิ' : isComms ? 'ประกาศและเอกสาร' : isMembership ? 'สมาชิกของฉัน' : isAdmin ? 'ผู้ดูแลระบบ' : 'แดชบอร์ด'}
+                  {isAudit ? 'ประวัติแก้ไข' : isActivity ? 'ประวัติเข้าใช้งาน' : isSettings ? 'ตั้งค่าบัญชี' : isAssets ? 'รายการสินทรัพย์' : isFinance ? 'กำไรสุทธิ' : isComms ? 'ประกาศและเอกสาร' : isMembership ? 'สมาชิกของฉัน' : isAdmin ? 'ผู้ดูแลระบบ' : 'แดชบอร์ด'}
                 </h1>
                 <p className="hidden text-sm text-gray-500 dark:text-gray-400 lg:block">
-                  {isAudit ? 'บันทึกการแก้ไขยอดและเหตุผล' : isSettings ? 'ตั้งค่าเลขพร้อมเพย์ / บัญชีธนาคารสำหรับรับเงิน' : isAssets ? 'จัดการสัญญาเช่าและสินทรัพย์ทั้งหมด' : isFinance ? 'รายรับ รายจ่าย และกำไรสุทธิของแต่ละเดือน' : isComms ? 'แจ้งข่าวผู้เช่า จดบันทึก และเก็บไฟล์เอกสาร' : isMembership ? 'แพ็กเกจ การใช้งาน และการต่ออายุ' : isAdmin ? 'จัดการสมาชิกและค่าสมาชิกรอตรวจทั้งหมด' : 'ภาพรวมการเก็บค่าเช่าและการติดตามหนี้'}
+                  {isAudit ? 'บันทึกการแก้ไขยอดและเหตุผล' : isActivity ? 'ใครเข้า-ออกระบบ เมื่อไหร่ จาก IP ไหน' : isSettings ? 'ตั้งค่าเลขพร้อมเพย์ / บัญชีธนาคารสำหรับรับเงิน' : isAssets ? 'จัดการสัญญาเช่าและสินทรัพย์ทั้งหมด' : isFinance ? 'รายรับ รายจ่าย และกำไรสุทธิของแต่ละเดือน' : isComms ? 'แจ้งข่าวผู้เช่า จดบันทึก และเก็บไฟล์เอกสาร' : isMembership ? 'แพ็กเกจ การใช้งาน และการต่ออายุ' : isAdmin ? 'จัดการสมาชิกและค่าสมาชิกรอตรวจทั้งหมด' : 'ภาพรวมการเก็บค่าเช่าและการติดตามหนี้'}
                 </p>
               </div>
             </div>
@@ -5739,7 +6049,7 @@ function Dashboard({ userEmail = '' }) {
 
               {/* มือถือ/แท็บเล็ต: ปุ่มรองทั้งหมดยุบเข้าเมนู ⋯ (เหลือ ชื่อ + กระดิ่ง + โปรไฟล์ + ⋯) */}
               <HeaderOverflowMenu
-                onExportCsv={!isAssets && !isSettings && !isAudit && !isMembership && !isAdmin && !isFinance && !isComms ? handleExportCsv : null}
+                onExportCsv={!isAssets && !isSettings && !isAudit && !isActivity && !isMembership && !isAdmin && !isFinance && !isComms ? handleExportCsv : null}
                 onRefresh={() => { fetchRentals(); fetchSummary(); fetchPendingReviews(); fetchTxInsights(); fetchRepairTickets() }}
                 loading={loading}
                 lastUpdated={lastUpdated}
@@ -5750,7 +6060,7 @@ function Dashboard({ userEmail = '' }) {
               />
 
               {/* เดสก์ท็อป (lg+): แถวปุ่มเดิมทั้งหมด ไม่แตะ */}
-              {!isAssets && !isSettings && !isAudit && !isMembership && !isAdmin && (
+              {!isAssets && !isSettings && !isAudit && !isActivity && !isMembership && !isAdmin && (
                 <button
                   type="button"
                   onClick={handleExportCsv}
@@ -5875,6 +6185,8 @@ function Dashboard({ userEmail = '' }) {
         <main className="mx-auto max-w-7xl px-4 py-6 pb-24 sm:px-6 sm:py-8 lg:px-8 lg:pb-8">
           {isAudit ? (
             <AuditLogPage />
+          ) : isActivity ? (
+            <ActivityLogPage />
           ) : isSettings ? (
             <SettingsPage onSaved={fetchPaymentInfo} membership={membership} />
           ) : isMembership ? (
