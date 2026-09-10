@@ -13,6 +13,9 @@ import { useTheme, useChartTheme } from './theme'
 import { Icon } from './components/ui'
 import FinancePage from './pages/FinancePage'
 import CommsPage from './pages/CommsPage'
+import { BIZ_TYPES, CYCLE_LABELS, normalizeBizType, bizTypeMeta, countByStatus, isVacant, buildMoveOutPatch, buildMoveOutNote } from './utils/asset'
+import { AddAssetModal } from './modals/AddAssetModal'
+import { AddTenantModal } from './modals/AddTenantModal'
 
 
 const STATUS_LABELS = {
@@ -27,58 +30,7 @@ const STATUS_LABELS = {
   canceled: 'ยกเลิก',
 }
 
-const BIZ_TYPES = [
-  {
-    value: 'property',
-    label: 'อสังหาริมทรัพย์',
-    tab: 'อสังหา',
-    icon: '🏠',
-    examples: 'หอพัก/ห้องเช่า',
-    itemLabel: 'ห้อง',
-    placeholder: 'เช่น 101',
-    subLabel: 'ชื่อโครงการ/หมู่บ้าน',
-    subPlaceholder: 'เช่น บ้านสวย, คอนโด XYZ',
-  },
-  {
-    value: 'vehicle',
-    label: 'ยานพาหนะ',
-    tab: 'ยานพาหนะ',
-    icon: '🚗',
-    examples: 'รถเช่า/แท็กซี่',
-    itemLabel: 'ทะเบียนรถ',
-    placeholder: 'กก 1234',
-    subLabel: 'ยี่ห้อรถ',
-    subPlaceholder: 'เช่น Fortuner, Civic',
-  },
-  {
-    value: 'other',
-    label: 'อุปกรณ์/อื่นๆ',
-    tab: 'อุปกรณ์/อื่นๆ',
-    icon: '🛠️',
-    examples: 'เครื่องจักร/กล้อง/บริการรายเดือน',
-    itemLabel: 'รายการ',
-    placeholder: 'เช่น กล้อง Sony A7, เครื่องจักร CNC-01',
-  },
-]
-
-// แปลง biz_type จากทุกฟอร์แมต (ค่าใหม่ property/vehicle/other หรือค่าไทยเดิมสมัยแรก) ให้เป็นค่ามาตรฐาน
-function normalizeBizType(value) {
-  const raw = String(value ?? '').trim().toLowerCase()
-  if (raw === 'vehicle' || raw.includes('ยานพาหนะ')) return 'vehicle'
-  if (raw === 'other' || raw.includes('อุปกรณ์')) return 'other'
-  return 'property'
-}
-
-function bizTypeMeta(value) {
-  const key = normalizeBizType(value)
-  return BIZ_TYPES.find((t) => t.value === key) || BIZ_TYPES[0]
-}
-
-const CYCLE_LABELS = {
-  monthly: 'รายเดือน',
-  weekly: 'รายสัปดาห์',
-  daily: 'รายวัน',
-}
+// BIZ_TYPES, CYCLE_LABELS, normalizeBizType, bizTypeMeta ย้ายไป src/utils/asset.js แล้ว
 
 const AMOUNT_KEYS = ['amount', 'rent', 'rent_amount', 'monthly_rent', 'price', 'total', 'balance', 'deposit']
 const DATE_KEYS = ['due_date', 'due', 'due_at', 'paid_at', 'payment_date', 'payment_at', 'created_at', 'date', 'start_date', 'end_date']
@@ -112,74 +64,7 @@ function generateSecureToken() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36) + Math.random().toString(36).slice(2)
 }
 
-function generateBindingCode() {
-  return String(Math.floor(100000000 + Math.random() * 900000000))
-}
-
-const MOCK_FIRST_NAMES = ['สมชาย', 'สมหญิง', 'วีรชน', 'อารยา', 'ธนกร', 'กิตติ', 'ณัฐวุฒิ', 'ปิยะ', 'ศิริพร', 'วัชรพล', 'จิราพร', 'อนุชา', 'พรทิพย์', 'สุชาติ', 'รัตนา']
-const MOCK_LAST_NAMES = ['ใจดี', 'รุ่งเรือง', 'วงศ์สุวรรณ', 'ศรีสุข', 'มั่นคง', 'ไทยแท้', 'บุญมี', 'แก้วใส', 'ทองคำ', 'พันธ์ดี']
-
-function mockThaiId() {
-  let id = String(Math.floor(Math.random() * 9) + 1)
-  for (let i = 0; i < 12; i++) id += Math.floor(Math.random() * 10)
-  return id
-}
-
-// สร้างข้อมูลจำลอง (mock) สำหรับฟอร์ม เพื่อให้ทดสอบง่าย
-// (รับ bizType ตอนกดเลือกการ์ดประเภท — ไม่ส่งจะสุ่มเอง)
-function buildMockForm(bizTypeArg) {
-  const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min
-  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
-  const phone = () => `08${randInt(10000000, 99999999)}`
-  const pad = (n) => String(n).padStart(2, '0')
-  const localDate = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-
-  const bizType = bizTypeArg || pick(['property', 'property', 'vehicle', 'other'])
-  // item_details = ช่องหลักตามประเภท (ห้อง/ทะเบียน/รายการ), sub_label = ชื่อโครงการหรือยี่ห้อรถ
-  const items = {
-    property: ['101', '202', '401', 'C-1205', 'A-05'],
-    vehicle: ['กก 1234', 'ทส 5678', '1กข 3456', '70-8899'],
-    other: ['กล้อง Sony A7', 'เครื่องจักร CNC-01', 'โดรน DJI Mavic', 'เครื่องเสียงงานแต่ง'],
-  }
-  const subLabels = {
-    property: ['บ้านสวย', 'คอนโดมินิมัล', 'หอพักฟ้าใส', 'บ้านวิลล่ากรีน'],
-    vehicle: ['Fortuner', 'Honda Civic', 'Toyota Vios', 'Isuzu D-Max'],
-    other: [],
-  }
-  const amount = bizType === 'property' ? randInt(3000, 15000) : bizType === 'vehicle' ? randInt(800, 5000) : randInt(500, 3000)
-
-  const now = new Date()
-  const moveIn = new Date(now)
-  moveIn.setDate(moveIn.getDate() - randInt(0, 365))
-  const leaseEnd = new Date(moveIn)
-  leaseEnd.setFullYear(leaseEnd.getFullYear() + 1)
-
-  return {
-    biz_type: bizType,
-    cust_name: `${pick(MOCK_FIRST_NAMES)} ${pick(MOCK_LAST_NAMES)}`,
-    item_details: pick(items[bizType]),
-    sub_label: subLabels[bizType].length ? pick(subLabels[bizType]) : '',
-    amount: String(amount),
-    cycle: pick(['monthly', 'monthly', 'monthly', 'weekly', 'daily']),
-    due_date: String(randInt(1, 28)),
-    tenant_phone: phone(),
-    tenant_id_card: mockThaiId(),
-    emergency_contact: phone(),
-    room_status: pick(['occupied', 'occupied', 'vacant', 'maintenance']),
-    deposit_amount: String(amount),
-    move_in_date: localDate(moveIn),
-    lease_end_date: localDate(leaseEnd),
-    penalty_enabled: true,
-    penalty_per_day: String(randInt(50, 200)),
-    chase_frequency: pick([3, 7]),
-    stop_chase: String(randInt(0, 90)),
-    utility_enabled: bizType === 'property',
-    last_water_meter: bizType === 'property' ? String(randInt(0, 500)) : '0',
-    water_rate: bizType === 'property' ? '18' : '0',
-    last_elec_meter: bizType === 'property' ? String(randInt(0, 5000)) : '0',
-    elec_rate: bizType === 'property' ? '5' : '0',
-  }
-}
+// generateSecureToken ยังใช้ใน handleCreateBill — เก็บไว้ที่นี่
 
 function normalizeStatus(value) {
   const raw = String(value ?? '').trim().toLowerCase()
@@ -623,7 +508,7 @@ function MonthlyBreakdownModal({ monthly, onClose }) {
 const NAV_ITEMS = [
   { to: '/', label: 'แดชบอร์ด', icon: 'home' },
   { to: '/assets', label: 'รายการสินทรัพย์', icon: 'building' },
-  { to: '/finance', label: 'กำไรสุทธิ์', icon: 'chart' },
+  { to: '/finance', label: 'กำไรสุทธิ', icon: 'chart' },
   { to: '/comms', label: 'ประกาศและเอกสาร', icon: 'megaphone' },
   { to: '/admin', label: '🛡️ ผู้ดูแล', icon: 'shield', founderOnly: true },
 ]
@@ -644,15 +529,15 @@ function OccupancyDonut({ occupied, vacant }) {
         </div>
         <span className="text-lg font-bold text-blue-600 dark:text-blue-400">{total ? Math.round((occupied / total) * 100) : 0}%</span>
       </div>
-      <div className="h-40 sm:h-44">
+      <div className="h-48 sm:h-52 flex items-center justify-center">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
-            <Pie data={data} dataKey="value" nameKey="name" innerRadius={60} outerRadius={85} paddingAngle={3}>
+            <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="45%" innerRadius="50%" outerRadius="75%" paddingAngle={3}>
               <Cell fill="#3b82f6" />
               <Cell fill={chart.dark ? '#6b7280' : '#9ca3af'} />
             </Pie>
             <Tooltip contentStyle={chart.tooltip} labelStyle={{ color: chart.tooltipLabel, fontWeight: 600 }} itemStyle={{ color: chart.tooltip.color }} />
-            <Legend wrapperStyle={{ fontSize: '0.75rem', color: chart.legend }} />
+            <Legend wrapperStyle={{ fontSize: '0.75rem', color: chart.legend }} verticalAlign="bottom" />
           </PieChart>
         </ResponsiveContainer>
       </div>
@@ -1568,8 +1453,11 @@ function AssetsView({ rentals, loading, error, search, onRetry, onBillRequest, o
   // หัวคอลัมน์แรกเปลี่ยนตามแท็ปที่เลือก
   const itemColumnLabel = { property: 'ห้อง', vehicle: 'ทะเบียน', other: 'รายการ' }[bizTab] || 'ห้อง/รายการ'
 
+  // สรุปจำนวนสินทรัพย์ตามสถานะ (vacant/occupied)
+  const statusCounts = countByStatus(rentals)
+
   // จำนวนต่อประเภท (นับจากทั้งหมด ไม่ขึ้นกับคำค้นหา)
-  const counts = { all: (rentals || []).length, property: 0, vehicle: 0, other: 0 }
+  const counts = { all: (rentals || []).length, vacant: statusCounts.vacant, property: 0, vehicle: 0, other: 0 }
   for (const r of rentals || []) counts[normalizeBizType(r?.biz_type)] += 1
 
   const filtered = (rentals || []).filter((r) => {
@@ -1577,7 +1465,8 @@ function AssetsView({ rentals, loading, error, search, onRetry, onBillRequest, o
       || String(r?.cust_name ?? '').toLowerCase().includes(keyword)
       || String(r?.item_details ?? '').toLowerCase().includes(keyword)
       || String(r?.sub_label ?? '').toLowerCase().includes(keyword)
-    const matchTab = bizTab === 'all' || normalizeBizType(r?.biz_type) === bizTab
+    // แท็บ 'vacant' กรองเฉพาะห้องว่าง ไม่จำกัดประเภท
+    const matchTab = bizTab === 'all' || bizTab === 'vacant' ? (bizTab === 'vacant' ? isVacant(r) : true) : normalizeBizType(r?.biz_type) === bizTab
     return matchKeyword && matchTab
   })
 
@@ -1592,56 +1481,82 @@ function AssetsView({ rentals, loading, error, search, onRetry, onBillRequest, o
   )
 
   return (
-    <div className="mt-8 overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm">
-      <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-gray-800 px-6 py-5">
-        <div>
-          <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">ข้อมูลสัญญาเช่า</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">จำนวน {filtered.length} รายการ{keyword ? ` (จากทั้งหมด ${rentals.length})` : ''}</p>
+    <>
+      {/* การ์ดสรุป: ทั้งหมด / ว่าง / มีผู้เช่า */}
+      <div className="mb-6 grid grid-cols-3 gap-4">
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-4 shadow-sm">
+          <p className="text-sm font-medium text-gray-600 dark:text-gray-400">ทั้งหมด</p>
+          <p className="mt-1 text-2xl font-bold text-gray-900 dark:text-gray-100">{statusCounts.total}</p>
+        </div>
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-4 shadow-sm">
+          <p className="text-sm font-medium text-gray-600 dark:text-gray-400">ว่าง</p>
+          <p className="mt-1 text-2xl font-bold text-amber-600 dark:text-amber-400">{statusCounts.vacant}</p>
+        </div>
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-4 shadow-sm">
+          <p className="text-sm font-medium text-gray-600 dark:text-gray-400">มีผู้เช่า</p>
+          <p className="mt-1 text-2xl font-bold text-emerald-600 dark:text-emerald-400">{statusCounts.occupied}</p>
         </div>
       </div>
 
-      {/* แท็ปกรองตามประเภทสินทรัพย์ — เลื่อนแนวนอนได้ที่จอเล็ก ไม่ดันหน้าให้ล้น */}
-      <div
-        className="flex gap-2 overflow-x-auto border-b border-gray-100 dark:border-gray-800 px-4 py-3 sm:px-6 lg:flex-wrap lg:overflow-visible"
-        data-allow-overflow
-      >
-        <button
-          type="button"
-          onClick={() => setBizTab('all')}
-          className={`shrink-0 whitespace-nowrap rounded-full px-4 py-3 text-sm font-semibold transition-colors lg:px-3.5 lg:py-1.5 ${
-            bizTab === 'all' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-          }`}
+      <div className="overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm">
+        <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-gray-800 px-6 py-5">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">ข้อมูลสัญญาเช่า</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">จำนวน {filtered.length} รายการ{keyword ? ` (จากทั้งหมด ${rentals.length})` : ''}</p>
+          </div>
+        </div>
+
+        {/* แท็ปกรองตามประเภทสินทรัพย์ + แท็บ "ว่าง" — เลื่อนแนวนอนได้ที่จอเล็ก ไม่ดันหน้าให้ล้น */}
+        <div
+          className="flex gap-2 overflow-x-auto border-b border-gray-100 dark:border-gray-800 px-4 py-3 sm:px-6 lg:flex-wrap lg:overflow-visible"
+          data-allow-overflow
         >
-          ทั้งหมด {counts.all}
-        </button>
-        {BIZ_TYPES.map((t) => (
           <button
-            key={t.value}
             type="button"
-            onClick={() => setBizTab(t.value)}
+            onClick={() => setBizTab('all')}
             className={`shrink-0 whitespace-nowrap rounded-full px-4 py-3 text-sm font-semibold transition-colors lg:px-3.5 lg:py-1.5 ${
-              bizTab === t.value ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+              bizTab === 'all' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
             }`}
           >
-            {t.icon} {t.tab} {counts[t.value]}
+            ทั้งหมด {counts.all}
           </button>
-        ))}
-      </div>
-
-      {loading ? (
-        <TableSkeleton />
-      ) : error ? (
-        <div className="p-10 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400">
-            <Icon name="warning" className="h-6 w-6" />
-          </div>
-          <h3 className="mt-4 text-base font-semibold text-gray-900 dark:text-gray-100">ไม่สามารถโหลดข้อมูลได้</h3>
-          <p className="mx-auto mt-2 max-w-md text-sm text-gray-500 dark:text-gray-400">{error}</p>
           <button
             type="button"
-            onClick={onRetry}
-            className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-base font-semibold text-white shadow-sm hover:bg-indigo-500 lg:py-2.5 lg:text-sm"
+            onClick={() => setBizTab('vacant')}
+            className={`shrink-0 whitespace-nowrap rounded-full px-4 py-3 text-sm font-semibold transition-colors lg:px-3.5 lg:py-1.5 ${
+              bizTab === 'vacant' ? 'bg-amber-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+            }`}
           >
+            ว่าง {counts.vacant}
+          </button>
+          {BIZ_TYPES.map((t) => (
+            <button
+              key={t.value}
+              type="button"
+              onClick={() => setBizTab(t.value)}
+              className={`shrink-0 whitespace-nowrap rounded-full px-4 py-3 text-sm font-semibold transition-colors lg:px-3.5 lg:py-1.5 ${
+                bizTab === t.value ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+              }`}
+            >
+              {t.icon} {t.tab} {counts[t.value]}
+            </button>
+          ))}
+        </div>
+
+        {loading ? (
+          <TableSkeleton />
+        ) : error ? (
+          <div className="p-10 text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400">
+              <Icon name="warning" className="h-6 w-6" />
+            </div>
+            <h3 className="mt-4 text-base font-semibold text-gray-900 dark:text-gray-100">ไม่สามารถโหลดข้อมูลได้</h3>
+            <p className="mx-auto mt-2 max-w-md text-sm text-gray-500 dark:text-gray-400">{error}</p>
+            <button
+              type="button"
+              onClick={onRetry}
+              className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-base font-semibold text-white shadow-sm hover:bg-indigo-500 lg:py-2.5 lg:text-sm"
+            >
             <Icon name="refresh" className="h-4 w-4" />
             ลองอีกครั้ง
           </button>
@@ -1731,6 +1646,7 @@ function AssetsView({ rentals, loading, error, search, onRetry, onBillRequest, o
         </>
       )}
     </div>
+    </>
   )
 }
 
@@ -3347,452 +3263,10 @@ function RepairSection({ items, loading, error, completingId, onComplete, onRetr
   )
 }
 
-const EMPTY_FORM = {
-  biz_type: '',
-  cust_name: '',
-  item_details: '',
-  sub_label: '',
-  amount: '',
-  cycle: 'monthly',
-  due_date: '',
-  tenant_phone: '',
-  tenant_id_card: '',
-  emergency_contact: '',
-  room_status: 'occupied',
-  deposit_amount: '',
-  move_in_date: '',
-  lease_end_date: '',
-  penalty_enabled: true,
-  penalty_per_day: '',
-  chase_frequency: 3,
-  stop_chase: '0',
-  utility_enabled: true,
-  last_water_meter: '',
-  water_rate: '',
-  last_elec_meter: '',
-  elec_rate: '',
-}
+// EMPTY_FORM, inputClass, CollapsibleSection, Toggle, AddRentalModal
+// ย้ายไป src/utils/asset.js, src/components/styles.js, src/components/formControls.jsx,
+// src/modals/AddAssetModal.jsx แล้ว
 
-const inputClass =
-  'w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-3 text-base lg:py-2.5 lg:text-sm text-gray-900 dark:text-gray-100 shadow-sm transition placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20'
-
-function CollapsibleSection({ title, subtitle, icon, defaultOpen = false, children }) {
-  const [open, setOpen] = useState(defaultOpen)
-  return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-800"
-      >
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400">
-            <Icon name={icon} className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</p>
-            {subtitle && <p className="text-xs text-gray-500 dark:text-gray-400">{subtitle}</p>}
-          </div>
-        </div>
-        <svg
-          className={`h-5 w-5 shrink-0 text-gray-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-        </svg>
-      </button>
-      {open && <div className="border-t border-gray-100 dark:border-gray-800 px-5 py-5">{children}</div>}
-    </div>
-  )
-}
-
-function Toggle({ checked, onChange, label }) {
-  return (
-    <button type="button" onClick={() => onChange(!checked)} className="flex w-full items-center justify-between gap-3">
-      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</span>
-      <span className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${checked ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
-        <span className={`inline-block h-4 w-4 transform rounded-full bg-white dark:bg-gray-900 shadow transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
-      </span>
-    </button>
-  )
-}
-
-function AddRentalModal({ open, onClose, onCreated, onToast }) {
-  const [form, setForm] = useState(EMPTY_FORM)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState(null)
-
-  useEffect(() => {
-    if (open) {
-      // เริ่มที่ขั้นเลือกประเภทสินทรัพย์ก่อน (ฟอร์ม mock จะเติมให้หลังเลือกการ์ด)
-      setForm({ ...EMPTY_FORM })
-      setError(null)
-      setSaving(false)
-    }
-  }, [open])
-
-  useEffect(() => {
-    if (!open) return
-    const handleKey = (e) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', handleKey)
-    return () => window.removeEventListener('keydown', handleKey)
-  }, [open, onClose])
-
-  if (!open) return null
-
-  const updateField = (field) => (e) => {
-    setForm((prev) => ({ ...prev, [field]: e.target.value }))
-  }
-
-  const setField = (field, value) => {
-    setForm((prev) => ({ ...prev, [field]: value }))
-  }
-
-  const isProperty = normalizeBizType(form.biz_type) === 'property'
-  const typeMeta = bizTypeMeta(form.biz_type)
-
-  // กดเลือกการ์ดประเภท → เติมฟอร์ม mock ให้ตรงประเภท (vehicle/other ได้ utility_enabled=false + มิเตอร์ 0 อัตโนมัติ)
-  const selectBizType = (value) => {
-    setForm(buildMockForm(value))
-    setError(null)
-  }
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setSaving(true)
-    setError(null)
-    try {
-      // ดึง landlord_id (id ของ admins ตาม auth.uid()) ก่อน insert เสมอ — ถ้าไม่ได้ไม่บันทึก
-      // เพราะ RLS กรองแถวที่ landlord_id ไม่ตรงออกจากการอ่าน ทิ้งแถวเปล่าจะหายจากตารางทันที
-      const { data: landlordId, error: adminError } = await supabase.rpc('get_my_admin_id')
-      if (adminError) throw adminError
-      if (!landlordId) throw new Error('ไม่พบบัญชีเจ้าของของผู้ใช้นี้ — ลองออกจากระบบแล้วเข้าใหม่')
-
-      const bindingCode = generateBindingCode()
-      // vehicle/other: ไม่มีค่าน้ำไฟ — บังคับ utility_enabled=false และมิเตอร์/อัตราเป็น 0
-      const isProperty = normalizeBizType(form.biz_type) === 'property'
-      const payload = {
-        landlord_id: landlordId,
-        biz_type: normalizeBizType(form.biz_type),
-        cust_name: form.cust_name.trim(),
-        tenant_phone: form.tenant_phone.trim() || null,
-        tenant_id_card: form.tenant_id_card.trim() || null,
-        emergency_contact: form.emergency_contact.trim() || null,
-        item_details: form.item_details.trim(),
-        sub_label: form.sub_label.trim() || null,
-        room_status: form.room_status,
-        amount: Number(form.amount),
-        cycle: form.cycle,
-        due_date: Number(form.due_date),
-        penalty_per_day: Number(form.penalty_per_day) || 0,
-        penalty_enabled: Boolean(form.penalty_enabled),
-        chase_frequency: Number(form.chase_frequency) || 3,
-        stop_chase: Number(form.stop_chase) > 0 ? 1 : 0,
-        credit_balance: 0,
-        deposit_amount: Number(form.deposit_amount) || 0,
-        move_in_date: form.move_in_date || null,
-        lease_end_date: form.lease_end_date || null,
-        last_water_meter: isProperty ? Number(form.last_water_meter) || 0 : 0,
-        water_rate: isProperty ? Number(form.water_rate) || 0 : 0,
-        last_elec_meter: isProperty ? Number(form.last_elec_meter) || 0 : 0,
-        elec_rate: isProperty ? Number(form.elec_rate) || 0 : 0,
-        utility_enabled: isProperty ? Boolean(form.utility_enabled) : false,
-        binding_code: bindingCode,
-      }
-      const { error: insertError } = await supabase.from('rentals').insert([payload])
-      if (insertError) throw insertError
-      // รีเฟรชตารางก่อนปิด modal (ผ่าน onCreated ของ parent) ให้รายการใหม่โผล่ทันทีไม่ต้อง F5
-      await onCreated({ bindingCode, custName: form.cust_name.trim() })
-      onClose()
-    } catch (err) {
-      setError(err?.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล')
-      onToast?.({ type: 'error', message: err?.message || 'บันทึกข้อมูลไม่สำเร็จ' })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
-      <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
-
-      <div className="relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white dark:bg-gray-900 shadow-2xl sm:max-h-[90vh] sm:max-w-lg sm:rounded-2xl">
-        <div className="flex items-start justify-between border-b border-gray-100 dark:border-gray-800 px-6 py-5">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">เพิ่มสินทรัพย์ใหม่</h2>
-            <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">กรอกข้อมูลสัญญาเช่าเพื่อบันทึกลงในระบบ</p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 lg:mr-0 lg:h-auto lg:w-auto lg:p-1.5"
-            aria-label="ปิด"
-          >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
-            {error && (
-              <div className="flex items-start gap-2 rounded-xl border border-rose-200 dark:border-rose-800/70 bg-rose-50 dark:bg-rose-950/30 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
-                <Icon name="warning" className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
-
-            {!form.biz_type ? (
-              <div className="space-y-3">
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  เลือกประเภทสินทรัพย์ <span className="text-rose-500 dark:text-rose-400">*</span>
-                </p>
-                {BIZ_TYPES.map((t) => (
-                  <button
-                    key={t.value}
-                    type="button"
-                    onClick={() => selectBizType(t.value)}
-                    className="flex w-full items-center gap-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-5 py-4 text-left shadow-sm transition-colors hover:border-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/30"
-                  >
-                    <span className="text-3xl leading-none">{t.icon}</span>
-                    <span className="min-w-0">
-                      <span className="block text-base font-bold text-gray-900 dark:text-gray-100">{t.label}</span>
-                      <span className="mt-0.5 block truncate text-sm text-gray-500 dark:text-gray-400">{t.examples}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-            <>
-            <CollapsibleSection title="ข้อมูลสัญญาเช่า" subtitle="ข้อมูลหลักของสัญญา" icon="document" defaultOpen>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-indigo-100 dark:border-indigo-800/50 bg-indigo-50 dark:bg-indigo-950/30 px-4 py-3">
-                  <p className="text-sm font-bold text-indigo-900 dark:text-indigo-200">{typeMeta.icon} {typeMeta.label}</p>
-                  <button
-                    type="button"
-                    onClick={() => setField('biz_type', '')}
-                    disabled={saving}
-                    className="shrink-0 rounded-lg bg-white dark:bg-gray-900 px-3 py-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 shadow-sm transition-colors hover:bg-indigo-100 dark:hover:bg-indigo-800/50"
-                  >
-                    เปลี่ยนประเภท
-                  </button>
-                </div>
-
-                <div>
-                  <label htmlFor="cust_name" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    ชื่อผู้เช่า <span className="text-rose-500 dark:text-rose-400">*</span>
-                  </label>
-                  <input id="cust_name" type="text" value={form.cust_name} onChange={updateField('cust_name')} placeholder="เช่น นายสมชาย ใจดี" required className={inputClass} />
-                </div>
-
-                {typeMeta.subLabel && (
-                  <div>
-                    <label htmlFor="sub_label" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      {typeMeta.subLabel}
-                    </label>
-                    <input id="sub_label" type="text" value={form.sub_label} onChange={updateField('sub_label')} placeholder={typeMeta.subPlaceholder} className={inputClass} />
-                  </div>
-                )}
-
-                <div>
-                  <label htmlFor="item_details" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {typeMeta.itemLabel}
-                  </label>
-                  <input id="item_details" type="text" value={form.item_details} onChange={updateField('item_details')} placeholder={typeMeta.placeholder} className={inputClass} />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="amount" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      ค่าเช่า / ค่างวด <span className="text-rose-500 dark:text-rose-400">*</span>
-                    </label>
-                    <input id="amount" type="number" min="0" step="0.01" value={form.amount} onChange={updateField('amount')} placeholder="0.00" required className={inputClass} />
-                  </div>
-                  <div>
-                    <label htmlFor="cycle" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      รอบการเก็บเงิน <span className="text-rose-500 dark:text-rose-400">*</span>
-                    </label>
-                    <select id="cycle" value={form.cycle} onChange={updateField('cycle')} required className={inputClass}>
-                      {Object.entries(CYCLE_LABELS).map(([value, label]) => (
-                        <option key={value} value={value}>{label}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="due_date" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    วันครบกำหนดชำระ (1-31) <span className="text-rose-500 dark:text-rose-400">*</span>
-                  </label>
-                  <input id="due_date" type="number" min="1" max="31" step="1" value={form.due_date} onChange={updateField('due_date')} placeholder="เช่น 1" required className={inputClass} />
-                </div>
-
-                {!isProperty && (
-                  <div className="rounded-xl border-2 border-amber-200 dark:border-amber-800/70 bg-amber-50/60 dark:bg-amber-950/30 p-4">
-                    <label htmlFor="deposit_amount_main" className="mb-1.5 block text-sm font-bold text-amber-800 dark:text-amber-200">
-                      ค่าประกัน / เงินมัดจำ (บาท)
-                    </label>
-                    <input
-                      id="deposit_amount_main"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={form.deposit_amount}
-                      onChange={updateField('deposit_amount')}
-                      placeholder="0.00"
-                      className={inputClass}
-                    />
-                  </div>
-                )}
-              </div>
-            </CollapsibleSection>
-
-            <CollapsibleSection title="ข้อมูลผู้เช่าและสัญญา" subtitle="ข้อมูลติดต่อและช่วงเวลาสัญญา" icon="building">
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="tenant_phone" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">เบอร์โทรผู้เช่า</label>
-                    <input id="tenant_phone" type="text" value={form.tenant_phone} onChange={updateField('tenant_phone')} placeholder="08x-xxx-xxxx" className={inputClass} />
-                  </div>
-                  <div>
-                    <label htmlFor="tenant_id_card" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">เลขบัตรประชาชน</label>
-                    <input id="tenant_id_card" type="text" value={form.tenant_id_card} onChange={updateField('tenant_id_card')} placeholder="x-xxxx-xxxxx-xx-x" className={inputClass} />
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="emergency_contact" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">เบอร์ติดต่อฉุกเฉิน</label>
-                  <input id="emergency_contact" type="text" value={form.emergency_contact} onChange={updateField('emergency_contact')} placeholder="08x-xxx-xxxx" className={inputClass} />
-                </div>
-
-                <div>
-                  <label htmlFor="room_status" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">สถานะห้อง/สินทรัพย์</label>
-                  <select id="room_status" value={form.room_status} onChange={updateField('room_status')} className={inputClass}>
-                    <option value="occupied">ไม่ว่าง (occupied)</option>
-                    <option value="vacant">ว่าง (vacant)</option>
-                    <option value="maintenance">ซ่อมบำรุง (maintenance)</option>
-                  </select>
-                </div>
-
-                {isProperty && (
-                  <div>
-                    <label htmlFor="deposit_amount" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">เงินประกัน</label>
-                    <input id="deposit_amount" type="number" min="0" step="0.01" value={form.deposit_amount} onChange={updateField('deposit_amount')} placeholder="0.00" className={inputClass} />
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label htmlFor="move_in_date" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">วันที่ย้ายเข้า</label>
-                    <input id="move_in_date" type="date" value={form.move_in_date} onChange={updateField('move_in_date')} className={inputClass} />
-                  </div>
-                  <div>
-                    <label htmlFor="lease_end_date" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">วันสิ้นสุดสัญญา</label>
-                    <input id="lease_end_date" type="date" value={form.lease_end_date} onChange={updateField('lease_end_date')} className={inputClass} />
-                  </div>
-                </div>
-              </div>
-            </CollapsibleSection>
-
-            <CollapsibleSection
-              title={isProperty ? 'การตั้งค่าทวงเงินและค่าน้ำไฟ' : 'การตั้งค่าทวงเงิน'}
-              subtitle={isProperty ? 'ค่าปรับ การทวงหนี้ และมิเตอร์' : 'ค่าปรับและการทวงหนี้'}
-              icon="banknotes"
-            >
-              <div className="space-y-4">
-                <Toggle checked={form.penalty_enabled} onChange={(v) => setField('penalty_enabled', v)} label="เปิดใช้ค่าปรับ" />
-
-                {form.penalty_enabled && (
-                  <div>
-                    <label htmlFor="penalty_per_day" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">ค่าปรับต่อวัน (บาท)</label>
-                    <input id="penalty_per_day" type="number" min="0" step="0.01" value={form.penalty_per_day} onChange={updateField('penalty_per_day')} placeholder="0.00" className={inputClass} />
-                  </div>
-                )}
-
-                <div>
-                  <label htmlFor="chase_frequency" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">ความถี่ทวงหนี้</label>
-                  <select id="chase_frequency" value={form.chase_frequency} onChange={updateField('chase_frequency')} className={inputClass}>
-                    <option value={3}>ทุก 3 วัน</option>
-                    <option value={7}>ทุก 7 วัน</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label htmlFor="stop_chase" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">หยุดทวงหนี้หลังจาก (วัน)</label>
-                  <input id="stop_chase" type="number" min="0" step="1" value={form.stop_chase} onChange={updateField('stop_chase')} placeholder="เช่น 30 (0 = ไม่หยุด)" className={inputClass} />
-                </div>
-
-                {isProperty && (
-                  <>
-                    <Toggle checked={form.utility_enabled} onChange={(v) => setField('utility_enabled', v)} label="คิดค่าน้ำไฟ" />
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label htmlFor="last_water_meter" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">เลขมิเตอร์น้ำล่าสุด</label>
-                        <input id="last_water_meter" type="number" min="0" step="1" value={form.last_water_meter} onChange={updateField('last_water_meter')} placeholder="0" className={inputClass} />
-                      </div>
-                      <div>
-                        <label htmlFor="water_rate" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">ค่าน้ำ/หน่วย (บาท)</label>
-                        <input id="water_rate" type="number" min="0" step="0.01" value={form.water_rate} onChange={updateField('water_rate')} placeholder="0.00" className={inputClass} />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label htmlFor="last_elec_meter" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">เลขมิเตอร์ไฟล่าสุด</label>
-                        <input id="last_elec_meter" type="number" min="0" step="1" value={form.last_elec_meter} onChange={updateField('last_elec_meter')} placeholder="0" className={inputClass} />
-                      </div>
-                      <div>
-                        <label htmlFor="elec_rate" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">ค่าไฟ/หน่วย (บาท)</label>
-                        <input id="elec_rate" type="number" min="0" step="0.01" value={form.elec_rate} onChange={updateField('elec_rate')} placeholder="0.00" className={inputClass} />
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </CollapsibleSection>
-            </>
-            )}
-          </div>
-
-          <div className="flex flex-col-reverse gap-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-6 py-4 sm:flex-row sm:items-center sm:justify-end">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={saving}
-              className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-4 text-base font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm"
-            >
-              ยกเลิก
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-4 text-base font-semibold text-white shadow-sm transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm"
-            >
-              {saving ? (
-                <>
-                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
-                  </svg>
-                  กำลังบันทึก...
-                </>
-              ) : (
-                'บันทึกข้อมูล'
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
 
 function LineBindingModal({ code, custName, onClose }) {
   const [copied, setCopied] = useState(false)
@@ -5299,7 +4773,8 @@ function Dashboard({ userEmail = '' }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
-  const [isAddOpen, setIsAddOpen] = useState(false)
+  const [isAddAssetOpen, setIsAddAssetOpen] = useState(false)
+  const [isAddTenantOpen, setIsAddTenantOpen] = useState(false)
   const [assetSearch, setAssetSearch] = useState('')
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [bindingModal, setBindingModal] = useState(null)
@@ -5841,16 +5316,28 @@ function Dashboard({ userEmail = '' }) {
         if (error) throw error
         setToast({ type: 'success', message: 'ลบข้อมูลเรียบร้อยแล้ว' })
       } else {
-        const { error } = await supabase.from('rentals').update({
-          room_status: 'vacant',
-          cust_name: 'ว่าง',
-          tenant_phone: null,
-          tenant_id_card: null,
-          emergency_contact: null,
-        }).eq('id', rental.id)
+        // moveout: ล้างผู้เช่า + บันทึกประวัติลง notes
+        const patch = buildMoveOutPatch()
+        const { error } = await supabase.from('rentals').update(patch).eq('id', rental.id)
         if (error) throw error
+
         const refund = Math.max(0, (Number(rental.deposit_amount) || 0) - (repairCost || 0))
         setToast({ type: 'success', message: `ย้ายออกเรียบร้อย (เงินประกันคืน ${formatCurrency(refund)})` })
+
+        // บันทึกประวัติสัญญาเก่าลง notes
+        try {
+          const { data: landlordId } = await supabase.rpc('get_my_admin_id')
+          if (landlordId) {
+            const notePayload = buildMoveOutNote(rental, {
+              repairCost: repairCost || 0,
+              refund,
+              assetName: displayAssetName(rental),
+            })
+            await supabase.from('notes').insert([{ landlord_id: landlordId, ...notePayload }])
+          }
+        } catch (noteErr) {
+          console.warn('Failed to log moveout history:', noteErr)
+        }
       }
       setConfirmAction(null)
       fetchRentals()
@@ -6029,14 +5516,37 @@ function Dashboard({ userEmail = '' }) {
   }
 
   // gate จำนวนห้องตามแพ็กเกจ — ใช้แล้วครบ room_limit ไม่ให้เปิดฟอร์มเพิ่มสินทรัพย์
-  const handleOpenAddForm = () => {
+  // เปิด modal "เพิ่มสินทรัพย์" — เช็คจำนวนห้องตาม membership ก่อนเปิด
+  const handleOpenAddAsset = () => {
     const used = rentals.length
     const limit = Number(membership?.room_limit)
     if (membership?.ok && Number.isFinite(limit) && limit > 0 && used >= limit) {
       setToast({ type: 'warning', message: `ครบจำนวนห้องของแพ็กเกจแล้ว (ใช้ ${used}/${limit} ห้อง) — อัปเกรดเพื่อเพิ่มห้อง` })
       return
     }
-    setIsAddOpen(true)
+    setIsAddAssetOpen(true)
+  }
+
+  // เปิด modal "เพิ่มผู้เช่า" — ไม่เช็คจำนวนห้อง เพราะไม่ได้ insert แถวใหม่
+  const handleOpenAddTenant = () => {
+    setIsAddTenantOpen(true)
+  }
+
+  // callback หลัง AddAssetModal insert สำเร็จ — รีเฟรช + ไม่เปิด LineBindingModal
+  // เพราะห้องยังว่าง (binding code เก็บไว้ใช้ตอนเพิ่มผู้เช่าในภายหลัง)
+  const handleAssetCreated = async () => {
+    await fetchRentals()
+    fetchSummary()
+  }
+
+  // callback หลัง AddTenantModal update สำเร็จ — รีเฟรช + เปิด LineBindingModal
+  const handleTenantAssigned = async ({ rental, custName }) => {
+    await fetchRentals()
+    fetchSummary()
+    // แสดง LineBindingModal ให้ bind กลุ่ม LINE (ถ้ามี binding_code)
+    if (rental?.binding_code) {
+      setBindingModal({ code: rental.binding_code, custName })
+    }
   }
 
   const location = useLocation()
@@ -6214,10 +5724,10 @@ function Dashboard({ userEmail = '' }) {
                   {paymentInfo.business_name || 'PayRentPro'}
                 </h1>
                 <h1 className="hidden text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100 sm:text-2xl lg:block">
-                  {isAudit ? 'ประวัติแก้ไข' : isSettings ? 'ตั้งค่าบัญชี' : isAssets ? 'รายการสินทรัพย์' : isFinance ? 'กำไรสุทธิ์' : isComms ? 'ประกาศและเอกสาร' : isMembership ? 'สมาชิกของฉัน' : isAdmin ? 'ผู้ดูแลระบบ' : 'แดชบอร์ด'}
+                  {isAudit ? 'ประวัติแก้ไข' : isSettings ? 'ตั้งค่าบัญชี' : isAssets ? 'รายการสินทรัพย์' : isFinance ? 'กำไรสุทธิ' : isComms ? 'ประกาศและเอกสาร' : isMembership ? 'สมาชิกของฉัน' : isAdmin ? 'ผู้ดูแลระบบ' : 'แดชบอร์ด'}
                 </h1>
                 <p className="hidden text-sm text-gray-500 dark:text-gray-400 lg:block">
-                  {isAudit ? 'บันทึกการแก้ไขยอดและเหตุผล' : isSettings ? 'ตั้งค่าเลขพร้อมเพย์ / บัญชีธนาคารสำหรับรับเงิน' : isAssets ? 'จัดการสัญญาเช่าและสินทรัพย์ทั้งหมด' : isFinance ? 'รายรับ รายจ่าย และกำไรสุทธิ์ของแต่ละเดือน' : isComms ? 'แจ้งข่าวผู้เช่า จดบันทึก และเก็บไฟล์เอกสาร' : isMembership ? 'แพ็กเกจ การใช้งาน และการต่ออายุ' : isAdmin ? 'จัดการสมาชิกและค่าสมาชิกรอตรวจทั้งหมด' : 'ภาพรวมการเก็บค่าเช่าและการติดตามหนี้'}
+                  {isAudit ? 'บันทึกการแก้ไขยอดและเหตุผล' : isSettings ? 'ตั้งค่าเลขพร้อมเพย์ / บัญชีธนาคารสำหรับรับเงิน' : isAssets ? 'จัดการสัญญาเช่าและสินทรัพย์ทั้งหมด' : isFinance ? 'รายรับ รายจ่าย และกำไรสุทธิของแต่ละเดือน' : isComms ? 'แจ้งข่าวผู้เช่า จดบันทึก และเก็บไฟล์เอกสาร' : isMembership ? 'แพ็กเกจ การใช้งาน และการต่ออายุ' : isAdmin ? 'จัดการสมาชิกและค่าสมาชิกรอตรวจทั้งหมด' : 'ภาพรวมการเก็บค่าเช่าและการติดตามหนี้'}
                 </p>
               </div>
             </div>
@@ -6269,16 +5779,28 @@ function Dashboard({ userEmail = '' }) {
                 </div>
               )}
               {isAssets && (
-                <button
-                  type="button"
-                  onClick={handleOpenAddForm}
-                  className="hidden shrink-0 items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-base font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-500 lg:inline-flex"
-                >
-                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                  </svg>
-                  เพิ่มสินทรัพย์
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={handleOpenAddAsset}
+                    className="hidden shrink-0 items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-base font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-500 lg:inline-flex"
+                  >
+                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                    </svg>
+                    เพิ่มสินทรัพย์
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleOpenAddTenant}
+                    className="hidden shrink-0 items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-base font-semibold text-white shadow-sm shadow-emerald-600/30 transition-colors hover:bg-emerald-500 lg:inline-flex"
+                  >
+                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM4 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 10.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
+                    </svg>
+                    เพิ่มผู้เช่า
+                  </button>
+                </>
               )}
               <button
                 type="button"
@@ -6322,19 +5844,31 @@ function Dashboard({ userEmail = '' }) {
           </div>
         </header>
 
-        {/* ปุ่มเพิ่มสินทรัพย์ของหน้า Assets — มือถือ/แท็บเล็ตวางเป็นแถวเต็มความกว้างใต้ header */}
+        {/* ปุ่มเพิ่มสินทรัพย์/เพิ่มผู้เช่าของหน้า Assets — มือถือ/แท็บเล็ตวางเป็นแถวเต็มความกว้างใต้ header */}
         {isAssets && (
           <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:hidden">
-            <button
-              type="button"
-              onClick={handleOpenAddForm}
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-3 text-base font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-500"
-            >
-              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
-              เพิ่มสินทรัพย์
-            </button>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={handleOpenAddAsset}
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-3 text-base font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-500"
+              >
+                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                เพิ่มสินทรัพย์
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenAddTenant}
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-3 text-base font-semibold text-white shadow-sm shadow-emerald-600/30 transition-colors hover:bg-emerald-500"
+              >
+                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM4 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 10.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
+                </svg>
+                เพิ่มผู้เช่า
+              </button>
+            </div>
           </div>
         )}
 
@@ -6478,14 +6012,19 @@ function Dashboard({ userEmail = '' }) {
 
       {!pdpAccepted && <PDPAConsentModal onAccept={handleAcceptPDPA} />}
 
-      <AddRentalModal
-        open={isAddOpen}
-        onClose={() => setIsAddOpen(false)}
+      <AddAssetModal
+        open={isAddAssetOpen}
+        onClose={() => setIsAddAssetOpen(false)}
+        onCreated={handleAssetCreated}
         onToast={setToast}
-        onCreated={async ({ bindingCode, custName }) => {
-          await fetchRentals(true)
-          setBindingModal({ code: bindingCode, custName })
-        }}
+      />
+
+      <AddTenantModal
+        open={isAddTenantOpen}
+        rentals={rentals}
+        onClose={() => setIsAddTenantOpen(false)}
+        onAssigned={handleTenantAssigned}
+        onToast={setToast}
       />
 
       <InvoiceModal

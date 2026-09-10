@@ -6,9 +6,9 @@ import {
 } from '../components/ui'
 import { BTN, INPUT_CLS } from '../components/styles'
 
-// ── หน้ารายจ่าย / รายรับอื่น / กำไรสุทธิ์ ────────────────────────────
+// ── หน้ารายจ่าย / รายรับอื่น / กำไรสุทธิ ────────────────────────────
 // ที่มา: ผสานจาก PropertyHub (RESEARCH.md — expenses / income / profit)
-// "กำไรสุทธิ์ครบวงจร" เป็นจุดขายที่ระบบต้นทางโฆษณาไว้ และของเรายังไม่มี
+// "กำไรสุทธิครบวงจร" เป็นจุดขายที่ระบบต้นทางโฆษณาไว้ และของเรายังไม่มี
 //
 // ใช้ตาราง expenses / other_income / expense_categories
 // (migration 20260909100000_finance_expenses_income.sql)
@@ -86,7 +86,7 @@ function ExpenseModal({ row, categories, landlordId, onClose, onSaved, onToast }
   return (
     <Modal
       title={row?.id ? 'แก้ไขรายจ่าย' : 'เพิ่มรายจ่าย'}
-      subtitle="บันทึกค่าใช้จ่ายเพื่อคำนวณกำไรสุทธิ์"
+      subtitle="บันทึกค่าใช้จ่ายเพื่อคำนวณกำไรสุทธิ"
       onClose={onClose}
       footer={
         <>
@@ -266,10 +266,10 @@ function ProfitSummary({ summary, loading }) {
         </div>
       ))}
 
-      {/* กำไรสุทธิ์ — เน้นเป็นการ์ดสีทึบเพราะเป็นตัวเลขที่เจ้าของอยากรู้ที่สุด */}
+      {/* กำไรสุทธิ — เน้นเป็นการ์ดสีทึบเพราะเป็นตัวเลขที่เจ้าของอยากรู้ที่สุด */}
       <div className={`rounded-2xl bg-gradient-to-br p-4 shadow-lg sm:p-5 ${isLoss ? 'from-rose-500 to-red-600 shadow-rose-500/25' : 'from-emerald-500 to-green-600 shadow-emerald-500/25'}`}>
         <p className="truncate text-xs font-semibold text-white/80 sm:text-sm">
-          {isLoss ? 'ขาดทุนสุทธิ' : 'กำไรสุทธิ์'}
+          {isLoss ? 'ขาดทุนสุทธิ' : 'กำไรสุทธิ'}
         </p>
         <p className="mt-1.5 text-2xl font-bold tabular-nums tracking-tight text-white sm:text-3xl">
           {loading ? '—' : formatCurrency(Math.abs(net))}
@@ -600,7 +600,7 @@ export default function FinancePage({ onToast }) {
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-50 sm:text-2xl">กำไรสุทธิ์</h2>
+          <h2 className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-50 sm:text-2xl">กำไรสุทธิ</h2>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">รายรับ − รายจ่าย ของแต่ละเดือน</p>
         </div>
         <PeriodPicker year={year} month={month} onChange={handlePeriod} />
