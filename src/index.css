@@ -3,6 +3,22 @@
 /* Tailwind v4: เปิด dark variant แบบ class-based (คุมด้วย class "dark" บน <html>) */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ── ขนาดตัวอักษรฐาน ──────────────────────────────────────────────
+   Tailwind ใช้ rem ทั้งระบบ จึงคุมสเกล UI ทั้งหน้าได้จาก root font-size
+   จุดเดียว (ตัวหนังสือ + spacing py/px/gap ย่อขยายพร้อมกัน)
+
+   จอเดสก์ท็อป (>=1024px = lg) ใช้ 12.8px = 80% ของ 16px เพราะเต็มจอ
+   ที่ 16px ตัวใหญ่เกินไป — เท่ากับที่ซูมเบราว์เซอร์ 80% แล้วพอดี
+   อยากปรับความเล็ก แก้ font-size ในบล็อกนี้ (13.6px = 85%, 14.4px = 90%)
+
+   มือถือ/แท็บเล็ตคงไว้ที่ 16px ตาม default ของเบราว์เซอร์ ห้ามย่อ เพราะ
+   iOS Safari จะซูมเข้าเองตอนโฟกัส input ที่ font-size < 16px */
+@media (min-width: 1024px) {
+  html {
+    font-size: 12.8px;
+  }
+}
+
 /* โหมดตัวอักษรขยาย (accessibility): ขยาย root font-size — Tailwind ใช้ rem ทั้งระบบ
    text-sm/base/lg รวมถึง spacing py/px ของปุ่มจะขยายตามอัตโนมัติ */
 html.text-large {
@@ -12,6 +28,14 @@ html.text-large {
 @media (max-width: 639px) {
   html.text-large {
     font-size: 17px;
+  }
+}
+
+/* เดสก์ท็อป: โหมดขยายอ้างอิงจากฐานใหม่ — 16px คือขนาดที่เคยเป็น default
+   (ถ้าคง 18px ไว้จะกระโดดจาก 12.8px แรงเกินไป) */
+@media (min-width: 1024px) {
+  html.text-large {
+    font-size: 16px;
   }
 }
 
