@@ -22,6 +22,8 @@ const PAGES = [
   { name: '07-bill', path: '/bill/tok-bill-0001' },
   // แท็บประวัติของหน้าบิล — บอท LINE ส่งลิงก์ #history ให้ผู้เช่า
   { name: '08-bill-history', path: '/bill/tok-bill-0001#history' },
+  // หน้าแจ้งซ่อมของผู้เช่า — public เข้าด้วยเบอร์โทร (หน้าล็อกอิน)
+  { name: '09-repair-login', path: '/repair' },
 ]
 
 const run = async () => {

@@ -4,9 +4,13 @@ import { supabase } from './supabaseClient'
 // โหมดเทสชั่วคราว (คืนก่อนขายจริง): ทำงานเฉพาะเมื่อ VITE_DEV_LOGIN=true ใน env ท้องถิ่น
 const DEV_LOGIN = import.meta.env.VITE_DEV_LOGIN === 'true'
 
-// ปลายทางหลัง Google ส่งกลับ — โปรดักชันคือโดเมนบน Vercel
-// (ต้องใส่ URL นี้ใน Supabase → Authentication → URL Configuration → Redirect URLs ด้วย)
-const OAUTH_REDIRECT_TO = 'https://payrentpro-web.vercel.app'
+// ปลายทางหลัง Google ส่งกลับ — ใช้โดเมนของหน้าที่เปิดอยู่จริง
+// เดิม hardcode โดเมน Vercel ไว้ ทำให้ตอน dev บน localhost ล็อกอินแล้วเด้งออก
+// ไป production ทุกครั้ง (แพทเทิร์นเดียวกับ VITE_BILL_BASE_URL ที่ใช้อยู่แล้ว)
+//
+// ทุก origin ที่จะใช้ต้องอยู่ใน Supabase → Authentication → URL Configuration
+// → Redirect URLs ด้วย ไม่งั้น Supabase จะเด้งกลับไป Site URL แทน
+const OAUTH_REDIRECT_TO = import.meta.env.VITE_OAUTH_REDIRECT_TO || window.location.origin
 
 // โลโก้ G สี่สีของ Google (ตาม brand guideline — ห้ามเปลี่ยนสี)
 function GoogleLogo() {

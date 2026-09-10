@@ -269,6 +269,35 @@ export async function installStubs(context) {
       { period: '2026-07', total_amount: 7180, paid_amount: 7180, status: 'paid', created_at: iso(now - 63 * DAY), is_current: false },
       { period: '2026-06', total_amount: 7050, paid_amount: 7050, status: 'paid', created_at: iso(now - 93 * DAY), is_current: false },
     ],
+    // หน้าแจ้งซ่อมของผู้เช่า (/repair) — public เข้าด้วยเบอร์โทร
+    tenant_portal_login: {
+      ok: true,
+      token: 'tok-tenant-0001',
+      expires_at: iso(now + 8 * 60 * 60 * 1000),
+      rentals: [{ rental_id: 'r1', name: 'ตึก A · ห้อง 101' }],
+    },
+    tenant_portal_session: {
+      ok: true,
+      rentals: [{ rental_id: 'r1', name: 'ตึก A · ห้อง 101' }],
+    },
+    tenant_portal_repairs: [
+      {
+        id: 'rt1', rental_id: 'r1', rental_name: 'ตึก A · ห้อง 101',
+        description: 'แอร์ไม่เย็น เปิดแล้วมีแต่ลม ไม่มีความเย็นออกมาเลย',
+        status: 'open', photo_url: null, created_at: iso(now - 2 * DAY), done_at: null,
+      },
+      {
+        id: 'rt2', rental_id: 'r1', rental_name: 'ตึก A · ห้อง 101',
+        description: 'น้ำรั่วใต้อ่างล้างหน้า',
+        status: 'in_progress', photo_url: REPAIR_PHOTO, created_at: iso(now - 6 * DAY), done_at: null,
+      },
+      {
+        id: 'rt3', rental_id: 'r1', rental_name: 'ตึก A · ห้อง 101',
+        description: 'หลอดไฟห้องน้ำเสีย',
+        status: 'done', photo_url: null, created_at: iso(now - 20 * DAY), done_at: iso(now - 18 * DAY),
+      },
+    ],
+    tenant_portal_create_repair: { ok: true, ticket_id: 'rt-new' },
   }
   await context.route('**/rest/v1/rpc/*', (route) => {
     const name = route.request().url().split('/rpc/')[1].split('?')[0]

@@ -49,20 +49,45 @@
         6 แท็บ + 5 modal × 3 ความกว้าง
       - **ผลทดสอบ**: PASS ทุกช่อง · 375/768 = 0 small targets · 0 overflow
         · oxlint 0 errors · build ผ่าน · shoot.mjs ทั้งชุดไม่ regress
-- [ ] **2c. กลุ่มซ่อมบำรุง** — `vendors`, `inventory` (มี reorder_level), `fixed_assets`
+- [x] **2c-1. Portal แจ้งซ่อมผู้เช่า** ✅ — หน้า `/repair` เข้าด้วยเบอร์โทร (เจ้าของสั่งเพิ่ม)
+      - migration `20260909120000_tenant_repair_portal.sql`
+        + `normalize_phone()` รับ 081-234-5678 / +66812345678 / 0812345678 ให้เทียบกันได้
+        + `tenant_portal_sessions` (token อายุ 8 ชม.) + `tenant_portal_attempts` (rate limit)
+        + RPC `tenant_portal_login` / `_session` / `_repairs` / `_create_repair`
+        + bucket `repair-photos` (public read, 5MB, เฉพาะไฟล์รูป)
+      - หน้าใหม่ `src/RepairPortalPage.jsx` — ล็อกอินด้วยเบอร์ → แจ้งซ่อม + แนบรูป + ดูประวัติ
+      - แถบลิงก์ใน `RepairSection` ให้เจ้าของคัดลอกส่งผู้เช่า (D19)
+      - fixture + `tools/verify-repair-portal.mjs` (2 มุมมอง × 3 ความกว้าง)
+      - **ผลทดสอบกับ DB จริง**: login ผ่าน · แจ้งซ่อมห้องตัวเองผ่าน ·
+        ห้องคนอื่นถูกปฏิเสธ (`rental_not_yours`) · token ปลอมถูกปฏิเสธ ·
+        rate limit ตัดที่ครั้งที่ 6 · anon อ่าน `rentals` ตรงไม่ได้
+      - **ผล harness**: PASS ทุกช่อง · 375/768 = 0 small targets · 0 overflow
+        · oxlint 0 errors · build ผ่าน · shoot.mjs 11 หน้าไม่ regress
+- [ ] **2c-2. กลุ่มซ่อมบำรุง (ที่เหลือ)** — `vendors`, `inventory` (มี reorder_level), `fixed_assets`
       + ขยาย `repair_tickets` เดิมให้มี priority/parts_cost/labor_cost/charge_to/vendor
 - [ ] **2d. โครงอาคาร** — `properties`, `floors`, `room_types`, `rooms` + property switcher
 - [ ] **2e. บิล/มิเตอร์** — หน้าจดมิเตอร์ทั้งตึก, `common_fees`, ออกบิลเป็นรอบ
 - [ ] **2f. 3D** — viewer ก่อน (คุ้มค่ากว่า) แล้วค่อย designer ถ้าเวลาเหลือ
 - [ ] **2g. อื่น ๆ** — `bookings`, role/permission, หน้ารวมการแจ้งเตือน
 
-### ⚠️ ต้องรัน migration ก่อนใช้งานจริง
-ยังไม่ได้รันบน DB จริงทั้งสองไฟล์ — หน้า `/finance` และ `/comms` จะ error จนกว่าจะรัน
-(`supabase db push` หรือวางใน SQL Editor):
-- `20260909100000_finance_expenses_income.sql`
-- `20260909110000_announcements_notes_documents.sql`
+### ⚠️ migration ที่รันบน DB จริงแล้ว (2026-09-09)
+รันครบทั้ง 17 ไฟล์ · tracked ใน `supabase_migrations.schema_migrations` แล้ว
 
-ทดสอบที่ผ่านมาใช้ fixture stub ใน `tools/fixtures.mjs` ไม่ได้ยิง DB จริง
+**บทเรียน**: migration 11 ไฟล์แรกเคยรันผ่าน SQL Editor ซึ่ง **ไม่บันทึก tracking**
+ทำให้ `supabase db push` พยายามรันซ้ำแล้วพังที่ `update_bill_amount`
+(error 42P13 cannot remove parameter defaults) แก้ด้วย:
+1. `npx supabase migration repair --status applied <version...>` — บอกระบบว่ารันแล้ว
+2. `npx supabase db push --include-all` — รันไฟล์ที่ค้างจริง
+
+ต่อไปนี้ **ใช้ `supabase db push` เท่านั้น** ไม่ copy-paste ลง SQL Editor
+เพราะ SQL Editor ไม่เขียน tracking แล้วจะเจอปัญหาเดิมอีก
+
+ค้าง 1 อย่าง — ลบข้อมูลทดสอบที่สร้างตอนตรวจ RPC (ผมลบเองไม่ได้เพราะติด RLS):
+```sql
+delete from public.repair_tickets where description like 'TEST %';
+delete from public.tenant_portal_attempts;
+delete from public.tenant_portal_sessions;
+```
 
 ## Phase 3 — ธีมเขียวอ่อน ⬜ ยังไม่เริ่ม
 รวมสีเป็น token ชุดเดียวก่อน แล้วเปลี่ยน indigo/violet → เขียวอ่อน (D4)

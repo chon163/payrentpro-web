@@ -4,6 +4,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import './index.css'
 import App from './App.jsx'
 import BillPage from './BillPage.jsx'
+import RepairPortalPage from './RepairPortalPage.jsx'
 import { LoginRoute, PublicHomeRoute } from './HomeRoutes.jsx'
 import { ThemeProvider } from './theme.jsx'
 
@@ -22,6 +23,8 @@ createRoot(document.getElementById('root')).render(
         <Route path="/membership" element={<App />} />
         <Route path="/admin" element={<App />} />
         <Route path="/bill/:secure_token" element={<BillPage />} />
+        {/* หน้าแจ้งซ่อมของผู้เช่า — public ไม่ต้อง login (คุมสิทธิ์ที่ RPC ด้วย token) */}
+        <Route path="/repair" element={<RepairPortalPage />} />
       </Routes>
       </BrowserRouter>
     </ThemeProvider>

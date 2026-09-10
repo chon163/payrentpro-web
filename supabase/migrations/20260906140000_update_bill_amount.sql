@@ -36,6 +36,9 @@ create policy "audit_logs_authenticated_read" on public.audit_logs
   for select to authenticated using (true);
 
 -- 3) RPC แก้ยอดบิล (security definer — คุมสิทธิ์ที่ตัวฟังก์ชัน ไม่พึ่ง RLS ของ authenticated)
+-- ถ้าฟังก์ชันมีอยู่แล้วแต่ signature เปลี่ยน ต้อง DROP ก่อน (ไม่งั้น error 42P13)
+drop function if exists public.update_bill_amount(uuid, numeric, numeric, numeric, text) cascade;
+
 create or replace function public.update_bill_amount(
   p_tx_id uuid,
   p_water_cost numeric,

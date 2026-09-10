@@ -3126,6 +3126,57 @@ const REPAIR_TONES = {
   done: { card: 'border-emerald-200 dark:border-emerald-800/70 bg-emerald-50 dark:bg-emerald-950/30', text: 'text-emerald-700 dark:text-emerald-300' },
 }
 
+// แถบลิงก์แจ้งซ่อมสำหรับผู้เช่า — คัดลอกส่งในกลุ่ม LINE หรือติดหน้าห้องได้
+// ลิงก์ใช้โดเมนของหน้าที่เปิดอยู่ (แพทเทิร์นเดียวกับลิงก์บิล) ถ้าตั้ง
+// VITE_BILL_BASE_URL ไว้ก็ใช้ค่านั้นเพื่อให้ได้โดเมนจริงแม้เปิดจาก localhost
+function RepairPortalLinkBand() {
+  const [copied, setCopied] = useState(false)
+  const link = (import.meta.env.VITE_BILL_BASE_URL || window.location.origin) + '/repair'
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(link)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // clipboard ใช้ไม่ได้ (ต้อง https หรือผู้ใช้ไม่อนุญาต) — ผู้ใช้ยังเลือกข้อความเองได้
+    }
+  }
+
+  return (
+    <div className="border-b border-sky-100 bg-sky-50/60 px-4 py-3 dark:border-sky-800/50 dark:bg-sky-950/20 sm:px-6">
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="w-full text-xs font-semibold text-sky-900 dark:text-sky-200 sm:w-auto">
+          ลิงก์ให้ผู้เช่าแจ้งซ่อมเอง
+        </p>
+        <code className="min-w-0 flex-1 truncate rounded-lg bg-white px-2.5 py-2 text-xs text-gray-700 ring-1 ring-inset ring-sky-200 dark:bg-gray-900 dark:text-gray-300 dark:ring-sky-800/70">
+          {link}
+        </code>
+        <div className="flex shrink-0 gap-2">
+          <button
+            type="button"
+            onClick={copy}
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-sky-600 px-3 text-xs font-bold text-white transition-colors hover:bg-sky-700 lg:min-h-0 lg:py-2"
+          >
+            {copied ? '✓ คัดลอกแล้ว' : 'คัดลอกลิงก์'}
+          </button>
+          <a
+            href="/repair"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-h-11 items-center rounded-lg bg-white px-3 text-xs font-bold text-sky-700 ring-1 ring-inset ring-sky-300 transition-colors hover:bg-sky-50 dark:bg-gray-900 dark:text-sky-300 dark:ring-sky-800 lg:min-h-0 lg:py-2"
+          >
+            เปิดดู
+          </a>
+        </div>
+      </div>
+      <p className="mt-1.5 text-xs text-sky-800/70 dark:text-sky-300/70">
+        ผู้เช่ากรอกเบอร์โทรที่บันทึกในระบบเพื่อเข้าใช้ · ไม่ต้องสมัคร ไม่ต้องมีรหัสผ่าน
+      </p>
+    </div>
+  )
+}
+
 function RepairSection({ items, loading, error, completingId, onComplete, onRetry }) {
   const [previewPhoto, setPreviewPhoto] = useState(null)
 
@@ -3152,13 +3203,17 @@ function RepairSection({ items, loading, error, completingId, onComplete, onRetr
           </div>
           <div className="min-w-0">
             <h2 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100">แจ้งซ่อม</h2>
-            <p className="truncate text-sm text-sky-700 dark:text-sky-300">ผู้เช่าแจ้งผ่าน LINE ด้วยคำสั่ง &quot;แจ้งซ่อม&quot;</p>
+            <p className="truncate text-sm text-sky-700 dark:text-sky-300">ผู้เช่าแจ้งผ่าน LINE หรือลิงก์แจ้งซ่อมด้านล่าง</p>
           </div>
         </div>
         <span className="inline-flex shrink-0 items-center rounded-full bg-sky-100 dark:bg-sky-900/40 px-3 py-1 text-xs font-semibold text-sky-800 dark:text-sky-200 ring-1 ring-inset ring-sky-200 dark:ring-sky-800/70">
           {loading ? 'กำลังโหลด...' : `${active.length} รายการค้าง`}
         </span>
       </div>
+
+      {/* ลิงก์แจ้งซ่อมสำหรับผู้เช่า — ถ้าไม่โชว์ที่นี่ เจ้าของจะไม่รู้ว่ามีหน้านี้
+          ผู้เช่าเข้าด้วยเบอร์โทรที่บันทึกไว้ในระบบ ไม่ต้องสมัคร ไม่ต้องมีรหัส */}
+      <RepairPortalLinkBand />
 
       {/* การ์ดสรุป 3 ใบ — 3 คอลัมน์พอดีจอ 375px */}
       <div className="grid grid-cols-3 gap-2.5 px-4 pt-4 sm:gap-4 sm:px-6 sm:pt-5">
