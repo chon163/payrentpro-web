@@ -6,7 +6,7 @@ import { supabase } from './supabaseClient'
 import { BANKS, bankName } from './payment'
 import AuthPage from './AuthPage'
 import { createPromptpayQR } from './utils/promptpay'
-import { createReceiptPdf } from './utils/receipt'
+import { createReceiptPdf, createReceiptPng, receiptItemsFromTx } from './utils/receipt'
 import { THAI_MONTHS, currentPeriod, formatPeriod } from './utils/period'
 import { displayAssetName } from './utils/assetName'
 import { DEMO_ACCOUNT_EMAIL } from './utils/demoAccount'
@@ -1239,12 +1239,14 @@ function Sidebar({ businessName, membership }) {
 }
 
 // แถบนำทางล่างสำหรับมือถือ/แท็บเล็ต — สูง 56px (h-14) ซ่อนที่ lg ขึ้นไปเพราะมี Sidebar แล้ว
-// เหลือ 3 ปุ่มหลัก (หน้าแรก/สินทรัพย์/ตั้งค่า) — "สมาชิก" ไปอยู่ในเมนูโปรไฟล์ที่ header
-// และมีการ์ดลิงก์บนสุดของหน้าตั้งค่ามือถือกันคนหาไม่เจอ / founder ได้ปุ่มที่ 4 (ผู้ดูแล)
+// ต้องมีทุกหน้าที่ sidebar มี เพราะ Sidebar เป็น lg:flex — ต่ำกว่า 1024px มีทางเข้าทางนี้ทางเดียว
+// (กำไรสุทธิ/ประกาศฯ เคยตกหล่นจนมือถือกับแท็บเล็ตเข้า 2 หน้านั้นไม่ได้เลย)
+// "ตั้งค่า" ไม่ต้องมีที่นี่ — ProfileMenu ที่ header มี "ตั้งค่าบัญชี" อยู่แล้วและไม่ใช่ lg:hidden
 const BOTTOM_NAV_ITEMS = [
   { to: '/', label: 'หน้าแรก', icon: 'home' },
   { to: '/assets', label: 'สินทรัพย์', icon: 'building' },
-  { to: '/settings', label: 'ตั้งค่า', icon: 'cog' },
+  { to: '/finance', label: 'กำไรสุทธิ', icon: 'chart' },
+  { to: '/comms', label: 'ประกาศ', icon: 'megaphone' },
   { to: '/admin', label: 'ผู้ดูแล', icon: 'shield', founderOnly: true },
 ]
 
@@ -3651,13 +3653,15 @@ function LineBindingModal({ code, custName, onClose }) {
   )
 }
 
-function MeterBillModal({ rental, onClose, onConfirm }) {
+function MeterBillModal({ rental, onClose, onConfirm, onResendBill, onResendReceipt }) {
   const [waterCurrent, setWaterCurrent] = useState('')
   const [elecCurrent, setElecCurrent] = useState('')
   const [sendToLine, setSendToLine] = useState(true)
   const [saving, setSaving] = useState(false)
   const [period, setPeriod] = useState(currentPeriod())
-  const [existingPeriods, setExistingPeriods] = useState([])
+  const [existingBills, setExistingBills] = useState([])
+  const [resending, setResending] = useState(false)
+  const [resendingReceipt, setResendingReceipt] = useState(false)
 
   useEffect(() => {
     if (rental) {
@@ -3665,24 +3669,27 @@ function MeterBillModal({ rental, onClose, onConfirm }) {
       setElecCurrent('')
       setSendToLine(true)
       setSaving(false)
+      setResending(false)
+      setResendingReceipt(false)
       setPeriod(currentPeriod())
     }
   }, [rental])
 
-  // งวดที่ห้องนี้มีบิลแล้ว (กันสร้างซ้ำ ชน unique rental+period)
+  // บิลที่ห้องนี้มีอยู่แล้ว (กันสร้างซ้ำ ชน unique rental+period)
+  // เก็บ id/สถานะ/ยอด ด้วยเพื่อให้ส่งบิลเดิมหรือใบเสร็จซ้ำได้เมื่อลูกค้าไม่ได้รับ/ไลน์หาย
   useEffect(() => {
     const rentalId = rental?.id
     if (!rentalId) {
-      setExistingPeriods([])
+      setExistingBills([])
       return
     }
     let active = true
     supabase
       .from('transactions')
-      .select('period')
+      .select('id, period, status, total_amount, base_amount, paid_amount, water_units, water_cost, elec_units, elec_cost, extra_charges, penalty_days, penalty_amount')
       .eq('rental_id', rentalId)
       .then(({ data }) => {
-        if (active) setExistingPeriods((Array.isArray(data) ? data : []).map((t) => t.period).filter(Boolean))
+        if (active) setExistingBills((Array.isArray(data) ? data : []).filter((t) => t.period))
       })
       .catch(() => {})
     return () => { active = false }
@@ -3722,8 +3729,12 @@ function MeterBillModal({ rental, onClose, onConfirm }) {
   })()
   const periodLabel = periodOptions.find((o) => o.value === period)?.label || formatPeriod(period)
   // จับคู่ทั้งงวด ISO ใหม่และงวดเดิมที่เคยบันทึกฟอร์แมตไทย
-  const periodHasBill = existingPeriods.includes(period) || existingPeriods.includes(periodLabel)
+  const existingPeriods = existingBills.map((t) => t.period)
+  const billForPeriod = existingBills.find((t) => t.period === period || t.period === periodLabel)
+  const periodHasBill = Boolean(billForPeriod)
   const optionHasBill = (o) => existingPeriods.includes(o.value) || existingPeriods.includes(o.label)
+  // ใบเสร็จออกได้เฉพาะบิลที่ยืนยันการชำระแล้ว
+  const billIsPaid = String(billForPeriod?.status ?? '').toLowerCase() === 'paid'
 
   const handleConfirm = async () => {
     setSaving(true)
@@ -3731,6 +3742,37 @@ function MeterBillModal({ rental, onClose, onConfirm }) {
       await onConfirm(rental, { waterCurrent, elecCurrent }, sendToLine, period)
     } finally {
       setSaving(false)
+    }
+  }
+
+  // ส่งบิลเดิมของงวดนี้เข้าไลน์อีกครั้ง (ลูกค้าไม่ได้รับ / ไลน์หาย) — ไม่สร้างบิลใหม่
+  const handleResend = async () => {
+    if (!billForPeriod?.id) return
+    setResending(true)
+    try {
+      await onResendBill?.(billForPeriod.id)
+    } finally {
+      setResending(false)
+    }
+  }
+
+  // ออกใบเสร็จของบิลงวดนี้ส่งเข้าไลน์อีกครั้ง (เฉพาะบิลที่ชำระแล้ว)
+  const handleResendReceipt = async () => {
+    if (!billForPeriod?.id) return
+    setResendingReceipt(true)
+    try {
+      const total = Number(billForPeriod.total_amount || billForPeriod.base_amount || 0)
+      await onResendReceipt?.({
+        txId: billForPeriod.id,
+        custName: rental.cust_name,
+        itemDetails: displayAssetName(rental),
+        period: billForPeriod.period,
+        totalAmount: total,
+        paidAmount: Number(billForPeriod.paid_amount) > 0 ? Number(billForPeriod.paid_amount) : total,
+        items: receiptItemsFromTx(billForPeriod),
+      })
+    } finally {
+      setResendingReceipt(false)
     }
   }
 
@@ -3766,9 +3808,50 @@ function MeterBillModal({ rental, onClose, onConfirm }) {
               ))}
             </select>
             {periodHasBill ? (
-              <p className="mt-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-sm font-medium text-amber-700 dark:text-amber-300">
-                ⚠️ งวดนี้มีบิลอยู่แล้ว — ไม่สามารถสร้างบิลซ้ำได้
-              </p>
+              <div className="mt-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 px-3 py-2.5">
+                <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                  ⚠️ งวดนี้มีบิลอยู่แล้ว — ไม่สามารถสร้างบิลซ้ำได้
+                </p>
+                <p className="mt-1 text-xs text-amber-600/90 dark:text-amber-400/80">
+                  {billIsPaid
+                    ? 'บิลนี้ชำระแล้ว — ถ้าลูกค้าไม่ได้รับใบเสร็จ หรือข้อความในไลน์หาย ส่งอีกครั้งได้ (ไม่สร้างบิลใหม่)'
+                    : 'ถ้าลูกค้าไม่ได้รับบิล หรือข้อความในไลน์หาย ส่งบิลเดิมอีกครั้งได้ (ไม่สร้างบิลใหม่)'}
+                </p>
+                <div className="mt-2.5 flex flex-col gap-2 lg:flex-row lg:items-center">
+                  <button
+                    type="button"
+                    onClick={handleResend}
+                    disabled={resending || resendingReceipt}
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-60 lg:min-h-0 lg:w-auto lg:py-2"
+                  >
+                    {resending ? (
+                      <>
+                        <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" /></svg>
+                        กำลังส่ง...
+                      </>
+                    ) : (
+                      <>📤 ส่งบิลนี้เข้าไลน์อีกครั้ง</>
+                    )}
+                  </button>
+                  {billIsPaid && (
+                    <button
+                      type="button"
+                      onClick={handleResendReceipt}
+                      disabled={resending || resendingReceipt}
+                      className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60 lg:min-h-0 lg:w-auto lg:py-2"
+                    >
+                      {resendingReceipt ? (
+                        <>
+                          <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" /></svg>
+                          กำลังส่ง...
+                        </>
+                      ) : (
+                        <>🧾 ส่งใบเสร็จอีกครั้ง</>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
             ) : existingPeriods.length > 0 ? (
               <p className="mt-1.5 text-xs text-gray-400">งวดที่มีบิลแล้ว: {existingPeriods.slice(-6).map(formatPeriod).join(', ')}</p>
             ) : null}
@@ -5414,11 +5497,16 @@ function Dashboard({ userEmail = '' }) {
     }
   }
 
-  // ออกใบเสร็จ PDF → อัปโหลด bucket receipts → ส่งรูปเข้ากลุ่ม LINE
-  // failToast: ข้อความ toast เมื่อขั้นตอนใด ๆ พัง (คนละ flow ใช้คนละข้อความ)
-  const issueReceiptAndSend = async ({ txId, custName, itemDetails, period, totalAmount, paidAmount, paidAt, failToast }) => {
+  // ออกใบเสร็จ → อัปโหลด bucket receipts → ส่งรูปเข้ากลุ่ม LINE
+  // failPrefix: คำนำหน้าเมื่อพัง (คนละ flow ใช้คนละคำ) — ต่อท้ายด้วยสาเหตุจริงเสมอ
+  // แยกข้อความตามขั้นที่พัง — เดิมขึ้น "ส่งใบเสร็จไม่สำเร็จ" เหมือนกันหมดจนหาสาเหตุไม่ได้
+  //
+  // อัปทั้ง PNG และ PDF: LINE รับ originalContentUrl เป็น JPEG/PNG เท่านั้น
+  // (ส่ง .pdf ไปจะเห็นแต่ข้อความ รูปไม่ขึ้น) ส่วน PDF เก็บไว้เป็นไฟล์สำหรับพิมพ์
+  const issueReceiptAndSend = async ({ txId, custName, itemDetails, period, totalAmount, paidAmount, paidAt, items, failPrefix }) => {
+    let step = 'สร้างไฟล์ใบเสร็จ'
     try {
-      const blob = createReceiptPdf({
+      const receiptData = {
         custName,
         itemDetails,
         period,
@@ -5426,16 +5514,32 @@ function Dashboard({ userEmail = '' }) {
         paidAmount,
         txId,
         paidAt,
+        items,
         businessName: paymentInfo.business_name,
         ownerName: paymentInfo.owner_name,
         address: paymentInfo.address,
-      })
-      const path = `${txId}.pdf`
-      const { error: uploadError } = await supabase.storage
+      }
+      const pngBlob = await createReceiptPng(receiptData)
+
+      step = 'อัปโหลดใบเสร็จ'
+      const pngPath = `${txId}.png`
+      const { error: pngError } = await supabase.storage
         .from('receipts')
-        .upload(path, blob, { contentType: 'application/pdf', upsert: true })
-      if (uploadError) throw uploadError
-      const { data: publicData } = supabase.storage.from('receipts').getPublicUrl(path)
+        .upload(pngPath, pngBlob, { contentType: 'image/png', upsert: true })
+      if (pngError) throw pngError
+
+      // PDF เป็นของแถมสำหรับเก็บ/พิมพ์ — พังก็ไม่ควรขวางการส่งรูปเข้าไลน์
+      try {
+        const pdfBlob = createReceiptPdf(receiptData)
+        await supabase.storage
+          .from('receipts')
+          .upload(`${txId}.pdf`, pdfBlob, { contentType: 'application/pdf', upsert: true })
+      } catch (pdfErr) {
+        console.error('Receipt PDF upload failed (ไม่กระทบการส่งเข้าไลน์):', pdfErr)
+      }
+
+      step = 'ส่งเข้าไลน์'
+      const { data: publicData } = supabase.storage.from('receipts').getPublicUrl(pngPath)
       const { data, error } = await supabase.rpc('send_receipt_to_line', { p_tx_id: txId, p_public_url: publicData?.publicUrl })
       if (error) throw error
       if (data?.ok === false && data?.error === 'no_group') {
@@ -5445,8 +5549,15 @@ function Dashboard({ userEmail = '' }) {
       if (data?.ok === false) throw new Error(data?.error || 'send_receipt_to_line failed')
       setToast({ type: 'success', message: 'ส่งใบเสร็จเข้า LINE แล้ว' })
     } catch (err) {
-      console.error('Issue receipt failed:', err)
-      setToast(failToast || { type: 'error', message: 'ส่งใบเสร็จไม่สำเร็จ' })
+      console.error(`Issue receipt failed (${step}):`, err)
+      const raw = String(err?.message || '')
+      // สิทธิ์ storage หาย (policy ยังไม่ได้ apply) — บอกตรง ๆ ว่าต้องแก้ที่ฐานข้อมูล
+      const reason = /row-level security|Unauthorized|AccessDenied/i.test(raw)
+        ? 'ยังไม่ได้เปิดสิทธิ์อัปโหลดใบเสร็จในฐานข้อมูล (storage policy)'
+        : raw || 'ไม่ทราบสาเหตุ'
+      setToast(failPrefix
+        ? { type: 'warning', message: `${failPrefix} (${step}: ${reason})` }
+        : { type: 'error', message: `ออกใบเสร็จไม่สำเร็จ (${step}): ${reason}` })
     }
   }
 
@@ -5466,7 +5577,8 @@ function Dashboard({ userEmail = '' }) {
       totalAmount: total,
       paidAmount: Number(item.paid_amount) > 0 ? Number(item.paid_amount) : total,
       paidAt: new Date().toISOString(),
-      failToast: { type: 'warning', message: 'อนุมัติสำเร็จ แต่ส่งใบเสร็จไม่ได้' },
+      items: receiptItemsFromTx(item),
+      failPrefix: 'อนุมัติสำเร็จ แต่ส่งใบเสร็จไม่ได้',
     })
   }
 
@@ -6182,7 +6294,9 @@ function Dashboard({ userEmail = '' }) {
           </div>
         )}
 
-        <main className="mx-auto max-w-7xl px-4 py-6 pb-24 sm:px-6 sm:py-8 lg:px-8 lg:pb-8">
+        {/* pb-24 เผื่อที่ให้ BottomNav (สูง ~57px) — ต้องย้ำที่ sm ด้วย เพราะ sm:py-8
+            เขียนทับ padding-bottom ทั้งคู่ ทำให้แท็บเล็ตเหลือ 32px แล้วแถบล่างทับเนื้อหา */}
+        <main className="mx-auto max-w-7xl px-4 py-6 pb-24 sm:px-6 sm:py-8 sm:pb-24 lg:px-8 lg:pb-8">
           {isAudit ? (
             <AuditLogPage />
           ) : isActivity ? (
@@ -6355,6 +6469,15 @@ function Dashboard({ userEmail = '' }) {
             totalAmount: invoice.total,
             paidAmount: invoice.total,
             paidAt: new Date().toISOString(),
+            // invoice ใช้ชื่อคีย์แบบ camelCase — แปลงให้ตรงกับคอลัมน์ที่ helper อ่าน
+            items: receiptItemsFromTx({
+              base_amount: invoice.baseAmount,
+              water_units: invoice.waterUnits,
+              water_cost: invoice.waterCost,
+              elec_units: invoice.elecUnits,
+              elec_cost: invoice.elecCost,
+              extra_charges: invoice.extraCharges,
+            }),
           })
         }}
         onEditAmount={handleEditBillAmount}
@@ -6382,6 +6505,19 @@ function Dashboard({ userEmail = '' }) {
         rental={billRental}
         onClose={() => setBillRental(null)}
         onConfirm={handleCreateBill}
+        onResendBill={handleSendOverdueBill}
+        onResendReceipt={async ({ txId, custName, itemDetails, period, totalAmount, paidAmount, items }) => {
+          await issueReceiptAndSend({
+            txId,
+            custName,
+            itemDetails,
+            period: period ? formatPeriod(period) : '',
+            totalAmount,
+            paidAmount,
+            paidAt: new Date().toISOString(),
+            items,
+          })
+        }}
       />
 
       <RenewModal
