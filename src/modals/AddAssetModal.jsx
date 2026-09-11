@@ -45,9 +45,16 @@ export function AddAssetModal({ open, onClose, onCreated, onToast }) {
   const isProperty = normalizeBizType(form.biz_type) === 'property'
   const typeMeta = bizTypeMeta(form.biz_type)
 
-  // กดเลือกการ์ดประเภท → เติมฟอร์ม mock ให้ตรงประเภท (พฤติกรรมเดิม — ทดสอบง่าย)
+  // กดเลือกการ์ดประเภท → เปิดฟอร์มเปล่า ให้พิมพ์ทับ placeholder ได้เลย
+  // (เดิมเติม mock ลงทุกช่องเป็นค่าจริง ผู้ใช้ต้องลบทิ้งก่อนกรอกทุกครั้ง —
+  //  ย้ายไปเป็นปุ่ม "เติมข้อมูลตัวอย่าง" ตรงฟุตเตอร์ เหมือน AddTenantModal)
   const selectBizType = (value) => {
-    setForm(buildMockAssetForm(value))
+    setForm({ ...ASSET_FORM_EMPTY, biz_type: value })
+    setError(null)
+  }
+
+  const fillMock = () => {
+    setForm(buildMockAssetForm(normalizeBizType(form.biz_type)))
     setError(null)
   }
 
@@ -163,7 +170,7 @@ export function AddAssetModal({ open, onClose, onCreated, onToast }) {
                         <label htmlFor="amount" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
                           ค่าเช่า / ค่างวด <span className="text-rose-500 dark:text-rose-400">*</span>
                         </label>
-                        <input id="amount" type="number" min="0" step="0.01" value={form.amount} onChange={updateField('amount')} placeholder="0.00" required className={MODAL_INPUT_CLS} />
+                        <input id="amount" type="number" min="0" step="0.01" value={form.amount} onChange={updateField('amount')} placeholder={typeMeta.amountPlaceholder} required className={MODAL_INPUT_CLS} />
                       </div>
                       <div>
                         <label htmlFor="cycle" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -195,7 +202,7 @@ export function AddAssetModal({ open, onClose, onCreated, onToast }) {
                         step="0.01"
                         value={form.deposit_amount}
                         onChange={updateField('deposit_amount')}
-                        placeholder="0.00"
+                        placeholder={typeMeta.amountPlaceholder}
                         className={MODAL_INPUT_CLS}
                       />
                       <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">ค่าเริ่มต้นของห้องนี้ — ตอนเพิ่มผู้เช่าจะปรับเป็นยอดที่เก็บจริงได้</p>
@@ -210,7 +217,7 @@ export function AddAssetModal({ open, onClose, onCreated, onToast }) {
                     {form.penalty_enabled && (
                       <div>
                         <label htmlFor="penalty_per_day" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">ค่าปรับต่อวัน (บาท)</label>
-                        <input id="penalty_per_day" type="number" min="0" step="0.01" value={form.penalty_per_day} onChange={updateField('penalty_per_day')} placeholder="0.00" className={MODAL_INPUT_CLS} />
+                        <input id="penalty_per_day" type="number" min="0" step="0.01" value={form.penalty_per_day} onChange={updateField('penalty_per_day')} placeholder="เช่น 50" className={MODAL_INPUT_CLS} />
                       </div>
                     )}
 
@@ -236,22 +243,22 @@ export function AddAssetModal({ open, onClose, onCreated, onToast }) {
                           <div className="grid grid-cols-2 gap-4">
                             <div>
                               <label htmlFor="last_water_meter" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">เลขมิเตอร์น้ำเริ่มต้น</label>
-                              <input id="last_water_meter" type="number" min="0" step="1" value={form.last_water_meter} onChange={updateField('last_water_meter')} placeholder="0" className={MODAL_INPUT_CLS} />
+                              <input id="last_water_meter" type="number" min="0" step="1" value={form.last_water_meter} onChange={updateField('last_water_meter')} placeholder="เช่น 120" className={MODAL_INPUT_CLS} />
                             </div>
                             <div>
                               <label htmlFor="water_rate" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">ค่าน้ำ/หน่วย (บาท)</label>
-                              <input id="water_rate" type="number" min="0" step="0.01" value={form.water_rate} onChange={updateField('water_rate')} placeholder="0.00" className={MODAL_INPUT_CLS} />
+                              <input id="water_rate" type="number" min="0" step="0.01" value={form.water_rate} onChange={updateField('water_rate')} placeholder="เช่น 18" className={MODAL_INPUT_CLS} />
                             </div>
                           </div>
 
                           <div className="grid grid-cols-2 gap-4">
                             <div>
                               <label htmlFor="last_elec_meter" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">เลขมิเตอร์ไฟเริ่มต้น</label>
-                              <input id="last_elec_meter" type="number" min="0" step="1" value={form.last_elec_meter} onChange={updateField('last_elec_meter')} placeholder="0" className={MODAL_INPUT_CLS} />
+                              <input id="last_elec_meter" type="number" min="0" step="1" value={form.last_elec_meter} onChange={updateField('last_elec_meter')} placeholder="เช่น 2500" className={MODAL_INPUT_CLS} />
                             </div>
                             <div>
                               <label htmlFor="elec_rate" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">ค่าไฟ/หน่วย (บาท)</label>
-                              <input id="elec_rate" type="number" min="0" step="0.01" value={form.elec_rate} onChange={updateField('elec_rate')} placeholder="0.00" className={MODAL_INPUT_CLS} />
+                              <input id="elec_rate" type="number" min="0" step="0.01" value={form.elec_rate} onChange={updateField('elec_rate')} placeholder="เช่น 5" className={MODAL_INPUT_CLS} />
                             </div>
                           </div>
                         </>
@@ -263,32 +270,46 @@ export function AddAssetModal({ open, onClose, onCreated, onToast }) {
             )}
           </div>
 
-          <div className="flex flex-col-reverse gap-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-6 py-4 sm:flex-row sm:items-center sm:justify-end">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={saving}
-              className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-4 text-base font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm"
-            >
-              ยกเลิก
-            </button>
-            <button
-              type="submit"
-              disabled={saving || !form.biz_type}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-4 text-base font-semibold text-white shadow-sm transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm"
-            >
-              {saving ? (
-                <>
-                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
-                  </svg>
-                  กำลังบันทึก...
-                </>
-              ) : (
-                'บันทึกข้อมูล'
-              )}
-            </button>
+          <div className="flex flex-col-reverse gap-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+            {form.biz_type ? (
+              <button
+                type="button"
+                onClick={fillMock}
+                disabled={saving}
+                className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-60"
+              >
+                เติมข้อมูลตัวอย่าง
+              </button>
+            ) : (
+              <span className="hidden sm:block" />
+            )}
+            <div className="flex flex-col-reverse gap-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={saving}
+                className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-4 text-base font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="submit"
+                disabled={saving || !form.biz_type}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-4 text-base font-semibold text-white shadow-sm transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm"
+              >
+                {saving ? (
+                  <>
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
+                    </svg>
+                    กำลังบันทึก...
+                  </>
+                ) : (
+                  'บันทึกข้อมูล'
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>

@@ -1140,6 +1140,9 @@ function membershipPrice(planType, months) {
 // badge สถานะคำสั่งซื้อ/ต่ออายุในประวัติการส่งสลิป
 const MEMBERSHIP_PAYMENT_STATUS = {
   pending_review: { label: 'รอตรวจสอบ', cls: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 ring-amber-200 dark:ring-amber-800/70', dot: 'bg-amber-500' },
+  // สถานะชั่วคราวระหว่าง EasySlip ยืนยันยอดแล้วแต่ RPC ต่ออายุยังไม่จบ
+  // (ปกติผู้ใช้จะไม่ทันเห็น เพราะกลายเป็น approved ในทรานแซกชันถัดไป)
+  auto_verified: { label: 'ตรวจอัตโนมัติผ่าน', cls: 'bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300 ring-teal-200 dark:ring-teal-800/70', dot: 'bg-teal-500' },
   approved: { label: 'อนุมัติแล้ว', cls: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-800/70', dot: 'bg-emerald-500' },
   rejected: { label: 'ไม่ผ่านการตรวจสอบ', cls: 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-800/70', dot: 'bg-rose-500' },
 }
@@ -2098,6 +2101,54 @@ function SettingsPage({ onSaved, membership }) {
 // - ประวัติการส่งสลิปของตัวเอง
 // ============================================================
 
+// อ่านไฟล์รูป → base64 (ส่งให้ Edge Function verify-slip)
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(reader.error || new Error('อ่านไฟล์รูปไม่สำเร็จ'))
+    reader.readAsDataURL(file)
+  })
+}
+
+// เรียก verify-slip ตรวจสลิปค่าสมาชิกอัตโนมัติ
+// คืน verdict เสมอ — ไม่ throw เพราะแถว pending_review ถูกสร้างไว้แล้ว
+// ต่อให้ตรวจอัตโนมัติล้มเหลว ก็ยังรอ founder อนุมัติมือได้ตามเดิม
+async function verifyMembershipSlip(slipFile, refId) {
+  try {
+    const imageBase64 = await fileToBase64(slipFile)
+    const { data, error } = await supabase.functions.invoke('verify-slip', {
+      body: { image_base64: imageBase64, kind: 'membership', ref_id: refId },
+    })
+    if (error) throw error
+    return data || { ok: false, error: 'read_failed' }
+  } catch (err) {
+    console.error('verify-slip failed:', err)
+    return { ok: false, error: 'read_failed' }
+  }
+}
+
+// แปลง verdict จาก verify-slip → toast ที่ผู้ใช้อ่านรู้เรื่อง
+function membershipVerifyToast(verdict) {
+  if (verdict?.ok && verdict?.approved) {
+    return { type: 'success', message: 'ตรวจสอบอัตโนมัติสำเร็จ — ต่ออายุแล้ว 🎉' }
+  }
+  // อ่านสลิปได้แต่ยอดไม่ตรงแพ็ก → ให้ founder ตัดสิน
+  if (verdict?.ok && verdict?.matched === false) {
+    return { type: 'warning', message: `${verdict.note || 'ยอดสลิปไม่ตรงกับยอดแพ็ก'} — ส่งให้ทีมงานตรวจสอบแล้ว` }
+  }
+  // ยอดตรงแต่ต่ออายุอัตโนมัติไม่สำเร็จ (RPC พลาด/แถวถูกแก้ไปแล้ว)
+  if (verdict?.ok) {
+    return { type: 'warning', message: 'ตรวจสลิปผ่านแล้ว แต่ต่ออายุอัตโนมัติไม่สำเร็จ — รอทีมงานยืนยัน' }
+  }
+  const reasons = {
+    duplicate: 'สลิปนี้ถูกใช้ไปแล้ว — ส่งให้ทีมงานตรวจสอบแล้ว',
+    quota: 'ระบบตรวจสลิปอัตโนมัติไม่พร้อมใช้งาน — ส่งให้ทีมงานตรวจสอบแล้ว',
+    read_failed: 'อ่านสลิปอัตโนมัติไม่ได้ — ส่งให้ทีมงานตรวจสอบแล้ว',
+  }
+  return { type: 'warning', message: reasons[verdict?.error] || 'ส่งสลิปเรียบร้อย — รอตรวจสอบ' }
+}
+
 // modal สั่งซื้อ: QR พร้อมเพย์ (เบอร์เจ้าของระบบ) + แนบรูปสลิปให้ทีมงานตรวจ
 function MembershipOrderModal({ open, plan, months, amount, systemPromptpay, onClose, onToast, onSubmitted }) {
   const [qrDataUrl, setQrDataUrl] = useState(null)
@@ -2169,6 +2220,8 @@ function MembershipOrderModal({ open, plan, months, amount, systemPromptpay, onC
       if (!adminRow?.id) throw new Error('ไม่พบข้อมูลบัญชีแอดมินของคุณ')
 
       // 1) บันทึกคำสั่งซื้อเป็นรอตรวจสอบ
+      //    (ต้อง insert ก่อนเรียก verify-slip เพราะ ref_id = id ของแถวนี้
+      //     และ Edge Function ใช้แถวนี้ตรวจสิทธิ์ว่าเป็นเจ้าของจริง)
       const { data: payment, error: insertError } = await supabase
         .from('membership_payments')
         .insert([{ admin_id: adminRow.id, plan_type: plan.type, duration_months: months, amount, status: 'pending_review' }])
@@ -2189,7 +2242,9 @@ function MembershipOrderModal({ open, plan, months, amount, systemPromptpay, onC
         .eq('id', payment.id)
       if (updateError) throw updateError
 
-      onToast?.({ type: 'success', message: 'ส่งสลิปเรียบร้อย — รอตรวจสอบ' })
+      // 3) ตรวจสลิปอัตโนมัติด้วย EasySlip (ล้มเหลวก็ยังมีแถวรออนุมัติมืออยู่)
+      const verdict = await verifyMembershipSlip(slipFile, payment.id)
+      onToast?.(membershipVerifyToast(verdict))
       onSubmitted?.()
       resetSlip()
       onClose()
@@ -2942,6 +2997,14 @@ function AdminPage({ onToast }) {
                   </div>
 
                   <p className="text-2xl font-bold tabular-nums tracking-tight text-amber-600 dark:text-amber-400">{formatCurrency(item.amount)}</p>
+
+                  {/* หมายเหตุจากการตรวจอัตโนมัติ (เช่น ยอดสลิปไม่ตรงกับยอดแพ็ก) */}
+                  {item.note ? (
+                    <p className="flex items-start gap-2 rounded-xl bg-amber-50 dark:bg-amber-900/30 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+                      <Icon name="warning" className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span className="min-w-0">{item.note}</span>
+                    </p>
+                  ) : null}
 
                   {item.slip_image_url ? (
                     <button

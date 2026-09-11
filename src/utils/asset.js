@@ -22,6 +22,7 @@ export const BIZ_TYPES = [
     placeholder: 'เช่น 101',
     subLabel: 'ชื่อโครงการ/หมู่บ้าน',
     subPlaceholder: 'เช่น บ้านสวย, คอนโด XYZ',
+    amountPlaceholder: 'เช่น 3,500',
   },
   {
     value: 'vehicle',
@@ -33,6 +34,7 @@ export const BIZ_TYPES = [
     placeholder: 'กก 1234',
     subLabel: 'ยี่ห้อรถ',
     subPlaceholder: 'เช่น Fortuner, Civic',
+    amountPlaceholder: 'เช่น 1,200',
   },
   {
     value: 'other',
@@ -42,6 +44,7 @@ export const BIZ_TYPES = [
     examples: 'เครื่องจักร/กล้อง/บริการรายเดือน',
     itemLabel: 'รายการ',
     placeholder: 'เช่น กล้อง Sony A7, เครื่องจักร CNC-01',
+    amountPlaceholder: 'เช่น 800',
   },
 ]
 
