@@ -20,8 +20,9 @@ for (const size of SIZES) {
     const room = [...main.querySelectorAll('.bg-gradient-to-br.rounded-2xl, .rounded-2xl.bg-gradient-to-br')]
     const cols = (el) => (el ? getComputedStyle(el).gridTemplateColumns.split(' ').length : 0)
     const panels = [...main.querySelectorAll('section h3')].map((h) => txt(h))
-    const quickRows = [...main.querySelectorAll('button')].filter((b) => /รอตรวจสลิป|งานซ่อมค้าง|ค้างชำระเกินกำหนด|สัญญาใกล้หมดอายุ/.test(txt(b)))
-    const anchors = ['dash-lease', 'dash-pending', 'dash-repair', 'dash-urgent'].filter((id) => document.getElementById(id))
+    // แถวในการ์ด "สรุปด่วน" — เป็น <a> (NavLink) ตั้งแต่แยกงานค้างออกเป็นหน้าของตัวเอง
+    // (เดิมเป็น <button> ที่ scrollIntoView หา anchor dash-* ในหน้าเดียวกัน)
+    const quickRows = [...main.querySelectorAll('a[href]')].filter((a) => /รอตรวจสลิป|งานซ่อมค้าง|ค้างชำระเกินกำหนด|สัญญาใกล้หมดอายุ/.test(txt(a)))
     return {
       heading: !!heading,
       subline: txt(heading?.parentElement?.querySelector('p')).slice(0, 80),
@@ -33,7 +34,7 @@ for (const size of SIZES) {
       roomLabels: room.map((el) => txt(el.querySelector('p'))),
       panels,
       quickRows: quickRows.length,
-      anchors,
+      quickTargets: quickRows.map((a) => new URL(a.href).pathname),
       recentPaymentRows: document.querySelectorAll('section li').length,
     }
   })
@@ -42,7 +43,7 @@ for (const size of SIZES) {
   console.log(`หัวเรื่อง "ภาพรวมระบบ": ${r.heading ? '✓' : '✗'}  | subline: ${r.subline}`)
   console.log(`KPI: ${r.kpiCount} ใบ / ${r.kpiCols} คอลัมน์  ${JSON.stringify(r.kpiLabels)}`)
   console.log(`สถานะห้อง: ${r.roomCount} ใบ / ${r.roomCols} คอลัมน์  ${JSON.stringify(r.roomLabels)}`)
-  console.log(`สรุปด่วน: ${r.quickRows} แถว | anchors: ${r.anchors.join(',')}`)
+  console.log(`สรุปด่วน: ${r.quickRows} แถว → ${r.quickTargets.join(', ')}`)
   console.log(`การ์ด: ${JSON.stringify(r.panels)}`)
   await ctx.close()
 }

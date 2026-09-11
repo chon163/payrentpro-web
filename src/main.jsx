@@ -44,6 +44,11 @@ createRoot(document.getElementById('root')).render(
         <Route path="/" element={<PublicHomeRoute />} />
         <Route path="/login" element={<LoginRoute />} />
         <Route path="/assets" element={<App />} />
+        {/* 4 หน้างานค้าง — แยกออกจากแดชบอร์ดเพื่อให้หน้าภาพรวมไม่รก (หน้าละเรื่อง) */}
+        <Route path="/pending" element={<App />} />
+        <Route path="/overdue" element={<App />} />
+        <Route path="/repairs" element={<App />} />
+        <Route path="/leases" element={<App />} />
         <Route path="/finance" element={<App />} />
         <Route path="/comms" element={<App />} />
         <Route path="/settings" element={<App />} />

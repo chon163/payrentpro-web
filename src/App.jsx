@@ -392,10 +392,9 @@ function QuickSummaryCard({ items }) {
         {items.map((it) => {
           const t = QUICK_TONES[it.tone] || QUICK_TONES.sky
           return (
-            <button
+            <NavLink
               key={it.label}
-              type="button"
-              onClick={it.onClick}
+              to={it.to}
               className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors ${t.row}`}
             >
               <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${t.icon}`}>
@@ -407,7 +406,7 @@ function QuickSummaryCard({ items }) {
               </span>
               <span className={`shrink-0 text-lg font-bold tabular-nums ${t.value}`}>{it.value}</span>
               <span aria-hidden="true" className="shrink-0 text-gray-400 dark:text-gray-500">›</span>
-            </button>
+            </NavLink>
           )
         })}
       </div>
@@ -421,6 +420,20 @@ function PanelEmpty({ children }) {
     <div className="flex flex-1 items-center justify-center px-4 py-10">
       <p className="text-sm text-gray-400 dark:text-gray-500">{children}</p>
     </div>
+  )
+}
+
+// สถานะว่างของหน้างานค้าง — เดิมส่วนพวกนี้ return null เมื่อไม่มีรายการ (เพราะซ้อนอยู่ในแดชบอร์ด)
+// พอแยกเป็นหน้าของตัวเองแล้ว หน้าว่างเปล่าจะดูเหมือนโหลดไม่ขึ้น จึงต้องบอกว่า "ไม่มีงานค้าง"
+function TaskEmptyCard({ icon = 'check', title, hint }) {
+  return (
+    <section className="rounded-2xl border border-gray-200 bg-white px-6 py-14 text-center shadow-sm dark:border-gray-800 dark:bg-gray-900">
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400">
+        <Icon name={icon} className="h-7 w-7" />
+      </div>
+      <h3 className="mt-4 text-base font-bold text-gray-900 dark:text-gray-100">{title}</h3>
+      {hint ? <p className="mx-auto mt-1.5 max-w-md text-sm text-gray-500 dark:text-gray-400">{hint}</p> : null}
+    </section>
   )
 }
 
@@ -547,10 +560,58 @@ function MonthlyBreakdownModal({ monthly, onClose }) {
 const NAV_ITEMS = [
   { to: '/', label: 'แดชบอร์ด', icon: 'home' },
   { to: '/assets', label: 'รายการสินทรัพย์', icon: 'building' },
+  { to: '/pending', label: 'งานค้าง', icon: 'clock', group: 'tasks' },
   { to: '/finance', label: 'กำไรสุทธิ', icon: 'chart' },
   { to: '/comms', label: 'ประกาศและเอกสาร', icon: 'megaphone' },
   { to: '/admin', label: '🛡️ ผู้ดูแล', icon: 'shield', founderOnly: true },
 ]
+
+// 4 หน้างานค้าง — เมนู "งานค้าง" ชี้มาที่ /pending แล้วสลับกันเองด้วยแถบแท็บนี้
+// (ไม่ยัดทั้ง 4 ลง sidebar/bottom-nav เพราะแถบล่างที่ 375px จะเหลือปุ่มละ ~53px ป้ายตัดทิ้ง)
+const TASK_PAGES = [
+  { to: '/pending', label: 'รอตรวจสอบสลิป', short: 'ตรวจสลิป', icon: 'check', key: 'pending', subtitle: 'ผู้เช่าแจ้งชำระแล้ว ตรวจหลักฐานก่อนยืนยัน' },
+  { to: '/overdue', label: 'ต้องทวงด่วน', short: 'ทวงหนี้', icon: 'warning', key: 'overdue', subtitle: 'ค้างชำระเกิน 15 วัน เรียงยอดมากไปน้อย' },
+  { to: '/repairs', label: 'แจ้งซ่อม', short: 'แจ้งซ่อม', icon: 'wrench', key: 'repairs', subtitle: 'คำขอซ่อมจากผู้เช่า และการปิดงาน' },
+  { to: '/leases', label: 'สัญญาใกล้หมดอายุ', short: 'สัญญา', icon: 'calendar', key: 'leases', subtitle: 'ต่อสัญญาหรือแจ้งย้ายออกก่อนหมดอายุ' },
+]
+
+// แถบแท็บสลับ 4 หน้างานค้าง — แพทเทิร์นเดียวกับแท็บในหน้ากำไรสุทธิ (FinancePage)
+// ปุ่มสูง 44px ที่ touch, ป้ายย่อที่จอแคบ, badge ตัวเลขงานค้างของแต่ละหน้า
+function isTaskPath(pathname) {
+  return TASK_PAGES.some((t) => t.to === pathname)
+}
+
+function TaskTabs({ counts }) {
+  return (
+    <div className="mb-5 flex gap-1 overflow-x-auto rounded-xl border border-gray-200 bg-white p-1 dark:border-gray-800 dark:bg-gray-900">
+      {TASK_PAGES.map((t) => {
+        const n = Number(counts?.[t.key]) || 0
+        return (
+          <NavLink
+            key={t.to}
+            to={t.to}
+            className={({ isActive }) =>
+              `inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-sm font-semibold transition-colors sm:gap-2 sm:px-3 ${
+                isActive
+                  ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300'
+                  : 'text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-800'
+              }`
+            }
+          >
+            <Icon name={t.icon} className="h-4 w-4 shrink-0" />
+            <span className="sm:hidden">{t.short}</span>
+            <span className="hidden sm:inline">{t.label}</span>
+            {n > 0 ? (
+              <span className="shrink-0 rounded-full bg-rose-100 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-rose-700 dark:bg-rose-900/50 dark:text-rose-300">
+                {n}
+              </span>
+            ) : null}
+          </NavLink>
+        )
+      })}
+    </div>
+  )
+}
 
 function OccupancyDonut({ occupied, vacant }) {
   const chart = useChartTheme()
@@ -611,8 +672,9 @@ function RevenueBar({ monthly }) {
   )
 }
 
-// แถบสัญญาใกล้หมดอายุบนแดชบอร์ด — ห้องที่ lease_end_date หมดใน 90 วันข้างหน้า (ไม่นับห้องว่าง)
-function LeaseExpiryBand({ rentals, onViewDetails }) {
+// แถบสัญญาใกล้หมดอายุ — ห้องที่ lease_end_date หมดใน 90 วันข้างหน้า (ไม่นับห้องว่าง)
+// ใช้ทั้งหน้า /leases (ส่ง onRenew/onMoveOut มาด้วย) และหน้า /assets
+function LeaseExpiryBand({ rentals, onViewDetails, onRenew, onMoveOut }) {
   const rows = useMemo(() => {
     return (rentals || [])
       .filter((r) => r?.lease_end_date && String(r?.room_status ?? '').toLowerCase() !== 'vacant' && isExpiringSoon(r.lease_end_date, 90))
@@ -648,16 +710,18 @@ function LeaseExpiryBand({ rentals, onViewDetails }) {
           const days = daysUntil(r.lease_end_date)
           const badge = badgeOf(days ?? 90)
           return (
-            <li key={r.id}>
-              <button
-                type="button"
-                onClick={() => onViewDetails?.(r)}
-                className="flex w-full flex-col gap-2 px-5 py-4 text-left transition-colors hover:bg-orange-50/50 dark:hover:bg-orange-900/30 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="min-w-0">
+            <li key={r.id} className="px-5 py-4 transition-colors hover:bg-orange-50/50 dark:hover:bg-orange-900/30">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                {/* กดที่ข้อมูลห้อง = เปิดรายละเอียด — แยกออกจากปุ่มต่อสัญญา/ย้ายออกด้านล่าง
+                    (ปุ่มซ้อนในปุ่มไม่ได้ จึงไม่ห่อทั้งแถวเป็น <button> เหมือนเดิม) */}
+                <button
+                  type="button"
+                  onClick={() => onViewDetails?.(r)}
+                  className="min-w-0 flex-1 rounded-lg text-left"
+                >
                   <p className="truncate text-base font-bold text-gray-900 dark:text-gray-100">{displayAssetName(r)}</p>
                   <p className="mt-0.5 truncate text-base text-gray-600 dark:text-gray-400">{r.cust_name || 'ไม่ระบุ'}</p>
-                </div>
+                </button>
                 <div className="flex items-center gap-4 sm:gap-6">
                   <p className="text-sm text-gray-500 dark:text-gray-400">
                     สิ้นสุด <span className="font-semibold text-gray-900 dark:text-gray-100">{formatDate(r.lease_end_date)}</span>
@@ -666,7 +730,31 @@ function LeaseExpiryBand({ rentals, onViewDetails }) {
                     {days <= 0 ? 'หมดสัญญาแล้ว' : `อีก ${days} วัน`}
                   </span>
                 </div>
-              </button>
+              </div>
+
+              {/* ปุ่มจัดการ — มีเฉพาะหน้า /leases (แดชบอร์ดไม่ส่ง onRenew/onMoveOut มา) */}
+              {onRenew || onMoveOut ? (
+                <div className="mt-3 flex gap-2">
+                  {onRenew ? (
+                    <button
+                      type="button"
+                      onClick={() => onRenew(r)}
+                      className="inline-flex min-h-11 flex-1 items-center justify-center rounded-lg bg-indigo-600 px-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 lg:min-h-0 lg:flex-none lg:py-2"
+                    >
+                      ต่อสัญญา
+                    </button>
+                  ) : null}
+                  {onMoveOut ? (
+                    <button
+                      type="button"
+                      onClick={() => onMoveOut(r)}
+                      className="inline-flex min-h-11 flex-1 items-center justify-center rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 lg:min-h-0 lg:flex-none lg:py-2"
+                    >
+                      ทำเครื่องหมายว่าย้ายออก
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
             </li>
           )
         })}
@@ -1194,6 +1282,8 @@ function MembershipBadge({ membership }) {
 function Sidebar({ businessName, membership }) {
   const isFounder = isFounderPlan(membership)
   const navItems = isFounder ? NAV_ITEMS : NAV_ITEMS.filter((item) => !item.founderOnly)
+  // เมนู "งานค้าง" ต้องไฮไลต์ทั้ง 4 หน้าในกลุ่ม ไม่ใช่แค่ /pending ที่มันลิงก์ไป
+  const onTaskPage = isTaskPath(useLocation().pathname)
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 lg:flex">
       <div className="flex items-center gap-3 border-b border-gray-100 dark:border-gray-800 px-6 py-6">
@@ -1215,7 +1305,7 @@ function Sidebar({ businessName, membership }) {
             end={item.to === '/'}
             className={({ isActive }) =>
               `flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-                isActive ? 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100'
+                isActive || (item.group === 'tasks' && onTaskPage) ? 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100'
               }`
             }
           >
@@ -1248,6 +1338,7 @@ function Sidebar({ businessName, membership }) {
 const BOTTOM_NAV_ITEMS = [
   { to: '/', label: 'หน้าแรก', icon: 'home' },
   { to: '/assets', label: 'สินทรัพย์', icon: 'building' },
+  { to: '/pending', label: 'งานค้าง', icon: 'clock', group: 'tasks' },
   { to: '/finance', label: 'กำไรสุทธิ', icon: 'chart' },
   { to: '/comms', label: 'ประกาศ', icon: 'megaphone' },
   { to: '/admin', label: 'ผู้ดูแล', icon: 'shield', founderOnly: true },
@@ -1256,6 +1347,7 @@ const BOTTOM_NAV_ITEMS = [
 function BottomNav({ membership }) {
   const isFounder = isFounderPlan(membership)
   const items = isFounder ? BOTTOM_NAV_ITEMS : BOTTOM_NAV_ITEMS.filter((item) => !item.founderOnly)
+  const onTaskPage = isTaskPath(useLocation().pathname)
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-40 border-t border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 backdrop-blur lg:hidden"
@@ -1270,7 +1362,7 @@ function BottomNav({ membership }) {
             end={item.to === '/'}
             className={({ isActive }) =>
               `flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors ${
-                isActive
+                isActive || (item.group === 'tasks' && onTaskPage)
                   ? 'text-indigo-600 dark:text-indigo-400'
                   : 'text-gray-500 dark:text-gray-400 active:bg-gray-50 dark:active:bg-gray-800'
               }`
@@ -1857,56 +1949,6 @@ function AssetsView({ rentals, loading, error, search, onRetry, onBillRequest, o
       )}
     </div>
     </>
-  )
-}
-
-function LeaseExpirySection({ rentals, onRenew, onMoveOut }) {
-  const expiring = useMemo(() => {
-    return (rentals || [])
-      .filter((r) => r?.lease_end_date && String(r.room_status ?? '').toLowerCase() !== 'vacant' && isExpiringSoon(r.lease_end_date))
-      .sort((a, b) => (daysUntil(a.lease_end_date) ?? 999) - (daysUntil(b.lease_end_date) ?? 999))
-  }, [rentals])
-
-  if (expiring.length === 0) return null
-
-  return (
-    <section className="mt-6 overflow-hidden rounded-2xl border border-orange-200 dark:border-orange-800/70 bg-white dark:bg-gray-900 shadow-lg shadow-orange-100/60">
-      <div className="flex items-center justify-between gap-4 border-b border-orange-100 dark:border-orange-800/50 bg-gradient-to-r from-orange-50 dark:from-orange-950/30 to-amber-50 dark:to-amber-950/30 px-6 py-5">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-orange-500 text-white shadow-lg shadow-orange-500/40">
-            <Icon name="warning" className="h-6 w-6" />
-          </div>
-          <div>
-            <h2 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100">สัญญาใกล้หมดอายุ</h2>
-            <p className="text-sm text-orange-700 dark:text-orange-300">สัญญาที่จะหมดภายใน 30 วันข้างหน้า</p>
-          </div>
-        </div>
-        <span className="inline-flex items-center rounded-full bg-orange-100 dark:bg-orange-900/40 px-3 py-1 text-xs font-semibold text-orange-800 dark:text-orange-200 ring-1 ring-inset ring-orange-200 dark:ring-orange-800/70">{expiring.length} รายการ</span>
-      </div>
-      <div className="grid grid-cols-1 gap-4 p-6 sm:grid-cols-2 xl:grid-cols-3">
-        {expiring.map((r) => {
-          const days = daysUntil(r.lease_end_date)
-          return (
-            <div key={r.id} className="flex flex-col rounded-xl border border-orange-200 dark:border-orange-800/70 bg-orange-50/40 dark:bg-orange-950/30 p-4 shadow-sm">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="truncate text-base font-bold text-gray-900 dark:text-gray-100">{r.cust_name}</p>
-                  <p className="mt-0.5 truncate text-sm text-gray-600 dark:text-gray-400">{displayAssetName(r)}</p>
-                </div>
-                <span className="shrink-0 rounded-full bg-rose-100 dark:bg-rose-900/40 px-2.5 py-1 text-xs font-bold text-rose-600 dark:text-rose-400 ring-1 ring-inset ring-rose-200 dark:ring-rose-800/70">
-                  {days <= 0 ? 'หมดสัญญาแล้ว' : `เหลือ ${days} วัน`}
-                </span>
-              </div>
-              <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">สิ้นสุดสัญญา <span className="font-semibold text-gray-900 dark:text-gray-100">{formatDate(r.lease_end_date)}</span></p>
-              <div className="mt-4 flex gap-2">
-                <button type="button" onClick={() => onRenew(r)} className="flex-1 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500">ต่อสัญญา</button>
-                <button type="button" onClick={() => onMoveOut(r)} className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-xs font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800">ทำเครื่องหมายว่าย้ายออก</button>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </section>
   )
 }
 
@@ -6042,10 +6084,22 @@ function Dashboard({ userEmail = '' }) {
   const isActivity = location.pathname === '/activity'
   const isMembership = location.pathname === '/membership'
   const isAdmin = location.pathname === '/admin'
+  // 4 หน้างานค้าง — ย้ายออกจากแดชบอร์ดแล้ว หน้าละเรื่อง (แดชบอร์ดเหลือแค่ภาพรวม)
+  const isPending = location.pathname === '/pending'
+  const isOverdue = location.pathname === '/overdue'
+  const isRepairs = location.pathname === '/repairs'
+  const isLeases = location.pathname === '/leases'
+  const isTaskPage = isPending || isOverdue || isRepairs || isLeases
+  const taskPage = TASK_PAGES.find((t) => t.to === location.pathname) || null
 
   const stats = useMemo(() => computeStats(rentals), [rentals])
   const expiringLeases = useMemo(() => {
     return (rentals || []).filter((r) => r?.lease_end_date && String(r?.room_status ?? '').toLowerCase() !== 'vacant' && isExpiringSoon(r.lease_end_date))
+  }, [rentals])
+  // หน้า /leases ใช้กรอบ 90 วัน (กว้างกว่ากระดิ่งแจ้งเตือนที่ใช้ 30 วัน) — ให้ตรงกับ LeaseExpiryBand
+  // ที่หน้านั้นเรนเดอร์ ไม่งั้นจะขึ้น "ไม่มีสัญญาใกล้หมดอายุ" ทั้งที่แถบมีรายการ
+  const expiringLeases90 = useMemo(() => {
+    return (rentals || []).filter((r) => r?.lease_end_date && String(r?.room_status ?? '').toLowerCase() !== 'vacant' && isExpiringSoon(r.lease_end_date, 90))
   }, [rentals])
 
   // อัตราเก็บเงินได้ = ยอด paid เดือนนี้ ÷ ยอดบิลทั้งหมดของเดือนนี้ ×100 (คำนวณจาก summary ที่โหลดแล้ว)
@@ -6132,16 +6186,19 @@ function Dashboard({ userEmail = '' }) {
     { icon: 'check', label: 'มีผู้เช่า', value: stats.occupied, hint: 'สัญญาที่ยังใช้งาน', tone: 'slate' },
   ]
 
-  // สรุปด่วน — กดแล้วเลื่อนไปยังการ์ดที่จัดการเรื่องนั้นจริง
-  const scrollToId = (id) => {
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
+  // สรุปด่วน — กดแล้วไปยัง "หน้า" ที่จัดการเรื่องนั้น (เดิมเลื่อนหาการ์ดในหน้าเดียวกัน)
   const activeRepairCount = repairTickets.filter((t) => t.status !== 'done').length
+  const taskCounts = {
+    pending: pendingReviews.length,
+    overdue: overdueBills.length,
+    repairs: activeRepairCount,
+    leases: stats.expiringSoon,
+  }
   const quickItems = [
-    { icon: 'check', label: 'รอตรวจสลิป', hint: 'ผู้เช่าส่งหลักฐานการโอน', value: pendingReviews.length, tone: 'amber', onClick: () => scrollToId('dash-pending') },
-    { icon: 'warning', label: 'ค้างชำระเกินกำหนด', hint: 'ส่งบิล/แจ้งเตือนซ้ำ', value: overdueBills.length, tone: 'rose', onClick: () => scrollToId('dash-urgent') },
-    { icon: 'cog', label: 'งานซ่อมค้าง', hint: 'คำขอที่ยังไม่ปิดงาน', value: activeRepairCount, tone: 'sky', onClick: () => scrollToId('dash-repair') },
-    { icon: 'document', label: 'สัญญาใกล้หมดอายุ', hint: 'ต่อสัญญาหรือแจ้งย้ายออก', value: stats.expiringSoon, tone: 'emerald', onClick: () => scrollToId('dash-lease') },
+    { icon: 'check', label: 'รอตรวจสลิป', hint: 'ผู้เช่าส่งหลักฐานการโอน', value: pendingReviews.length, tone: 'amber', to: '/pending' },
+    { icon: 'warning', label: 'ค้างชำระเกินกำหนด', hint: 'ส่งบิล/แจ้งเตือนซ้ำ', value: overdueBills.length, tone: 'rose', to: '/overdue' },
+    { icon: 'cog', label: 'งานซ่อมค้าง', hint: 'คำขอที่ยังไม่ปิดงาน', value: activeRepairCount, tone: 'sky', to: '/repairs' },
+    { icon: 'document', label: 'สัญญาใกล้หมดอายุ', hint: 'ต่อสัญญาหรือแจ้งย้ายออก', value: stats.expiringSoon, tone: 'emerald', to: '/leases' },
   ]
 
   // ตารางล่าง — 5 รายการล่าสุดของแต่ละฝั่ง
@@ -6209,10 +6266,10 @@ function Dashboard({ userEmail = '' }) {
                   {paymentInfo.business_name || 'PayRentPro'}
                 </h1>
                 <h1 className="hidden text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100 sm:text-2xl lg:block">
-                  {isAudit ? 'ประวัติแก้ไข' : isActivity ? 'ประวัติเข้าใช้งาน' : isSettings ? 'ตั้งค่าบัญชี' : isAssets ? 'รายการสินทรัพย์' : isFinance ? 'กำไรสุทธิ' : isComms ? 'ประกาศและเอกสาร' : isMembership ? 'สมาชิกของฉัน' : isAdmin ? 'ผู้ดูแลระบบ' : 'แดชบอร์ด'}
+                  {taskPage ? taskPage.label : isAudit ? 'ประวัติแก้ไข' : isActivity ? 'ประวัติเข้าใช้งาน' : isSettings ? 'ตั้งค่าบัญชี' : isAssets ? 'รายการสินทรัพย์' : isFinance ? 'กำไรสุทธิ' : isComms ? 'ประกาศและเอกสาร' : isMembership ? 'สมาชิกของฉัน' : isAdmin ? 'ผู้ดูแลระบบ' : 'แดชบอร์ด'}
                 </h1>
                 <p className="hidden text-sm text-gray-500 dark:text-gray-400 lg:block">
-                  {isAudit ? 'บันทึกการแก้ไขยอดและเหตุผล' : isActivity ? 'ใครเข้า-ออกระบบ เมื่อไหร่ จาก IP ไหน' : isSettings ? 'ตั้งค่าเลขพร้อมเพย์ / บัญชีธนาคารสำหรับรับเงิน' : isAssets ? 'จัดการสัญญาเช่าและสินทรัพย์ทั้งหมด' : isFinance ? 'รายรับ รายจ่าย และกำไรสุทธิของแต่ละเดือน' : isComms ? 'แจ้งข่าวผู้เช่า จดบันทึก และเก็บไฟล์เอกสาร' : isMembership ? 'แพ็กเกจ การใช้งาน และการต่ออายุ' : isAdmin ? 'จัดการสมาชิกและค่าสมาชิกรอตรวจทั้งหมด' : 'ภาพรวมการเก็บค่าเช่าและการติดตามหนี้'}
+                  {taskPage ? taskPage.subtitle : isAudit ? 'บันทึกการแก้ไขยอดและเหตุผล' : isActivity ? 'ใครเข้า-ออกระบบ เมื่อไหร่ จาก IP ไหน' : isSettings ? 'ตั้งค่าเลขพร้อมเพย์ / บัญชีธนาคารสำหรับรับเงิน' : isAssets ? 'จัดการสัญญาเช่าและสินทรัพย์ทั้งหมด' : isFinance ? 'รายรับ รายจ่าย และกำไรสุทธิของแต่ละเดือน' : isComms ? 'แจ้งข่าวผู้เช่า จดบันทึก และเก็บไฟล์เอกสาร' : isMembership ? 'แพ็กเกจ การใช้งาน และการต่ออายุ' : isAdmin ? 'จัดการสมาชิกและค่าสมาชิกรอตรวจทั้งหมด' : 'ภาพรวมการเก็บค่าเช่าและการติดตามหนี้'}
                 </p>
               </div>
             </div>
@@ -6224,7 +6281,7 @@ function Dashboard({ userEmail = '' }) {
 
               {/* มือถือ/แท็บเล็ต: ปุ่มรองทั้งหมดยุบเข้าเมนู ⋯ (เหลือ ชื่อ + กระดิ่ง + โปรไฟล์ + ⋯) */}
               <HeaderOverflowMenu
-                onExportCsv={!isAssets && !isSettings && !isAudit && !isActivity && !isMembership && !isAdmin && !isFinance && !isComms ? handleExportCsv : null}
+                onExportCsv={!isAssets && !isSettings && !isAudit && !isActivity && !isMembership && !isAdmin && !isFinance && !isComms && !isTaskPage ? handleExportCsv : null}
                 onRefresh={() => { fetchRentals(); fetchSummary(); fetchPendingReviews(); fetchTxInsights(); fetchRepairTickets() }}
                 loading={loading}
                 lastUpdated={lastUpdated}
@@ -6235,7 +6292,7 @@ function Dashboard({ userEmail = '' }) {
               />
 
               {/* เดสก์ท็อป (lg+): แถวปุ่มเดิมทั้งหมด ไม่แตะ */}
-              {!isAssets && !isSettings && !isAudit && !isActivity && !isMembership && !isAdmin && (
+              {!isAssets && !isSettings && !isAudit && !isActivity && !isMembership && !isAdmin && !isTaskPage && (
                 <button
                   type="button"
                   onClick={handleExportCsv}
@@ -6374,6 +6431,73 @@ function Dashboard({ userEmail = '' }) {
             <FinancePage onToast={setToast} />
           ) : isComms ? (
             <CommsPage onToast={setToast} />
+          ) : isTaskPage ? (
+            <>
+              <TaskTabs counts={taskCounts} />
+
+              {isPending ? (
+                <div className="space-y-4 [&>section]:mt-0">
+                  <PendingReviewSection
+                    items={pendingReviews}
+                    loading={pendingLoading}
+                    error={pendingError}
+                    reviewing={reviewing}
+                    onApprove={(id) => handleApproveWithReceipt(pendingReviews.find((t) => t.id === id))}
+                    onReject={(id) => handleReviewTransaction(id, 'unpaid')}
+                    onRetry={fetchPendingReviews}
+                  />
+                </div>
+              ) : isOverdue ? (
+                <div className="space-y-4 [&>section]:mt-0">
+                  {overdueBills.length === 0 ? (
+                    <TaskEmptyCard
+                      icon="check"
+                      title="ไม่มีรายการค้างชำระเกินกำหนด"
+                      hint="บิลที่ค้างเกิน 15 วันจะขึ้นที่นี่ พร้อมปุ่มส่งบิลเข้าไลน์"
+                    />
+                  ) : (
+                    <UrgentChaseSection
+                      overdue={overdueBills}
+                      sendingId={sendingBillId}
+                      onSendBill={handleSendOverdueBill}
+                      sendingReminder={sendingReminder}
+                      onSendReminders={handleSendDueSoonReminders}
+                    />
+                  )}
+                  {/* "ชำระเงินล่าสุด" อยู่คู่กับหน้าทวงหนี้ — ดูว่าใครจ่ายแล้วเทียบกับใครยังค้าง */}
+                  <RecentPaymentsCard items={recentPayments} />
+                </div>
+              ) : isRepairs ? (
+                <div className="space-y-4 [&>section]:mt-0">
+                  <RepairSection
+                    items={repairTickets}
+                    loading={repairLoading}
+                    error={repairError}
+                    completingId={completingRepairId}
+                    onComplete={handleCompleteRepair}
+                    onRetry={fetchRepairTickets}
+                  />
+                  <RecentRepairsCard items={recentRepairs} />
+                </div>
+              ) : (
+                <div className="space-y-4 [&>section]:mt-0">
+                  {expiringLeases90.length === 0 ? (
+                    <TaskEmptyCard
+                      icon="check"
+                      title="ไม่มีสัญญาที่ใกล้หมดอายุ"
+                      hint="สัญญาที่จะสิ้นสุดภายใน 90 วันข้างหน้าจะขึ้นที่นี่"
+                    />
+                  ) : (
+                    <LeaseExpiryBand
+                      rentals={rentals}
+                      onViewDetails={setDetailRental}
+                      onRenew={setRenewRental}
+                      onMoveOut={(rental) => setConfirmAction({ type: 'moveout', rental })}
+                    />
+                  )}
+                </div>
+              )}
+            </>
           ) : isAssets ? (
             <>
               <div className="relative lg:hidden">
@@ -6389,11 +6513,8 @@ function Dashboard({ userEmail = '' }) {
                 />
               </div>
 
-              <LeaseExpirySection
-                rentals={rentals}
-                onRenew={setRenewRental}
-                onMoveOut={(rental) => setConfirmAction({ type: 'moveout', rental })}
-              />
+              {/* "สัญญาใกล้หมดอายุ" ย้ายไปหน้า /leases แล้ว (เดิมซ้ำอยู่ที่นี่ด้วย กรอบ 30 วัน
+                  ส่วนแดชบอร์ดใช้ 90 วัน — คนละเกณฑ์ คนละโค้ด) หน้านั้นครอบของเดิมทั้งหมด */}
 
               <AssetsView
                 rentals={rentals}
@@ -6443,55 +6564,14 @@ function Dashboard({ userEmail = '' }) {
                 <QuickSummaryCard items={quickItems} />
               </div>
 
-              {/* 4. ตารางล่าสุด สองคอลัมน์ */}
-              <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                <RecentPaymentsCard items={recentPayments} />
-                <RecentRepairsCard items={recentRepairs} />
-              </div>
-
-              {/* 5. กราฟรองสองคอลัมน์ */}
+              {/* 4. กราฟรองสองคอลัมน์ */}
               <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
                 <AgingBarChart buckets={agingBuckets} />
                 <OccupancyDonut occupied={stats.occupied} vacant={stats.vacant} />
               </div>
 
-              {/* ส่วนจัดการงาน — id ใช้เป็นเป้าหมายของปุ่มในการ์ดสรุปด่วน */}
-              <div id="dash-lease" className="scroll-mt-24">
-                <LeaseExpiryBand rentals={rentals} onViewDetails={setDetailRental} />
-              </div>
-
-              <div id="dash-pending" className="scroll-mt-24">
-                <PendingReviewSection
-                  items={pendingReviews}
-                  loading={pendingLoading}
-                  error={pendingError}
-                  reviewing={reviewing}
-                  onApprove={(id) => handleApproveWithReceipt(pendingReviews.find((t) => t.id === id))}
-                  onReject={(id) => handleReviewTransaction(id, 'unpaid')}
-                  onRetry={fetchPendingReviews}
-                />
-              </div>
-
-              <div id="dash-repair" className="scroll-mt-24">
-                <RepairSection
-                  items={repairTickets}
-                  loading={repairLoading}
-                  error={repairError}
-                  completingId={completingRepairId}
-                  onComplete={handleCompleteRepair}
-                  onRetry={fetchRepairTickets}
-                />
-              </div>
-
-              <div id="dash-urgent" className="scroll-mt-24">
-                <UrgentChaseSection
-                  overdue={overdueBills}
-                  sendingId={sendingBillId}
-                  onSendBill={handleSendOverdueBill}
-                  sendingReminder={sendingReminder}
-                  onSendReminders={handleSendDueSoonReminders}
-                />
-              </div>
+              {/* งานค้างทั้ง 4 เรื่อง (รอตรวจสลิป / ทวงหนี้ / แจ้งซ่อม / สัญญา) ย้ายไปหน้าของตัวเองแล้ว
+                  — เข้าถึงผ่านการ์ด "สรุปด่วน" ด้านบน หรือเมนู "งานค้าง" */}
             </>
           )}
         </main>

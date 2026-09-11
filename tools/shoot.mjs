@@ -13,6 +13,11 @@ const OUT = process.env.OUT_DIR || 'gui-test-screenshots/responsive'
 const PAGES = [
   { name: '01-dashboard', path: '/' },
   { name: '02-assets', path: '/assets' },
+  // 4 หน้างานค้าง — แยกออกจากแดชบอร์ด สลับกันด้วยแถบแท็บ
+  { name: '02d-pending', path: '/pending' },
+  { name: '02e-overdue', path: '/overdue' },
+  { name: '02f-repairs', path: '/repairs' },
+  { name: '02g-leases', path: '/leases' },
   { name: '02b-finance', path: '/finance' },
   { name: '02c-comms', path: '/comms' },
   { name: '03-settings', path: '/settings' },
