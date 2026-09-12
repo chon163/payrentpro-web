@@ -674,17 +674,108 @@ function RevenueBar({ monthly }) {
 
 // แถบสัญญาใกล้หมดอายุ — ห้องที่ lease_end_date หมดใน 90 วันข้างหน้า (ไม่นับห้องว่าง)
 // ใช้ทั้งหน้า /leases (ส่ง onRenew/onMoveOut มาด้วย) และหน้า /assets
-function LeaseExpiryBand({ rentals, onViewDetails, onRenew, onMoveOut }) {
-  const rows = useMemo(() => {
+// หมวด 1: สัญญาหมดอายุแล้ว (days < 0) — เร่งด่วน ต้องจัดการทันที
+function ExpiredLeasesSection({ rentals, onViewDetails, onRenew, onMoveOut }) {
+  const expired = useMemo(() => {
     return (rentals || [])
-      .filter((r) => r?.lease_end_date && String(r?.room_status ?? '').toLowerCase() !== 'vacant' && isExpiringSoon(r.lease_end_date, 90))
-      .sort((a, b) => new Date(a.lease_end_date) - new Date(b.lease_end_date))
+      .filter((r) => {
+        if (!r?.lease_end_date || String(r?.room_status ?? '').toLowerCase() === 'vacant') return false
+        const days = daysUntil(r.lease_end_date)
+        return days !== null && days < 0
+      })
+      .sort((a, b) => daysUntil(a.lease_end_date) - daysUntil(b.lease_end_date))
   }, [rentals])
 
-  if (rows.length === 0) return null
+  if (expired.length === 0) return null
+
+  return (
+    <section className="mt-6 overflow-hidden rounded-2xl border border-rose-200 dark:border-rose-800/70 bg-white dark:bg-gray-900 shadow-lg shadow-rose-100/60">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rose-100 dark:border-rose-800/50 bg-gradient-to-r from-rose-50 dark:from-rose-950/30 to-orange-50 dark:to-orange-950/30 px-5 py-5">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-rose-500 text-white shadow-lg shadow-rose-500/40">
+            <Icon name="alert-triangle" className="h-6 w-6" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100">สัญญาหมดอายุแล้ว</h2>
+            <p className="text-sm text-rose-700 dark:text-rose-300">ผู้เช่ายังอยู่แต่ไม่มีสัญญา ต้องรีบจัดการ</p>
+          </div>
+        </div>
+        <span className="inline-flex shrink-0 items-center rounded-full bg-rose-100 dark:bg-rose-900/40 px-3 py-1 text-sm font-bold text-rose-700 dark:text-rose-300 ring-1 ring-inset ring-rose-200 dark:ring-rose-800/70">
+          {expired.length} สัญญา
+        </span>
+      </div>
+      <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+        {expired.map((r) => {
+          const days = daysUntil(r.lease_end_date)
+          const absDays = Math.abs(days ?? 0)
+          return (
+            <li key={r.id} className="px-5 py-4 transition-colors hover:bg-rose-50/50 dark:hover:bg-rose-900/30">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <button
+                  type="button"
+                  onClick={() => onViewDetails?.(r)}
+                  className="min-w-0 flex-1 rounded-lg text-left"
+                >
+                  <p className="truncate text-base font-bold text-gray-900 dark:text-gray-100">{displayAssetName(r)}</p>
+                  <p className="mt-0.5 truncate text-base text-gray-600 dark:text-gray-400">{r.cust_name || 'ไม่ระบุ'}</p>
+                </button>
+                <div className="flex items-center gap-4 sm:gap-6">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    สิ้นสุด <span className="font-semibold text-gray-900 dark:text-gray-100">{formatDate(r.lease_end_date)}</span>
+                  </p>
+                  <span className="inline-flex shrink-0 items-center rounded-full bg-rose-50 dark:bg-rose-950/30 px-3 py-1 text-xs font-bold text-rose-700 dark:text-rose-300 ring-1 ring-inset ring-rose-200 dark:ring-rose-800/70">
+                    หมดไป {absDays} วัน
+                  </span>
+                </div>
+              </div>
+
+              {onRenew || onMoveOut ? (
+                <div className="mt-3 flex gap-2">
+                  {onRenew ? (
+                    <button
+                      type="button"
+                      onClick={() => onRenew(r)}
+                      className="inline-flex min-h-11 flex-1 items-center justify-center rounded-lg bg-indigo-600 px-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 lg:min-h-0 lg:flex-none lg:py-2"
+                    >
+                      ต่อสัญญา
+                    </button>
+                  ) : null}
+                  {onMoveOut ? (
+                    <button
+                      type="button"
+                      onClick={() => onMoveOut(r)}
+                      className="inline-flex min-h-11 flex-1 items-center justify-center rounded-lg border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 lg:min-h-0 lg:flex-none lg:py-2"
+                    >
+                      ทำเครื่องหมายว่าย้ายออก
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}
+
+// หมวด 2: ใกล้หมดอายุ (0 ≤ days ≤ 90) — ยังมีเวลา แต่ต้องเตรียมตัว
+function ExpiringSoonLeasesSection({ rentals, onViewDetails, onRenew, onMoveOut }) {
+  const expiring = useMemo(() => {
+    return (rentals || [])
+      .filter((r) => {
+        if (!r?.lease_end_date || String(r?.room_status ?? '').toLowerCase() === 'vacant') return false
+        const days = daysUntil(r.lease_end_date)
+        return days !== null && days >= 0 && days <= 90
+      })
+      .sort((a, b) => daysUntil(a.lease_end_date) - daysUntil(b.lease_end_date))
+  }, [rentals])
+
+  if (expiring.length === 0) return null
 
   const badgeOf = (days) => {
-    if (days <= 30) return { cls: 'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-800/70' }
+    if (days === 0) return { cls: 'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-800/70' }
+    if (days <= 30) return { cls: 'bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-300 ring-orange-200 dark:ring-orange-800/70' }
     if (days <= 60) return { cls: 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-800/70' }
     return { cls: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 ring-gray-200 dark:ring-gray-700' }
   }
@@ -694,26 +785,24 @@ function LeaseExpiryBand({ rentals, onViewDetails, onRenew, onMoveOut }) {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-orange-100 dark:border-orange-800/50 bg-gradient-to-r from-orange-50 dark:from-orange-950/30 to-amber-50 dark:to-amber-950/30 px-5 py-5">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-orange-500 text-white shadow-lg shadow-orange-500/40">
-            <span className="text-xl leading-none">📅</span>
+            <Icon name="clock" className="h-6 w-6" />
           </div>
           <div>
             <h2 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100">สัญญาใกล้หมดอายุ</h2>
-            <p className="text-sm text-orange-700 dark:text-orange-300">สัญญาที่จะสิ้นสุดภายใน 90 วันข้างหน้า</p>
+            <p className="text-sm text-orange-700 dark:text-orange-300">สัญญาที่จะสิ้นสุดในอีก 0-90 วันข้างหน้า</p>
           </div>
         </div>
         <span className="inline-flex shrink-0 items-center rounded-full bg-orange-100 dark:bg-orange-900/40 px-3 py-1 text-sm font-bold text-orange-700 dark:text-orange-300 ring-1 ring-inset ring-orange-200 dark:ring-orange-800/70">
-          {rows.length} สัญญา
+          {expiring.length} สัญญา
         </span>
       </div>
       <ul className="divide-y divide-gray-100 dark:divide-gray-800">
-        {rows.map((r) => {
+        {expiring.map((r) => {
           const days = daysUntil(r.lease_end_date)
           const badge = badgeOf(days ?? 90)
           return (
             <li key={r.id} className="px-5 py-4 transition-colors hover:bg-orange-50/50 dark:hover:bg-orange-900/30">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                {/* กดที่ข้อมูลห้อง = เปิดรายละเอียด — แยกออกจากปุ่มต่อสัญญา/ย้ายออกด้านล่าง
-                    (ปุ่มซ้อนในปุ่มไม่ได้ จึงไม่ห่อทั้งแถวเป็น <button> เหมือนเดิม) */}
                 <button
                   type="button"
                   onClick={() => onViewDetails?.(r)}
@@ -727,12 +816,11 @@ function LeaseExpiryBand({ rentals, onViewDetails, onRenew, onMoveOut }) {
                     สิ้นสุด <span className="font-semibold text-gray-900 dark:text-gray-100">{formatDate(r.lease_end_date)}</span>
                   </p>
                   <span className={`inline-flex shrink-0 items-center rounded-full px-3 py-1 text-xs font-bold ring-1 ring-inset ${badge.cls}`}>
-                    {days <= 0 ? 'หมดสัญญาแล้ว' : `อีก ${days} วัน`}
+                    {days === 0 ? 'หมดวันนี้' : `เหลือ ${days} วัน`}
                   </span>
                 </div>
               </div>
 
-              {/* ปุ่มจัดการ — มีเฉพาะหน้า /leases (แดชบอร์ดไม่ส่ง onRenew/onMoveOut มา) */}
               {onRenew || onMoveOut ? (
                 <div className="mt-3 flex gap-2">
                   {onRenew ? (
@@ -6099,7 +6187,11 @@ function Dashboard({ userEmail = '' }) {
   // หน้า /leases ใช้กรอบ 90 วัน (กว้างกว่ากระดิ่งแจ้งเตือนที่ใช้ 30 วัน) — ให้ตรงกับ LeaseExpiryBand
   // ที่หน้านั้นเรนเดอร์ ไม่งั้นจะขึ้น "ไม่มีสัญญาใกล้หมดอายุ" ทั้งที่แถบมีรายการ
   const expiringLeases90 = useMemo(() => {
-    return (rentals || []).filter((r) => r?.lease_end_date && String(r?.room_status ?? '').toLowerCase() !== 'vacant' && isExpiringSoon(r.lease_end_date, 90))
+    return (rentals || []).filter((r) => {
+      if (!r?.lease_end_date || String(r?.room_status ?? '').toLowerCase() === 'vacant') return false
+      const days = daysUntil(r.lease_end_date)
+      return days !== null && days <= 90  // รวมหมดแล้ว (days < 0) + ใกล้หมด (0-90)
+    })
   }, [rentals])
 
   // อัตราเก็บเงินได้ = ยอด paid เดือนนี้ ÷ ยอดบิลทั้งหมดของเดือนนี้ ×100 (คำนวณจาก summary ที่โหลดแล้ว)
@@ -6488,12 +6580,20 @@ function Dashboard({ userEmail = '' }) {
                       hint="สัญญาที่จะสิ้นสุดภายใน 90 วันข้างหน้าจะขึ้นที่นี่"
                     />
                   ) : (
-                    <LeaseExpiryBand
-                      rentals={rentals}
-                      onViewDetails={setDetailRental}
-                      onRenew={setRenewRental}
-                      onMoveOut={(rental) => setConfirmAction({ type: 'moveout', rental })}
-                    />
+                    <>
+                      <ExpiredLeasesSection
+                        rentals={rentals}
+                        onViewDetails={setDetailRental}
+                        onRenew={setRenewRental}
+                        onMoveOut={(rental) => setConfirmAction({ type: 'moveout', rental })}
+                      />
+                      <ExpiringSoonLeasesSection
+                        rentals={rentals}
+                        onViewDetails={setDetailRental}
+                        onRenew={setRenewRental}
+                        onMoveOut={(rental) => setConfirmAction({ type: 'moveout', rental })}
+                      />
+                    </>
                   )}
                 </div>
               )}
