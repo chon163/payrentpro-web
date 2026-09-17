@@ -11,13 +11,21 @@ import { THAI_MONTHS, currentPeriod, formatPeriod } from './utils/period'
 import { displayAssetName } from './utils/assetName'
 import { DEMO_ACCOUNT_EMAIL } from './utils/demoAccount'
 import { useTheme, useChartTheme } from './theme'
-import { Icon } from './components/ui'
-import { MODAL_INPUT_CLS as inputClass } from './components/styles'
+import { CloseButton, EmptyState, Field, Icon, Modal } from './components/ui'
+import { BTN, MODAL_INPUT_CLS as inputClass } from './components/styles'
 import FinancePage from './pages/FinancePage'
-import CommsPage from './pages/CommsPage'
+import AnnouncementsPage from './pages/AnnouncementsPage'
+import NotesPage from './pages/NotesPage'
+import DocumentsPage from './pages/DocumentsPage'
 import { BIZ_TYPES, CYCLE_LABELS, normalizeBizType, bizTypeMeta, countByStatus, isVacant, buildMoveOutPatch, buildMoveOutNote } from './utils/asset'
 import { AddAssetModal } from './modals/AddAssetModal'
 import { AddTenantModal } from './modals/AddTenantModal'
+import { UtilityBillModal } from './modals/UtilityBillModal'
+import { UtilityListModal } from './modals/UtilityListModal'
+import { MobileDashboard } from './components/MobileDashboard'
+import { MobileSlipReview } from './components/MobileSlipReview'
+import { MobileUtilityInput } from './components/MobileUtilityInput'
+import { MobileOverdueList } from './components/MobileOverdueList'
 
 
 const STATUS_LABELS = {
@@ -120,7 +128,7 @@ function getStatusBadge(value) {
   if (/(paid|ชำระแล้ว|จ่ายแล้ว)/.test(raw)) classes = 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-800/70'
   else if (/(pending|รอชำระ|รอดำเนิน)/.test(raw)) classes = 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-800/70'
   else if (/(overdue|late|unpaid|เกินกำหนด|ค้าง|ยังไม่ชำระ)/.test(raw)) classes = 'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-800/70'
-  else if (/(active|ใช้งาน)/.test(raw)) classes = 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300 ring-indigo-200 dark:ring-indigo-800/70'
+  else if (/(active|ใช้งาน)/.test(raw)) classes = 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-800/70'
   return (
     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${classes}`}>
       {label}
@@ -261,7 +269,7 @@ function renderCell(key, value) {
   if (key === 'due_date') {
     const day = Number(value)
     if (Number.isFinite(day) && day >= 1 && day <= 31) {
-      return <span className="font-semibold text-indigo-700 dark:text-indigo-300">วันที่ {day}</span>
+      return <span className="font-semibold text-emerald-700 dark:text-emerald-300">วันที่ {day}</span>
     }
     return <span className="text-gray-600 dark:text-gray-400">{formatDate(value)}</span>
   }
@@ -270,7 +278,7 @@ function renderCell(key, value) {
   }
   if (isAmountColumn(key)) return <span className="font-semibold tabular-nums text-gray-900 dark:text-gray-100">{formatCurrency(value)}</span>
   if (isDateColumn(key)) return <span className="text-gray-600 dark:text-gray-400">{formatDate(value)}</span>
-  if (typeof value === 'boolean') return <span className="text-gray-600 dark:text-gray-400">{value ? '✓' : '✗'}</span>
+  if (typeof value === 'boolean') return <span className="text-gray-600 dark:text-gray-400">{value ? <Icon name="check" className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> : <Icon name="close" className="h-4 w-4 text-gray-300" />}</span>
   return <span className="text-gray-700 dark:text-gray-300">{String(value)}</span>
 }
 
@@ -286,15 +294,15 @@ function renderDetailValue(key, value) {
 
 // การ์ด KPI แถวบนสุดของแดชบอร์ด — พื้นขาว แถบสีทางซ้าย ไอคอนมุมขวา (ดู tmp/dashboard-guide.md)
 const KPI_TONES = {
-  indigo: { bar: 'bg-indigo-500', icon: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-300' },
+  emerald: { bar: 'bg-emerald-500', icon: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300' },
   green: { bar: 'bg-emerald-500', icon: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-300' },
   red: { bar: 'bg-rose-500', icon: 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-300' },
   orange: { bar: 'bg-amber-500', icon: 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-300' },
   yellow: { bar: 'bg-yellow-400', icon: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-950/40 dark:text-yellow-300' },
 }
 
-function KpiCard({ icon, label, value, hint, tone = 'indigo', onClick }) {
-  const t = KPI_TONES[tone] || KPI_TONES.indigo
+function KpiCard({ icon, label, value, hint, tone = 'emerald', onClick }) {
+  const t = KPI_TONES[tone] || KPI_TONES.emerald
   const inner = (
     <>
       <span className={`absolute inset-y-0 left-0 w-1.5 ${t.bar}`} aria-hidden="true" />
@@ -348,8 +356,8 @@ function RoomStatusCard({ icon, label, value, hint, tone = 'slate', onClick }) {
   return <div className={cls}>{inner}</div>
 }
 
-// กรอบการ์ดมาตรฐานของแดชบอร์ด — หัวเรื่อง + คำอธิบาย + ลิงก์ "ดูทั้งหมด" มุมขวา
-function PanelCard({ title, subtitle, action, children, className = '' }) {
+// กรอบการ์ดมาตรฐานของแดชบอร์ด — หัวเรื่อง + คำอธิบาย
+function PanelCard({ title, subtitle, children, className = '' }) {
   return (
     <section className={`flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900 ${className}`}>
       <div className="flex items-start justify-between gap-3 border-b border-gray-100 px-4 py-4 dark:border-gray-800 sm:px-5">
@@ -357,23 +365,9 @@ function PanelCard({ title, subtitle, action, children, className = '' }) {
           <h3 className="text-base font-bold tracking-tight text-gray-900 dark:text-gray-100">{title}</h3>
           {subtitle ? <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{subtitle}</p> : null}
         </div>
-        {action}
       </div>
       {children}
     </section>
-  )
-}
-
-function PanelLink({ to, children }) {
-  return (
-    <NavLink
-      to={to}
-      // 44px ที่ touch (375/768) — ย่อเป็น compact เฉพาะ lg+ ตามเกณฑ์ tap target ของโปรเจกต์
-      className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-lg px-3 text-xs font-semibold text-indigo-600 transition-colors hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-950/40 lg:min-h-0 lg:px-2 lg:py-1"
-    >
-      {children}
-      <span aria-hidden="true">→</span>
-    </NavLink>
   )
 }
 
@@ -391,10 +385,12 @@ function QuickSummaryCard({ items }) {
       <div className="flex flex-col gap-2.5 p-4 sm:p-5">
         {items.map((it) => {
           const t = QUICK_TONES[it.tone] || QUICK_TONES.sky
+          const El = it.onClick ? 'button' : NavLink
           return (
-            <NavLink
+            <El
               key={it.label}
               to={it.to}
+              onClick={it.onClick}
               className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors ${t.row}`}
             >
               <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${t.icon}`}>
@@ -406,20 +402,11 @@ function QuickSummaryCard({ items }) {
               </span>
               <span className={`shrink-0 text-lg font-bold tabular-nums ${t.value}`}>{it.value}</span>
               <span aria-hidden="true" className="shrink-0 text-gray-400 dark:text-gray-500">›</span>
-            </NavLink>
+            </El>
           )
         })}
       </div>
     </PanelCard>
-  )
-}
-
-// รายการว่างในการ์ด — ใช้ร่วมกันระหว่าง "ชำระเงินล่าสุด" และ "คำขอซ่อมล่าสุด"
-function PanelEmpty({ children }) {
-  return (
-    <div className="flex flex-1 items-center justify-center px-4 py-10">
-      <p className="text-sm text-gray-400 dark:text-gray-500">{children}</p>
-    </div>
   )
 }
 
@@ -437,75 +424,23 @@ function TaskEmptyCard({ icon = 'check', title, hint }) {
   )
 }
 
-function RecentPaymentsCard({ items }) {
+// แถบลิงก์ "ดูทั้งหมด" — แทนการ์ดย่อ "ล่าสุด" ที่ถอดออกจากหน้างานค้างแล้ว
+// คงเหลือทางเข้าเบา ๆ ไปหน้าเต็ม (ทุกสถานะ / แยกตามเดือน) โดยไม่กินพื้นที่เท่าการ์ดรายการ
+function SeeAllLinkBar({ to, tone = 'sky', children }) {
+  const tones = {
+    sky: 'border-sky-200 text-sky-700 hover:bg-sky-50 dark:border-sky-800/70 dark:text-sky-300 dark:hover:bg-sky-950/40',
+    emerald:
+      'border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800/70 dark:text-emerald-300 dark:hover:bg-emerald-950/40',
+  }
+  const t = tones[tone] || tones.sky
   return (
-    <PanelCard
-      title="ชำระเงินล่าสุด"
-      subtitle="บิลที่ยืนยันการชำระแล้ว"
-      action={<PanelLink to="/assets">ดูทั้งหมด</PanelLink>}
+    <NavLink
+      to={to}
+      className={`flex min-h-11 items-center justify-center gap-1 rounded-2xl border bg-white px-4 py-3 text-sm font-semibold shadow-sm transition-colors dark:bg-gray-900 ${t}`}
     >
-      {items.length === 0 ? (
-        <PanelEmpty>ยังไม่มีรายการชำระเงิน</PanelEmpty>
-      ) : (
-        <ul className="divide-y divide-gray-100 dark:divide-gray-800">
-          {items.map((tx) => {
-            const rental = Array.isArray(tx.rentals) ? tx.rentals[0] : tx.rentals
-            return (
-              <li key={tx.id} className="flex items-center gap-3 px-4 py-3 sm:px-5">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                  <Icon name="check" className="h-5 w-5" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">{rental?.cust_name || 'ไม่ระบุ'}</p>
-                  <p className="truncate text-xs text-gray-500 dark:text-gray-400">
-                    {displayAssetName(rental || {})} · {formatPeriod(tx.period) || formatDate(tx.created_at)}
-                  </p>
-                </div>
-                <p className="shrink-0 text-sm font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{formatCurrency(txAmount(tx))}</p>
-              </li>
-            )
-          })}
-        </ul>
-      )}
-    </PanelCard>
-  )
-}
-
-const RECENT_REPAIR_BADGE = {
-  open: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
-  in_progress: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-  done: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
-}
-
-const RECENT_REPAIR_LABEL = { open: 'เปิดใหม่', in_progress: 'กำลังซ่อม', done: 'เสร็จแล้ว' }
-
-function RecentRepairsCard({ items }) {
-  return (
-    <PanelCard title="คำขอซ่อมล่าสุด" subtitle="ผู้เช่าแจ้งผ่าน LINE">
-      {items.length === 0 ? (
-        <PanelEmpty>ยังไม่มีคำขอซ่อม</PanelEmpty>
-      ) : (
-        <ul className="divide-y divide-gray-100 dark:divide-gray-800">
-          {items.map((t) => {
-            const rental = Array.isArray(t.rentals) ? t.rentals[0] : t.rentals
-            return (
-              <li key={t.id} className="flex items-center gap-3 px-4 py-3 sm:px-5">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-100 text-base dark:bg-sky-900/40">🔧</span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">{t.description}</p>
-                  <p className="truncate text-xs text-gray-500 dark:text-gray-400">
-                    {rental?.cust_name || 'ไม่ระบุ'} · {displayAssetName(rental || {})} · {formatDate(t.created_at)}
-                  </p>
-                </div>
-                <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${RECENT_REPAIR_BADGE[t.status] || RECENT_REPAIR_BADGE.open}`}>
-                  {RECENT_REPAIR_LABEL[t.status] || t.status}
-                </span>
-              </li>
-            )
-          })}
-        </ul>
-      )}
-    </PanelCard>
+      {children}
+      <span aria-hidden="true">→</span>
+    </NavLink>
   )
 }
 
@@ -521,9 +456,7 @@ function MonthlyBreakdownModal({ monthly, onClose }) {
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">รายได้รายเดือน</h2>
             <p className="text-xs text-gray-500 dark:text-gray-400">ยอดชำระแล้ว (paid) แยกตามเดือน</p>
           </div>
-          <button type="button" onClick={onClose} className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 lg:mr-0 lg:h-auto lg:w-auto lg:p-1.5" aria-label="ปิด">
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-          </button>
+          <CloseButton onClose={onClose} />
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <table className="w-full text-sm">
@@ -560,86 +493,180 @@ function MonthlyBreakdownModal({ monthly, onClose }) {
 const NAV_ITEMS = [
   { to: '/', label: 'แดชบอร์ด', icon: 'home' },
   { to: '/assets', label: 'รายการสินทรัพย์', icon: 'building' },
-  { to: '/pending', label: 'งานค้าง', icon: 'clock', group: 'tasks' },
-  { to: '/finance', label: 'กำไรสุทธิ', icon: 'chart' },
-  { to: '/comms', label: 'ประกาศและเอกสาร', icon: 'megaphone' },
-  { to: '/admin', label: '🛡️ ผู้ดูแล', icon: 'shield', founderOnly: true },
+
+  // กลุ่มการเงิน
+  {
+    label: 'การเงิน',
+    icon: 'banknotes',
+    group: 'finance',
+    children: [
+      { to: '/finance/pending', label: 'รอตรวจสอบสลิป', badge: 'pending' },
+      { to: '/finance/overdue', label: 'ต้องทวงด่วน', badge: 'overdue' },
+      { to: '/finance/recent', label: 'ชำระเงินทั้งหมด' },
+    ],
+  },
+
+  // กลุ่มซ่อมแซม
+  {
+    label: 'ซ่อมแซม',
+    icon: 'wrench',
+    group: 'repairs',
+    children: [
+      { to: '/repairs/active', label: 'ค้างดำเนินการ', badge: 'repairs' },
+      { to: '/repairs/recent', label: 'คำขอซ่อมทั้งหมด' },
+    ],
+  },
+
+  // กลุ่มสัญญา
+  {
+    label: 'สัญญา',
+    icon: 'document',
+    group: 'leases',
+    children: [
+      { to: '/leases/expired', label: 'หมดอายุแล้ว', badge: 'expired' },
+      { to: '/leases/expiring', label: 'ใกล้หมดอายุ', badge: 'expiring' },
+    ],
+  },
+
+  { to: '/profit', label: 'กำไรสุทธิ', icon: 'trending-up' },
+
+  // กลุ่มเอกสาร
+  {
+    label: 'เอกสาร',
+    icon: 'folder',
+    group: 'docs',
+    children: [
+      { to: '/docs/announcements', label: 'ประกาศ' },
+      { to: '/docs/notes', label: 'บันทึก' },
+      { to: '/docs/files', label: 'ไฟล์เอกสาร' },
+    ],
+  },
+
+  { to: '/admin', label: 'ผู้ดูแล', icon: 'shield', founderOnly: true },
 ]
 
-// 4 หน้างานค้าง — เมนู "งานค้าง" ชี้มาที่ /pending แล้วสลับกันเองด้วยแถบแท็บนี้
-// (ไม่ยัดทั้ง 4 ลง sidebar/bottom-nav เพราะแถบล่างที่ 375px จะเหลือปุ่มละ ~53px ป้ายตัดทิ้ง)
-const TASK_PAGES = [
-  { to: '/pending', label: 'รอตรวจสอบสลิป', short: 'ตรวจสลิป', icon: 'check', key: 'pending', subtitle: 'ผู้เช่าแจ้งชำระแล้ว ตรวจหลักฐานก่อนยืนยัน' },
-  { to: '/overdue', label: 'ต้องทวงด่วน', short: 'ทวงหนี้', icon: 'warning', key: 'overdue', subtitle: 'ค้างชำระเกิน 15 วัน เรียงยอดมากไปน้อย' },
-  { to: '/repairs', label: 'แจ้งซ่อม', short: 'แจ้งซ่อม', icon: 'wrench', key: 'repairs', subtitle: 'คำขอซ่อมจากผู้เช่า และการปิดงาน' },
-  { to: '/leases', label: 'สัญญาใกล้หมดอายุ', short: 'สัญญา', icon: 'calendar', key: 'leases', subtitle: 'ต่อสัญญาหรือแจ้งย้ายออกก่อนหมดอายุ' },
-]
-
-// แถบแท็บสลับ 4 หน้างานค้าง — แพทเทิร์นเดียวกับแท็บในหน้ากำไรสุทธิ (FinancePage)
-// ปุ่มสูง 44px ที่ touch, ป้ายย่อที่จอแคบ, badge ตัวเลขงานค้างของแต่ละหน้า
-function isTaskPath(pathname) {
-  return TASK_PAGES.some((t) => t.to === pathname)
+// Badge resolver — แปลง badge key เป็นตัวเลขจริงจาก taskCounts
+function resolveBadge(badgeKey, taskCounts) {
+  if (!badgeKey || !taskCounts) return 0
+  return Number(taskCounts[badgeKey]) || 0
 }
 
-function TaskTabs({ counts }) {
-  return (
-    <div className="mb-5 flex gap-1 overflow-x-auto rounded-xl border border-gray-200 bg-white p-1 dark:border-gray-800 dark:bg-gray-900">
-      {TASK_PAGES.map((t) => {
-        const n = Number(counts?.[t.key]) || 0
-        return (
-          <NavLink
-            key={t.to}
-            to={t.to}
-            className={({ isActive }) =>
-              `inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-sm font-semibold transition-colors sm:gap-2 sm:px-3 ${
-                isActive
-                  ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300'
-                  : 'text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-800'
-              }`
-            }
-          >
-            <Icon name={t.icon} className="h-4 w-4 shrink-0" />
-            <span className="sm:hidden">{t.short}</span>
-            <span className="hidden sm:inline">{t.label}</span>
-            {n > 0 ? (
-              <span className="shrink-0 rounded-full bg-rose-100 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-rose-700 dark:bg-rose-900/50 dark:text-rose-300">
-                {n}
-              </span>
-            ) : null}
-          </NavLink>
-        )
-      })}
-    </div>
-  )
+// 4 หน้างานค้าง — สลับกันเองด้วยแถบแท็บนี้
+// (ไม่ยัดทั้ง 4 ลง sidebar/bottom-nav เพราะแถบล่างที่ 375px จะเหลือปุ่มละ ~53px ป้ายตัดทิ้ง)
+// to ต้องชี้ nested path จริง — ถ้าชี้ redirect เก่า (/pending ฯลฯ) NavLink จะ active ไม่ได้เลย
+// 4 หน้างานค้างหลัก — ป้อนหัวเรื่อง header เดสก์ท็อป (PAGE_TITLES) เท่านั้น
+// เดิมเคยมีแถบแท็บสลับ TaskTabs วางบนหน้าเหล่านี้ ถอดออกแล้วตาม feedback:
+// งานค้างแต่ละหน้าเข้าผ่านการ์ด "สรุปด่วน" ของแดชบอร์ด / sidebar / bottom-nav
+const TASK_PAGES = [
+  { to: '/finance/pending', label: 'รอตรวจสอบสลิป', subtitle: 'ผู้เช่าแจ้งชำระแล้ว ตรวจหลักฐานก่อนยืนยัน' },
+  { to: '/finance/overdue', label: 'ต้องทวงด่วน', subtitle: 'ค้างชำระเกิน 15 วัน เรียงยอดมากไปน้อย' },
+  { to: '/repairs/active', label: 'แจ้งซ่อม', subtitle: 'คำขอซ่อมจากผู้เช่า และการปิดงาน' },
+  { to: '/leases/expiring', label: 'สัญญาใกล้หมดอายุ', subtitle: 'ต่อสัญญาหรือแจ้งย้ายออกก่อนหมดอายุ' },
+]
+
+// ครอบทั้ง 4 หน้างานค้างหลัก + หน้า "ทั้งหมด" และสัญญาหมดอายุแล้ว (ครอบครัวเดียวกัน — ไฮไลต์ปุ่ม "งานค้าง" ของแถบล่าง)
+const TASK_PATH_PREFIXES = [
+  '/finance/pending',
+  '/finance/overdue',
+  '/finance/recent',
+  '/repairs/active',
+  '/repairs/recent',
+  '/leases/expired',
+  '/leases/expiring',
+]
+
+// หัวเรื่อง header เดสก์ท็อปของหน้างานค้าง + เอกสาร — หน้าที่ไม่อยู่ในนี้ตกไปเงื่อนไขเดิม (แดชบอร์ด ฯลฯ)
+// เดิมพึ่ง taskPage ที่เป็น null ตลอด ทำให้ทุกหน้าขึ้น "แดชบอร์ด"
+const PAGE_TITLES = {
+  ...Object.fromEntries(TASK_PAGES.map((t) => [t.to, [t.label, t.subtitle]])),
+  '/finance/recent': ['ชำระเงินทั้งหมด', 'บิลที่ยืนยันการชำระแล้ว เรียงใหม่สุดขึ้นก่อน'],
+  '/repairs/recent': ['คำขอซ่อมทั้งหมด', 'รวมทุกสถานะ เรียงใหม่สุดขึ้นก่อน'],
+  '/leases/expired': ['สัญญาหมดอายุแล้ว', 'สัญญาที่เลยวันสิ้นสุดไปแล้ว'],
+  '/docs/announcements': ['ประกาศ', 'แจ้งข่าวถึงผู้เช่า ส่งเข้ากลุ่ม LINE ได้ในคลิกเดียว'],
+  '/docs/notes': ['บันทึก', 'โน้ตส่วนตัว จดสิ่งที่ต้องทำ ไอเดียที่นึกได้'],
+  '/docs/files': ['ไฟล์เอกสาร', 'เก็บไฟล์สำคัญไว้ในระบบ เช่น สำเนาบัตร สัญญาเช่า'],
+}
+
+// ตรวจว่า path ปัจจุบันอยู่ในครอบครัวหน้างานค้าง — ใช้ไฮไลต์ปุ่ม "งานค้าง" ของแถบล่าง (BottomNav)
+function isTaskPath(pathname) {
+  return TASK_PATH_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + '/'))
 }
 
 function OccupancyDonut({ occupied, vacant }) {
   const chart = useChartTheme()
   const data = [
-    { name: 'มีผู้เช่า', value: occupied },
-    { name: 'ห้องว่าง', value: vacant },
+    { name: 'มีผู้เช่า', value: occupied, color: '#10b981' },
+    { name: 'ห้องว่าง', value: vacant, color: chart.dark ? '#6b7280' : '#9ca3af' },
   ]
   const total = occupied + vacant
+  const occupancyRate = total ? Math.round((occupied / total) * 100) : 0
+
   return (
     <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-5 shadow-sm">
-      <div className="mb-3 flex items-center justify-between">
-        <div>
-          <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">สัดส่วนสินทรัพย์</h3>
-          <p className="text-xs text-gray-500 dark:text-gray-400">ห้องมีผู้เช่าเทียบกับห้องว่าง</p>
-        </div>
-        <span className="text-lg font-bold text-blue-600 dark:text-blue-400">{total ? Math.round((occupied / total) * 100) : 0}%</span>
+      <div className="mb-4">
+        <h3 className="text-base font-bold text-gray-900 dark:text-gray-100">สัดส่วนสินทรัพย์</h3>
+        <p className="text-xs text-gray-500 dark:text-gray-400">ห้องมีผู้เช่าเทียบกับห้องว่าง</p>
       </div>
-      <div className="h-48 sm:h-52 flex items-center justify-center">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="45%" innerRadius="50%" outerRadius="75%" paddingAngle={3}>
-              <Cell fill="#3b82f6" />
-              <Cell fill={chart.dark ? '#6b7280' : '#9ca3af'} />
-            </Pie>
-            <Tooltip contentStyle={chart.tooltip} labelStyle={{ color: chart.tooltipLabel, fontWeight: 600 }} itemStyle={{ color: chart.tooltip.color }} />
-            <Legend wrapperStyle={{ fontSize: '0.75rem', color: chart.legend }} verticalAlign="bottom" />
-          </PieChart>
-        </ResponsiveContainer>
+
+      <div className="flex items-center gap-6">
+        {/* Donut Chart with Center Text */}
+        <div className="relative flex-shrink-0" style={{ width: '160px', height: '160px' }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={data}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                innerRadius="60%"
+                outerRadius="90%"
+                paddingAngle={2}
+                startAngle={90}
+                endAngle={450}
+              >
+                {data.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+              <Tooltip
+                contentStyle={chart.tooltip}
+                labelStyle={{ color: chart.tooltipLabel, fontWeight: 600 }}
+                itemStyle={{ color: chart.tooltip.color }}
+                formatter={(value) => `${value} ห้อง`}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+
+          {/* Center Text */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">{occupancyRate}%</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">อัตราเข้าพัก</p>
+          </div>
+        </div>
+
+        {/* Custom Legend */}
+        <div className="flex-1 space-y-3">
+          {data.map((item, index) => {
+            const percentage = total ? Math.round((item.value / total) * 100) : 0
+            return (
+              <div key={index} className="flex items-center gap-3">
+                <div
+                  className="h-3 w-3 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: item.color }}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    {item.name} <span className="font-bold">{item.value}</span>
+                    <span className="ml-1.5 text-xs font-normal text-gray-500 dark:text-gray-400">
+                      ({percentage}%)
+                    </span>
+                  </p>
+                </div>
+              </div>
+            )
+          })}
+        </div>
       </div>
     </div>
   )
@@ -663,7 +690,7 @@ function RevenueBar({ monthly }) {
             <Tooltip formatter={(v) => formatCurrency(v)} contentStyle={chart.tooltip} labelStyle={{ color: chart.tooltipLabel, fontWeight: 600 }} itemStyle={{ color: chart.tooltip.color }} cursor={{ fill: chart.cursor }} />
             <Legend wrapperStyle={{ fontSize: '0.75rem', color: chart.legend }} />
             <Bar dataKey="property" name="อสังหาริมทรัพย์" stackId="rev" fill="#10b981" />
-            <Bar dataKey="vehicle" name="ยานพาหนะ" stackId="rev" fill="#3b82f6" />
+            <Bar dataKey="vehicle" name="ยานพาหนะ" stackId="rev" fill="#14b8a6" />
             <Bar dataKey="other" name="อุปกรณ์/อื่นๆ" stackId="rev" fill="#f59e0b" radius={[6, 6, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
@@ -689,15 +716,15 @@ function ExpiredLeasesSection({ rentals, onViewDetails, onRenew, onMoveOut }) {
   if (expired.length === 0) return null
 
   return (
-    <section className="mt-6 overflow-hidden rounded-2xl border border-rose-200 dark:border-rose-800/70 bg-white dark:bg-gray-900 shadow-lg shadow-rose-100/60">
+    <section className="overflow-hidden rounded-2xl border border-rose-200 dark:border-rose-800/70 bg-white dark:bg-gray-900 shadow-lg shadow-rose-100/60">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rose-100 dark:border-rose-800/50 bg-gradient-to-r from-rose-50 dark:from-rose-950/30 to-orange-50 dark:to-orange-950/30 px-5 py-5">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-rose-500 text-white shadow-lg shadow-rose-500/40">
-            <Icon name="alert-triangle" className="h-6 w-6" />
+            <Icon name="warning" className="h-6 w-6" />
           </div>
           <div>
-            <h2 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100">สัญญาหมดอายุแล้ว</h2>
-            <p className="text-sm text-rose-700 dark:text-rose-300">ผู้เช่ายังอยู่แต่ไม่มีสัญญา ต้องรีบจัดการ</p>
+            <h2 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100 lg:hidden">สัญญาหมดอายุแล้ว</h2>
+            <p className="text-sm text-rose-700 dark:text-rose-300 lg:hidden">ผู้เช่ายังอยู่แต่ไม่มีสัญญา ต้องรีบจัดการ</p>
           </div>
         </div>
         <span className="inline-flex shrink-0 items-center rounded-full bg-rose-100 dark:bg-rose-900/40 px-3 py-1 text-sm font-bold text-rose-700 dark:text-rose-300 ring-1 ring-inset ring-rose-200 dark:ring-rose-800/70">
@@ -720,6 +747,11 @@ function ExpiredLeasesSection({ rentals, onViewDetails, onRenew, onMoveOut }) {
                   <p className="mt-0.5 truncate text-base text-gray-600 dark:text-gray-400">{r.cust_name || 'ไม่ระบุ'}</p>
                 </button>
                 <div className="flex items-center gap-4 sm:gap-6">
+                  {Number(r.amount) > 0 ? (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      ค่าเช่า <span className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(r.amount)}</span>
+                    </p>
+                  ) : null}
                   <p className="text-sm text-gray-500 dark:text-gray-400">
                     สิ้นสุด <span className="font-semibold text-gray-900 dark:text-gray-100">{formatDate(r.lease_end_date)}</span>
                   </p>
@@ -735,7 +767,7 @@ function ExpiredLeasesSection({ rentals, onViewDetails, onRenew, onMoveOut }) {
                     <button
                       type="button"
                       onClick={() => onRenew(r)}
-                      className="inline-flex min-h-11 flex-1 items-center justify-center rounded-lg bg-indigo-600 px-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 lg:min-h-0 lg:flex-none lg:py-2"
+                      className="inline-flex min-h-11 flex-1 items-center justify-center rounded-lg bg-emerald-600 px-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500 lg:min-h-0 lg:flex-none lg:py-2"
                     >
                       ต่อสัญญา
                     </button>
@@ -781,15 +813,15 @@ function ExpiringSoonLeasesSection({ rentals, onViewDetails, onRenew, onMoveOut 
   }
 
   return (
-    <section className="mt-6 overflow-hidden rounded-2xl border border-orange-200 dark:border-orange-800/70 bg-white dark:bg-gray-900 shadow-lg shadow-orange-100/60">
+    <section className="overflow-hidden rounded-2xl border border-orange-200 dark:border-orange-800/70 bg-white dark:bg-gray-900 shadow-lg shadow-orange-100/60">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-orange-100 dark:border-orange-800/50 bg-gradient-to-r from-orange-50 dark:from-orange-950/30 to-amber-50 dark:to-amber-950/30 px-5 py-5">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-orange-500 text-white shadow-lg shadow-orange-500/40">
             <Icon name="clock" className="h-6 w-6" />
           </div>
           <div>
-            <h2 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100">สัญญาใกล้หมดอายุ</h2>
-            <p className="text-sm text-orange-700 dark:text-orange-300">สัญญาที่จะสิ้นสุดในอีก 0-90 วันข้างหน้า</p>
+            <h2 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100 lg:hidden">สัญญาใกล้หมดอายุ</h2>
+            <p className="text-sm text-orange-700 dark:text-orange-300 lg:hidden">สัญญาที่จะสิ้นสุดในอีก 0-90 วันข้างหน้า</p>
           </div>
         </div>
         <span className="inline-flex shrink-0 items-center rounded-full bg-orange-100 dark:bg-orange-900/40 px-3 py-1 text-sm font-bold text-orange-700 dark:text-orange-300 ring-1 ring-inset ring-orange-200 dark:ring-orange-800/70">
@@ -812,6 +844,11 @@ function ExpiringSoonLeasesSection({ rentals, onViewDetails, onRenew, onMoveOut 
                   <p className="mt-0.5 truncate text-base text-gray-600 dark:text-gray-400">{r.cust_name || 'ไม่ระบุ'}</p>
                 </button>
                 <div className="flex items-center gap-4 sm:gap-6">
+                  {Number(r.amount) > 0 ? (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      ค่าเช่า <span className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(r.amount)}</span>
+                    </p>
+                  ) : null}
                   <p className="text-sm text-gray-500 dark:text-gray-400">
                     สิ้นสุด <span className="font-semibold text-gray-900 dark:text-gray-100">{formatDate(r.lease_end_date)}</span>
                   </p>
@@ -827,7 +864,7 @@ function ExpiringSoonLeasesSection({ rentals, onViewDetails, onRenew, onMoveOut 
                     <button
                       type="button"
                       onClick={() => onRenew(r)}
-                      className="inline-flex min-h-11 flex-1 items-center justify-center rounded-lg bg-indigo-600 px-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 lg:min-h-0 lg:flex-none lg:py-2"
+                      className="inline-flex min-h-11 flex-1 items-center justify-center rounded-lg bg-emerald-600 px-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500 lg:min-h-0 lg:flex-none lg:py-2"
                     >
                       ต่อสัญญา
                     </button>
@@ -907,15 +944,15 @@ function UrgentChaseSection({ overdue, sendingId, onSendBill, sendingReminder, o
   if (rows.length === 0) return null
 
   return (
-    <section className="mt-6 overflow-hidden rounded-2xl border border-rose-200 dark:border-rose-800/70 bg-white dark:bg-gray-900 shadow-lg shadow-rose-100/60">
+    <section className="overflow-hidden rounded-2xl border border-rose-200 dark:border-rose-800/70 bg-white dark:bg-gray-900 shadow-lg shadow-rose-100/60">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rose-100 dark:border-rose-800/50 bg-gradient-to-r from-rose-50 dark:from-rose-950/30 to-orange-50 dark:to-orange-950/30 px-4 py-4 sm:px-5 sm:py-5">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-rose-500 text-white shadow-lg shadow-rose-500/40">
             <Icon name="warning" className="h-6 w-6" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100">ต้องทวงด่วน</h2>
-            <p className="text-sm text-rose-700 dark:text-rose-300">ค้างชำระเกิน 15 วัน เรียงยอดมากไปน้อย</p>
+            <h2 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100 lg:hidden">ต้องทวงด่วน</h2>
+            <p className="text-sm text-rose-700 dark:text-rose-300 lg:hidden">ค้างชำระเกิน 15 วัน เรียงยอดมากไปน้อย</p>
           </div>
         </div>
         <div className="flex w-full items-center gap-3 sm:w-auto">
@@ -958,7 +995,7 @@ function UrgentChaseSection({ overdue, sendingId, onSendBill, sendingReminder, o
                   type="button"
                   onClick={() => onSendBill(item.id)}
                   disabled={sending}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 px-5 py-3 text-base font-semibold text-white shadow-sm shadow-green-600/30 transition-colors hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+                  className={`${BTN.primary} w-full sm:w-auto`}
                 >
                   {sending ? (
                     <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -1075,7 +1112,7 @@ function AuditLogPage() {
       {loading ? (
         <TableSkeleton />
       ) : logs.length === 0 ? (
-        <div className="p-10 text-center text-sm text-gray-500 dark:text-gray-400">ยังไม่มีประวัติการแก้ไข</div>
+        <EmptyState icon="document" title="ยังไม่มีประวัติการแก้ไข" />
       ) : (
         <>
           {/* ตารางที่ 768px ขึ้นไป */}
@@ -1246,23 +1283,9 @@ function ActivityLogPage() {
       {loading ? (
         <TableSkeleton />
       ) : error ? (
-        <div className="p-10 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400">
-            <Icon name="warning" className="h-6 w-6" />
-          </div>
-          <h3 className="mt-4 text-base font-semibold text-gray-900 dark:text-gray-100">ไม่สามารถโหลดประวัติได้</h3>
-          <p className="mx-auto mt-2 max-w-md text-sm text-gray-500 dark:text-gray-400">{error}</p>
-          <button
-            type="button"
-            onClick={load}
-            className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500"
-          >
-            <Icon name="refresh" className="h-4 w-4" />
-            ลองอีกครั้ง
-          </button>
-        </div>
+        <EmptyState icon="warning" tone="rose" title="ไม่สามารถโหลดประวัติได้" hint={error} action={<button type="button" onClick={load} className={BTN.primary}><Icon name="refresh" className="h-4 w-4" />ลองอีกครั้ง</button>} />
       ) : logs.length === 0 ? (
-        <div className="p-10 text-center text-sm text-gray-500 dark:text-gray-400">ยังไม่มีประวัติการเข้าใช้งาน</div>
+        <EmptyState icon="document" title="ยังไม่มีประวัติการเข้าใช้งาน" />
       ) : (
         <ActivityLogTable logs={logs} />
       )}
@@ -1275,12 +1298,12 @@ function PDPAConsentModal({ onAccept }) {
     <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" />
       <div className="relative max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white dark:bg-gray-900 p-6 shadow-2xl sm:max-h-[90vh] sm:max-w-md sm:rounded-2xl">
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/30">
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-lg shadow-emerald-600/30">
           <Icon name="building" className="h-6 w-6" />
         </div>
         <h2 className="mt-4 text-lg font-bold text-gray-900 dark:text-gray-100">การยินยอมข้อมูลส่วนบุคคล (PDPA)</h2>
         <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-gray-400">ระบบจะเก็บข้อมูลชื่อ-ที่อยู่-ยอดเงินของผู้เช่าเพื่อการทวงเงินตามกฎหมาย PDPA</p>
-        <button type="button" onClick={onAccept} className="mt-5 w-full rounded-xl bg-indigo-600 px-4 py-4 text-base font-semibold text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500 lg:py-2.5 lg:text-sm">
+        <button type="button" onClick={onAccept} className="mt-5 w-full rounded-xl bg-emerald-600 px-4 py-4 text-base font-semibold text-white shadow-sm shadow-emerald-600/30 transition-colors hover:bg-emerald-500 lg:py-2.5 lg:text-sm">
           ยินยอม
         </button>
       </div>
@@ -1293,7 +1316,7 @@ const MEMBERSHIP_PLANS = {
   starter: { label: 'Starter', cls: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-800/70' },
   // pro = แพ็กเกจที่ขายอยู่จริงใน MEMBERSHIP_PACKAGES (บัญชีเดโม่ก็ใช้ค่านี้)
   // basic = ค่าเก่าที่ยังมีในแถวสมาชิกบางราย — ไม่ใส่ไว้จะโชว์เป็นตัวพิมพ์เล็กดิบในตาราง /admin
-  pro: { label: 'Pro', cls: 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 ring-indigo-200 dark:ring-indigo-800/70' },
+  pro: { label: 'Pro', cls: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-800/70' },
   basic: { label: 'Basic', cls: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 ring-slate-200 dark:ring-slate-700' },
   founder: { label: 'ผู้ก่อตั้ง', cls: 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 ring-violet-200 dark:ring-violet-800/70' },
 }
@@ -1354,66 +1377,171 @@ function membershipSummary(membership) {
   }
 }
 
-function MembershipBadge({ membership }) {
+function MembershipBadge({ membership, className = '' }) {
   if (!membership?.ok) return null
   const { planLabel, cls, daysLeft, hasExpiry, urgent } = membershipSummary(membership)
   return (
-    <span className={`mb-1 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold ring-1 ring-inset ${
+    // whitespace-nowrap กันข้อความยาว ๆ ("ทดลองใช้ · เหลือ 30 วัน") ถูกตัดคำ "วัน" ตกบรรทัดล่าง
+    <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold ring-1 ring-inset ${
       urgent ? 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-800/70' : cls
-    }`}>
+    } ${className}`}>
       {planLabel}
       {hasExpiry && <span>· เหลือ {daysLeft} วัน</span>}
     </span>
   )
 }
 
-function Sidebar({ businessName, membership }) {
+// NavGroup — เมนูที่มี submenu (collapsible)
+function NavGroup({ item, totalBadge, isActive, taskCounts, children }) {
+  const [open, setOpen] = useState(isActive)
+
+  useEffect(() => {
+    if (isActive && !open) setOpen(true)
+  }, [isActive, open])
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen(!open)}
+        className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors ${
+          isActive
+            ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
+            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <Icon name={item.icon} className="h-5 w-5 shrink-0" />
+          <span>{item.label}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          {totalBadge > 0 && (
+            <span className="shrink-0 rounded-full bg-rose-100 dark:bg-rose-900/50 px-2 py-0.5 text-xs font-bold tabular-nums text-rose-700 dark:text-rose-300">
+              {totalBadge}
+            </span>
+          )}
+          <Icon name={open ? 'chevron-down' : 'chevron-right'} className="h-4 w-4 shrink-0" />
+        </div>
+      </button>
+
+      {open && (
+        <div className="ml-8 mt-1 space-y-1">
+          {item.children.map((child) => (
+            <NavGroupItem
+              key={child.to}
+              to={child.to}
+              label={child.label}
+              badge={child.badge ? resolveBadge(child.badge, taskCounts) : 0}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// NavGroupItem — submenu link
+function NavGroupItem({ to, label, badge }) {
+  return (
+    <NavLink
+      to={to}
+      className={({ isActive }) =>
+        `flex items-center justify-between rounded-lg px-3 py-1.5 text-sm transition-colors ${
+          isActive
+            ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 font-semibold'
+            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+        }`
+      }
+    >
+      <span>{label}</span>
+      {badge > 0 && (
+        <span className="shrink-0 rounded-full bg-rose-100 dark:bg-rose-900/50 px-2 py-0.5 text-xs font-bold tabular-nums text-rose-700 dark:text-rose-300">
+          {badge}
+        </span>
+      )}
+    </NavLink>
+  )
+}
+
+function Sidebar({ businessName, membership, taskCounts, email }) {
+  const location = useLocation()
   const isFounder = isFounderPlan(membership)
   const navItems = isFounder ? NAV_ITEMS : NAV_ITEMS.filter((item) => !item.founderOnly)
-  // เมนู "งานค้าง" ต้องไฮไลต์ทั้ง 4 หน้าในกลุ่ม ไม่ใช่แค่ /pending ที่มันลิงก์ไป
-  const onTaskPage = isTaskPath(useLocation().pathname)
+
+  // ตรวจว่า path ปัจจุบันอยู่ในกลุ่มไหน
+  const isInGroup = (group) => {
+    if (group === 'finance') return location.pathname.startsWith('/finance')
+    if (group === 'repairs') return location.pathname.startsWith('/repairs')
+    if (group === 'leases') return location.pathname.startsWith('/leases')
+    if (group === 'docs') return location.pathname.startsWith('/docs')
+    return false
+  }
+
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 lg:flex">
-      <div className="flex items-center gap-3 border-b border-gray-100 dark:border-gray-800 px-6 py-6">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/30">
+      {/* px-4 แทน px-6 — ให้ป้ายสมาชิก ("ทดลองใช้ · เหลือ 30 วัน") อยู่บรรทัดเดียวได้สบาย ๆ */}
+      <div className="flex items-center gap-3 border-b border-gray-100 dark:border-gray-800 px-4 py-6">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-lg shadow-emerald-600/30">
           <Icon name="building" className="h-6 w-6" />
         </div>
         <div className="min-w-0">
-          <MembershipBadge membership={membership} />
+          <MembershipBadge className="mb-1" membership={membership} />
           <p className="truncate text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100">{businessName || 'PayRentPro'}</p>
           <p className="text-xs text-gray-500 dark:text-gray-400">ระบบจัดการค่าเช่า</p>
         </div>
       </div>
 
-      <nav className="flex-1 space-y-1 px-3 py-5">
-        {navItems.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.to === '/'}
-            className={({ isActive }) =>
-              `flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-                isActive || (item.group === 'tasks' && onTaskPage) ? 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100'
-              }`
-            }
-          >
-            <Icon name={item.icon} className="h-5 w-5" />
-            {item.label}
-          </NavLink>
-        ))}
+      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-5">
+        {navItems.map((item) => {
+          if (item.children) {
+            // กลุ่มที่มี submenu
+            const isActive = isInGroup(item.group)
+            const totalBadge = item.children.reduce((sum, child) => {
+              return sum + (child.badge ? resolveBadge(child.badge, taskCounts) : 0)
+            }, 0)
+
+            return (
+              <NavGroup
+                key={item.group}
+                item={item}
+                totalBadge={totalBadge}
+                isActive={isActive}
+                taskCounts={taskCounts}
+              />
+            )
+          } else {
+            // เมนูปกติ (ไม่มี submenu)
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === '/'}
+                className={({ isActive }) =>
+                  `flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors ${
+                    isActive
+                      ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100'
+                  }`
+                }
+              >
+                <Icon name={item.icon} className="h-5 w-5" />
+                {item.label}
+              </NavLink>
+            )
+          }
+        })}
       </nav>
 
       <div className="border-t border-gray-100 dark:border-gray-800 p-4">
         <div className="flex items-center gap-3 rounded-xl bg-gray-50 dark:bg-gray-950 p-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-sm font-bold text-white">
-            ก
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-sm font-bold text-white">
+            {(email || 'ผ').charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">ผู้ดูแลระบบ</p>
-            <p className="truncate text-xs text-gray-500 dark:text-gray-400">admin@payrentpro.com</p>
+            <p className="truncate text-xs text-gray-500 dark:text-gray-400">{email || '—'}</p>
           </div>
         </div>
-        <p className="mt-2 text-center text-[10px] font-semibold tracking-wide text-indigo-500 dark:text-indigo-400">PayRentPro v2.0 · build 2026-08-29</p>
+        <p className="mt-2 text-center text-[10px] font-semibold tracking-wide text-emerald-500 dark:text-emerald-400">PayRentPro v2.0 · build 2026-09-12</p>
       </div>
     </aside>
   )
@@ -1426,9 +1554,9 @@ function Sidebar({ businessName, membership }) {
 const BOTTOM_NAV_ITEMS = [
   { to: '/', label: 'หน้าแรก', icon: 'home' },
   { to: '/assets', label: 'สินทรัพย์', icon: 'building' },
-  { to: '/pending', label: 'งานค้าง', icon: 'clock', group: 'tasks' },
-  { to: '/finance', label: 'กำไรสุทธิ', icon: 'chart' },
-  { to: '/comms', label: 'ประกาศ', icon: 'megaphone' },
+  { to: '/finance/pending', label: 'งานค้าง', icon: 'clock', group: 'tasks' },
+  { to: '/profit', label: 'กำไรสุทธิ', icon: 'chart' },
+  { to: '/docs/announcements', label: 'ประกาศ', icon: 'megaphone' },
   { to: '/admin', label: 'ผู้ดูแล', icon: 'shield', founderOnly: true },
 ]
 
@@ -1451,7 +1579,7 @@ function BottomNav({ membership }) {
             className={({ isActive }) =>
               `flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors ${
                 isActive || (item.group === 'tasks' && onTaskPage)
-                  ? 'text-indigo-600 dark:text-indigo-400'
+                  ? 'text-emerald-600 dark:text-emerald-400'
                   : 'text-gray-500 dark:text-gray-400 active:bg-gray-50 dark:active:bg-gray-800'
               }`
             }
@@ -1543,8 +1671,8 @@ function ProfileMenu({ email, membership }) {
             : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
         }`}
       >
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-xs font-bold text-white">
-          {short ? short.slice(0, 2) : <span aria-hidden="true">👤</span>}
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 text-xs font-bold text-white">
+          {short ? short.slice(0, 2) : <span aria-hidden="true"><Icon name="user" className="h-5 w-5" /></span>}
         </span>
         {/* จุดแดงเตือนเมื่อสมาชิกใกล้หมด/หมดอายุ — เห็นได้แม้ไม่เปิดเมนู */}
         {summary?.urgent && <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-rose-500" />}
@@ -1567,11 +1695,11 @@ function ProfileMenu({ email, membership }) {
             <div className="my-1 border-t border-gray-100 dark:border-gray-800" />
 
             <button type="button" onClick={() => go('/membership')} className={`${itemClass} text-gray-700 dark:text-gray-300`}>
-              <span aria-hidden="true" className="shrink-0 text-base leading-none">🪪</span>
+              <span aria-hidden="true" className="shrink-0"><Icon name="identification" className="h-5 w-5" /></span>
               <span className="min-w-0 flex-1">
                 <span className="block">สมาชิก</span>
                 {summary && (
-                  <span className={`block text-xs font-medium ${
+                  <span className={`block whitespace-nowrap text-xs font-medium ${
                     summary.urgent ? 'text-rose-600 dark:text-rose-400' : 'text-gray-500 dark:text-gray-400'
                   }`}>
                     {summary.planLabel}
@@ -1582,19 +1710,19 @@ function ProfileMenu({ email, membership }) {
             </button>
 
             <button type="button" onClick={() => go('/settings')} className={`${itemClass} text-gray-700 dark:text-gray-300`}>
-              <span aria-hidden="true" className="shrink-0 text-base leading-none">⚙️</span>
+              <span aria-hidden="true" className="shrink-0"><Icon name="cog" className="h-5 w-5" /></span>
               ตั้งค่าบัญชี
             </button>
 
             {/* /audit และ /activity ไม่มีที่อยู่ใน sidebar แล้ว (เหลือ หน้าแรก/สินทรัพย์/ผู้ดูแล)
                 และเมนู ⋯ เป็น lg:hidden — ถ้าไม่วางไว้ที่นี่ เดสก์ท็อปจะเข้าหน้านี้ไม่ได้เลย */}
             <button type="button" onClick={() => go('/audit')} className={`${itemClass} text-gray-700 dark:text-gray-300`}>
-              <span aria-hidden="true" className="shrink-0 text-base leading-none">📜</span>
+              <span aria-hidden="true" className="shrink-0"><Icon name="document" className="h-5 w-5" /></span>
               ประวัติแก้ไข
             </button>
 
             <button type="button" onClick={() => go('/activity')} className={`${itemClass} text-gray-700 dark:text-gray-300`}>
-              <span aria-hidden="true" className="shrink-0 text-base leading-none">🕘</span>
+              <span aria-hidden="true" className="shrink-0"><Icon name="clock" className="h-5 w-5" /></span>
               ประวัติเข้าใช้งาน
             </button>
 
@@ -1605,7 +1733,7 @@ function ProfileMenu({ email, membership }) {
               onClick={() => { setOpen(false); signOutWithLog() }}
               className={`${itemClass} text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30`}
             >
-              <span aria-hidden="true" className="shrink-0 text-base leading-none">🚪</span>
+              <span aria-hidden="true" className="shrink-0"><Icon name="logout" className="h-5 w-5" /></span>
               ออกจากระบบ
             </button>
           </div>
@@ -1641,7 +1769,7 @@ function HeaderOverflowMenu({ onExportCsv, onRefresh, loading, lastUpdated, larg
           <div className="absolute right-0 z-50 mt-2 w-60 overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl">
             {onExportCsv && (
               <button type="button" onClick={() => { close(); onExportCsv() }} className={itemClass}>
-                <span aria-hidden="true">⬇️</span> Export CSV
+                <Icon name="download" className="h-5 w-5" aria-hidden="true" /> Export CSV
               </button>
             )}
             <button type="button" onClick={() => { close(); onRefresh() }} disabled={loading} className={`${itemClass} disabled:opacity-60`}>
@@ -1655,7 +1783,7 @@ function HeaderOverflowMenu({ onExportCsv, onRefresh, loading, lastUpdated, larg
               {largeText ? 'ปิดตัวอักษรขยาย' : 'เปิดตัวอักษรขยาย'}
             </button>
             <button type="button" onClick={onToggleTheme} className={itemClass}>
-              <span aria-hidden="true">{theme === 'dark' ? '☀️' : '🌙'}</span>
+              <Icon name={theme === 'dark' ? 'sun' : 'moon'} className="h-5 w-5" aria-hidden="true" />
               {theme === 'dark' ? 'โหมดสว่าง' : 'โหมดมืด'}
             </button>
             {lastUpdated && (
@@ -1822,7 +1950,7 @@ function FirstColumnCell({ row, fallback = 'ไม่ระบุ', bold = false
   const mainCls = `block truncate leading-5 ${bold ? 'text-base font-bold text-gray-900 dark:text-gray-100' : ''}`
   return (
     <div className="flex items-start gap-1.5">
-      <span className="shrink-0 leading-5">{bizTypeMeta(row?.biz_type).icon}</span>
+      <span className="mt-0.5 shrink-0 leading-5"><Icon name={bizTypeMeta(row?.biz_type).icon} className="h-4 w-4 text-gray-400 dark:text-gray-500" /></span>
       {sub ? (
         <span className="min-w-0">
           <span className="block truncate text-xs font-normal leading-4 text-gray-500 dark:text-gray-400">{sub}</span>
@@ -1905,7 +2033,7 @@ function AssetsView({ rentals, loading, error, search, onRetry, onBillRequest, o
             type="button"
             onClick={() => setBizTab('all')}
             className={`shrink-0 whitespace-nowrap rounded-full px-4 py-3 text-sm font-semibold transition-colors lg:px-3.5 lg:py-1.5 ${
-              bizTab === 'all' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+              bizTab === 'all' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
             }`}
           >
             ทั้งหมด {counts.all}
@@ -1924,11 +2052,12 @@ function AssetsView({ rentals, loading, error, search, onRetry, onBillRequest, o
               key={t.value}
               type="button"
               onClick={() => setBizTab(t.value)}
-              className={`shrink-0 whitespace-nowrap rounded-full px-4 py-3 text-sm font-semibold transition-colors lg:px-3.5 lg:py-1.5 ${
-                bizTab === t.value ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+              className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-3 text-sm font-semibold transition-colors lg:px-3.5 lg:py-1.5 ${
+                bizTab === t.value ? 'bg-emerald-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
               }`}
             >
-              {t.icon} {t.tab} {counts[t.value]}
+              <Icon name={t.icon} className="h-4 w-4" />
+              {t.tab} {counts[t.value]}
             </button>
           ))}
         </div>
@@ -1936,29 +2065,9 @@ function AssetsView({ rentals, loading, error, search, onRetry, onBillRequest, o
         {loading ? (
           <TableSkeleton />
         ) : error ? (
-          <div className="p-10 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400">
-              <Icon name="warning" className="h-6 w-6" />
-            </div>
-            <h3 className="mt-4 text-base font-semibold text-gray-900 dark:text-gray-100">ไม่สามารถโหลดข้อมูลได้</h3>
-            <p className="mx-auto mt-2 max-w-md text-sm text-gray-500 dark:text-gray-400">{error}</p>
-            <button
-              type="button"
-              onClick={onRetry}
-              className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-base font-semibold text-white shadow-sm hover:bg-indigo-500 lg:py-2.5 lg:text-sm"
-            >
-            <Icon name="refresh" className="h-4 w-4" />
-            ลองอีกครั้ง
-          </button>
-        </div>
+          <EmptyState icon="warning" tone="rose" title="ไม่สามารถโหลดข้อมูลได้" hint={error} action={<button type="button" onClick={onRetry} className={BTN.primary}><Icon name="refresh" className="h-4 w-4" />ลองอีกครั้ง</button>} />
       ) : filtered.length === 0 ? (
-        <div className="p-10 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400">
-            <Icon name="document" className="h-6 w-6" />
-          </div>
-          <h3 className="mt-4 text-base font-semibold text-gray-900 dark:text-gray-100">{keyword ? 'ไม่พบรายการที่ค้นหา' : 'ยังไม่มีข้อมูล'}</h3>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">{keyword ? 'ลองเปลี่ยนคำค้นหา เช่น ชื่อผู้เช่า หรือชื่อห้อง' : 'ยังไม่มีสินทรัพย์ในระบบ'}</p>
-        </div>
+        <EmptyState icon="document" tone="gray" title={keyword ? 'ไม่พบรายการที่ค้นหา' : 'ยังไม่มีข้อมูล'} hint={keyword ? 'ลองเปลี่ยนคำค้นหา เช่น ชื่อผู้เช่า หรือชื่อห้อง' : 'ยังไม่มีสินทรัพย์ในระบบ'} />
       ) : (
         <>
           {/* ตารางเดสก์ท็อป */}
@@ -2052,17 +2161,12 @@ function MembershipSettingsLink({ membership }) {
       onClick={() => navigate('/membership')}
       className="mb-4 flex min-h-[44px] w-full items-center gap-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-4 text-left shadow-sm transition-colors active:bg-gray-50 dark:active:bg-gray-800 lg:hidden"
     >
-      <span aria-hidden="true" className="shrink-0 text-xl leading-none">🪪</span>
+      <span aria-hidden="true" className="shrink-0"><Icon name="identification" className="h-6 w-6" /></span>
       <span className="min-w-0 flex-1">
         <span className="block text-base font-bold text-gray-900 dark:text-gray-100">สมาชิก</span>
         <span className="mt-1 block">
           {summary ? (
-            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold ring-1 ring-inset ${
-              summary.urgent ? 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-800/70' : summary.cls
-            }`}>
-              {summary.planLabel}
-              {summary.hasExpiry && <span>· เหลือ {summary.daysLeft} วัน</span>}
-            </span>
+            <MembershipBadge membership={membership} />
           ) : (
             <span className="text-xs text-gray-500 dark:text-gray-400">แพ็กเกจ การใช้งาน และการต่ออายุ</span>
           )}
@@ -2174,11 +2278,11 @@ function SettingsPage({ onSaved, membership }) {
               <div>
                 <p className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">ประเภทการรับเงิน</p>
                 <div className="grid grid-cols-2 gap-3">
-                  <button type="button" onClick={() => setField('payment_type', 'promptpay')} className={`rounded-xl border-2 px-4 py-3 text-left ${!isBank ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/30' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900'}`}>
+                  <button type="button" onClick={() => setField('payment_type', 'promptpay')} className={`rounded-xl border-2 px-4 py-3 text-left ${!isBank ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/30' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900'}`}>
                     <span className="block text-sm font-semibold text-gray-900 dark:text-gray-100">พร้อมเพย์ (PromptPay)</span>
                     <span className="text-xs text-gray-500 dark:text-gray-400">เบอร์โทร / เลขบัตรประชาชน</span>
                   </button>
-                  <button type="button" onClick={() => setField('payment_type', 'bank')} className={`rounded-xl border-2 px-4 py-3 text-left ${isBank ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/30' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900'}`}>
+                  <button type="button" onClick={() => setField('payment_type', 'bank')} className={`rounded-xl border-2 px-4 py-3 text-left ${isBank ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/30' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900'}`}>
                     <span className="block text-sm font-semibold text-gray-900 dark:text-gray-100">บัญชีธนาคาร</span>
                     <span className="text-xs text-gray-500 dark:text-gray-400">โอนผ่านเลขบัญชี</span>
                   </button>
@@ -2211,7 +2315,7 @@ function SettingsPage({ onSaved, membership }) {
                 </div>
               )}
 
-              <button type="submit" disabled={saving} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-4 text-base font-semibold text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500 disabled:opacity-60 lg:w-auto lg:py-2.5 lg:text-sm">
+              <button type="submit" disabled={saving} className={`${BTN.primary} w-full lg:w-auto`}>
                 {saving ? 'กำลังบันทึก...' : 'บันทึกการตั้งค่า'}
               </button>
             </>
@@ -2261,7 +2365,7 @@ async function verifyMembershipSlip(slipFile, refId) {
 // แปลง verdict จาก verify-slip → toast ที่ผู้ใช้อ่านรู้เรื่อง
 function membershipVerifyToast(verdict) {
   if (verdict?.ok && verdict?.approved) {
-    return { type: 'success', message: 'ตรวจสอบอัตโนมัติสำเร็จ — ต่ออายุแล้ว 🎉' }
+    return { type: 'success', message: 'ตรวจสอบอัตโนมัติสำเร็จ — ต่ออายุแล้ว' }
   }
   // อ่านสลิปได้แต่ยอดไม่ตรงแพ็ก → ให้ founder ตัดสิน
   if (verdict?.ok && verdict?.matched === false) {
@@ -2397,7 +2501,7 @@ function MembershipOrderModal({ open, plan, months, amount, systemPromptpay, onC
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">สั่งซื้อแพ็กเกจ</h2>
             <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">{plan.label} · {months} เดือน</p>
           </div>
-          <p className="text-2xl font-bold tabular-nums tracking-tight text-indigo-600 dark:text-indigo-400">{formatCurrency(amount)}</p>
+          <p className="text-2xl font-bold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400">{formatCurrency(amount)}</p>
         </div>
 
         <div className="mt-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 p-4 text-center">
@@ -2418,7 +2522,7 @@ function MembershipOrderModal({ open, plan, months, amount, systemPromptpay, onC
           ชำระแล้วส่งสลิปใน LINE ของเรา หรืออัปโหลดที่นี่
         </p>
 
-        <label className="mt-3 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50/60 dark:bg-gray-800/60 px-4 py-5 text-center transition-colors hover:border-indigo-300 hover:bg-indigo-50/40 dark:hover:bg-indigo-900/30">
+        <label className="mt-3 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50/60 dark:bg-gray-800/60 px-4 py-5 text-center transition-colors hover:border-emerald-300 hover:bg-emerald-50/40 dark:hover:bg-emerald-900/30">
           <input
             type="file"
             accept="image/*"
@@ -2429,7 +2533,7 @@ function MembershipOrderModal({ open, plan, months, amount, systemPromptpay, onC
           {slipPreview ? (
             <img src={slipPreview} alt="ตัวอย่างสลิป" className="max-h-36 rounded-lg object-contain shadow-sm" />
           ) : (
-            <span className="text-sm font-medium text-gray-500 dark:text-gray-400">📎 แนบรูปสลิปการโอนเงิน (แตะเพื่อเลือกไฟล์)</span>
+            <span className="text-sm font-medium text-gray-500 dark:text-gray-400"><Icon name="upload" className="h-4 w-4" /> แนบรูปสลิปการโอนเงิน (แตะเพื่อเลือกไฟล์)</span>
           )}
           {slipFile && <span className="text-xs text-gray-400">{slipFile.name}</span>}
         </label>
@@ -2439,7 +2543,7 @@ function MembershipOrderModal({ open, plan, months, amount, systemPromptpay, onC
             type="button"
             onClick={handleClose}
             disabled={submitting}
-            className="rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-4 text-base font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-1 lg:py-2.5 lg:text-sm"
+            className={`${BTN.secondary} sm:flex-1`}
           >
             ยกเลิก
           </button>
@@ -2447,7 +2551,7 @@ function MembershipOrderModal({ open, plan, months, amount, systemPromptpay, onC
             type="button"
             onClick={handleSubmitSlip}
             disabled={!slipFile || submitting}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-4 text-base font-semibold text-white shadow-lg shadow-indigo-600/30 transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-1 lg:py-2.5 lg:text-sm"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-4 text-base font-semibold text-white shadow-lg shadow-emerald-600/30 transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-1 lg:py-2.5 lg:text-sm"
           >
             {submitting ? (
               <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -2589,7 +2693,7 @@ function MembershipPage({ membership, onToast, onRefreshMembership }) {
       )}
 
       {/* เลือกแพ็กเกจ + ระยะเวลา */}
-      <section className="mt-6 overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm">
+      <section className="overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm">
         <div className="border-b border-gray-100 dark:border-gray-800 px-6 py-5">
           <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">เลือกแพ็กเกจ</h2>
           <p className="text-xs text-gray-500 dark:text-gray-400">ต่ออายุหรืออัปเกรด — เลือกแพ็กและระยะเวลา แล้วกดสั่งซื้อ</p>
@@ -2605,7 +2709,7 @@ function MembershipPage({ membership, onToast, onRefreshMembership }) {
                 key={pkg.type}
                 onClick={() => setSelectedPlan(pkg.type)}
                 className={`rounded-2xl border-2 p-5 text-left transition-colors ${
-                  selected ? 'border-indigo-600 bg-indigo-50/60 dark:bg-indigo-950/30 shadow-sm shadow-indigo-100' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-indigo-200'
+                  selected ? 'border-emerald-600 bg-emerald-50/60 dark:bg-emerald-950/30 shadow-sm shadow-emerald-100' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-emerald-200'
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -2635,11 +2739,11 @@ function MembershipPage({ membership, onToast, onRefreshMembership }) {
                   key={m}
                   onClick={() => setSelectedMonths(m)}
                   className={`rounded-xl border-2 px-3 py-2.5 text-center transition-colors ${
-                    active ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/30' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-indigo-200'
+                    active ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/30' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-emerald-200'
                   }`}
                 >
-                  <p className={`text-sm font-semibold ${active ? 'text-indigo-700 dark:text-indigo-300' : 'text-gray-700 dark:text-gray-300'}`}>{m} เดือน</p>
-                  <p className={`mt-0.5 text-sm font-bold tabular-nums ${active ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                  <p className={`text-sm font-semibold ${active ? 'text-emerald-700 dark:text-emerald-300' : 'text-gray-700 dark:text-gray-300'}`}>{m} เดือน</p>
+                  <p className={`mt-0.5 text-sm font-bold tabular-nums ${active ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-gray-400'}`}>
                     {formatCurrency(membershipPrice(selectedPlan, m))}
                   </p>
                 </button>
@@ -2657,7 +2761,7 @@ function MembershipPage({ membership, onToast, onRefreshMembership }) {
             <button
               type="button"
               onClick={() => setOrderOpen(true)}
-              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 transition-colors hover:bg-indigo-500"
+              className={`${BTN.primary} px-6 shadow-lg shadow-emerald-600/30`}
             >
               สั่งซื้อ
             </button>
@@ -2666,7 +2770,7 @@ function MembershipPage({ membership, onToast, onRefreshMembership }) {
       </section>
 
       {/* ประวัติการส่งสลิป (แถวของตัวเอง — RLS กรองให้) */}
-      <section className="mt-6 overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm">
+      <section className="overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm">
         <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-gray-800 px-6 py-5">
           <div>
             <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">ประวัติการต่ออายุ</h2>
@@ -2681,29 +2785,9 @@ function MembershipPage({ membership, onToast, onRefreshMembership }) {
             ))}
           </div>
         ) : historyError ? (
-          <div className="p-10 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400">
-              <Icon name="warning" className="h-6 w-6" />
-            </div>
-            <h3 className="mt-4 text-base font-semibold text-gray-900 dark:text-gray-100">ไม่สามารถโหลดประวัติได้</h3>
-            <p className="mx-auto mt-2 max-w-md text-sm text-gray-500 dark:text-gray-400">{historyError}</p>
-            <button
-              type="button"
-              onClick={fetchHistory}
-              className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 lg:py-2.5 lg:text-sm"
-            >
-              <Icon name="refresh" className="h-4 w-4" />
-              ลองอีกครั้ง
-            </button>
-          </div>
+          <EmptyState icon="warning" tone="rose" title="ไม่สามารถโหลดประวัติได้" hint={historyError} action={<button type="button" onClick={fetchHistory} className={BTN.primary}><Icon name="refresh" className="h-4 w-4" />ลองอีกครั้ง</button>} />
         ) : history.length === 0 ? (
-          <div className="p-10 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400">
-              <Icon name="document" className="h-6 w-6" />
-            </div>
-            <h3 className="mt-4 text-base font-semibold text-gray-900 dark:text-gray-100">ยังไม่มีประวัติการต่ออายุ</h3>
-            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">เลือกแพ็กเกจด้านบนแล้วส่งสลิปเพื่อต่ออายุครั้งแรก</p>
-          </div>
+          <EmptyState icon="document" tone="gray" title="ยังไม่มีประวัติการต่ออายุ" hint="เลือกแพ็กเกจด้านบนแล้วส่งสลิปเพื่อต่ออายุครั้งแรก" />
         ) : (
           <>
           <div className="hidden overflow-x-auto sm:block">
@@ -2740,7 +2824,7 @@ function MembershipPage({ membership, onToast, onRefreshMembership }) {
                           <button
                             type="button"
                             onClick={() => setPreviewSlip(row.slip_image_url)}
-                            className="block overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700 transition-colors hover:border-indigo-300"
+                            className="block overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700 transition-colors hover:border-emerald-300"
                             aria-label="ดูสลิปเต็มจอ"
                           >
                             <img src={row.slip_image_url} alt="สลิปโอนเงิน" className="h-10 w-10 object-cover" loading="lazy" />
@@ -2781,7 +2865,7 @@ function MembershipPage({ membership, onToast, onRefreshMembership }) {
                     <button
                       type="button"
                       onClick={() => setPreviewSlip(row.slip_image_url)}
-                      className="shrink-0 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700 transition-colors hover:border-indigo-300"
+                      className="shrink-0 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700 transition-colors hover:border-emerald-300"
                       aria-label="ดูสลิปเต็มจอ"
                     >
                       <img src={row.slip_image_url} alt="สลิปโอนเงิน" className="h-14 w-14 object-cover" loading="lazy" />
@@ -2831,6 +2915,32 @@ function adminBackofficeError(err) {
   return err?.message || 'เกิดข้อผิดพลาดในการดึงข้อมูล'
 }
 
+// ข้อความตอบ RPC admin_change_member_email (ฝั่ง DB ตรวจให้ — นี่คือคำอธิบายภาษาไทย)
+const ADMIN_EMAIL_ERRORS = {
+  forbidden: 'เฉพาะผู้ดูแลระบบ (founder) เท่านั้นที่เปลี่ยนอีเมลได้',
+  invalid_email: 'รูปแบบอีเมลใหม่ไม่ถูกต้อง',
+  member_not_found: 'ไม่พบสมาชิกอีเมลนี้ในระบบ',
+  no_auth_account: 'สมาชิกนี้ยังไม่ผูกบัญชีเข้าสู่ระบบ',
+  same_email: 'อีเมลใหม่ต้องต่างจากอีเมลปัจจุบัน',
+  email_taken: 'อีเมลนี้ถูกใช้โดยบัญชีอื่นแล้ว',
+}
+
+// ข้อความตอบ RPC admin_update_member_plan (ตรง mapping ฝั่ง DB ทุกตัว)
+const ADMIN_PLAN_ERRORS = {
+  forbidden: 'เฉพาะผู้ดูแลระบบ (founder) เท่านั้นที่แก้แพ็กเกจได้',
+  invalid_plan: 'แพ็กเกจที่เลือกไม่ถูกต้อง',
+  member_not_found: 'ไม่พบสมาชิกอีเมลนี้ในระบบ',
+}
+
+// ตัวเลือกแพ็กเกจใน modal แก้สมาชิก — label/จำนวนห้องตรง MEMBERSHIP_PLANS
+// และ mapping ฝั่ง DB (trial 10 / starter 20 / pro 50 / founder ไม่จำกัด)
+const ADMIN_PLAN_OPTIONS = [
+  { value: 'trial', label: 'ทดลองใช้ (10 ห้อง)' },
+  { value: 'starter', label: 'Starter (20 ห้อง)' },
+  { value: 'pro', label: 'Pro (50 ห้อง)' },
+  { value: 'founder', label: 'ผู้ก่อตั้ง (ไม่จำกัด)' },
+]
+
 function AdminPage({ onToast }) {
   const [members, setMembers] = useState([])
   const [membersLoading, setMembersLoading] = useState(true)
@@ -2840,6 +2950,12 @@ function AdminPage({ onToast }) {
   const [pendingError, setPendingError] = useState(null)
   const [reviewing, setReviewing] = useState(null)
   const [previewSlip, setPreviewSlip] = useState(null)
+  // เปลี่ยนอีเมลสมาชิก — เก็บแถวที่กำลังแก้ (กรณีลูกค้าลืมรหัส Gmail เข้าอีเมลเดิมไม่ได้)
+  const [emailEdit, setEmailEdit] = useState(null)
+  const [savingEmail, setSavingEmail] = useState(false)
+  // แก้แพ็กเกจ/วันหมดอายุสมาชิก — เก็บ { email, plan, expireDate } ของแถวที่กำลังแก้
+  const [planEdit, setPlanEdit] = useState(null)
+  const [savingPlan, setSavingPlan] = useState(false)
   // แท็บ: 'members' = สมาชิก+ค่าสมาชิกรอตรวจ (เดิม) / 'activity' = ประวัติเข้าใช้งานของทุกคน
   const [tab, setTab] = useState('members')
   const [activity, setActivity] = useState([])
@@ -2877,6 +2993,53 @@ function AdminPage({ onToast }) {
       setPendingLoading(false)
     }
   }, [])
+
+  // ย้ายบัญชีสมาชิกไปอีเมลใหม่ — กรณีลูกค้าลืมรหัส Gmail เข้าอีเมลเดิมไม่ได้
+  // (RPC อัปเดต auth.users + admins ให้ตรงกัน แล้วลูกค้าขอลิงก์เข้าสู่ระบบด้วยอีเมลใหม่ได้ทันที)
+  const handleChangeMemberEmail = useCallback(async (memberEmail, newEmail) => {
+    setSavingEmail(true)
+    try {
+      const { data, error: rpcError } = await supabase.rpc('admin_change_member_email', {
+        p_member_email: memberEmail,
+        p_new_email: newEmail,
+      })
+      if (rpcError) throw rpcError
+      if (data?.ok === false) throw new Error(ADMIN_EMAIL_ERRORS[data?.error] || 'เปลี่ยนอีเมลไม่สำเร็จ')
+      onToast?.({ type: 'success', message: `เปลี่ยนอีเมลเป็น ${newEmail} แล้ว — ลูกค้าขอลิงก์เข้าสู่ระบบด้วยอีเมลใหม่ได้ทันที` })
+      setEmailEdit(null)
+      await fetchMembers()
+    } catch (err) {
+      onToast?.({ type: 'error', message: err?.message || 'เปลี่ยนอีเมลไม่สำเร็จ' })
+    } finally {
+      setSavingEmail(false)
+    }
+  }, [fetchMembers, onToast])
+
+  // แก้แพ็กเกจ + วันหมดอายุสมาชิก — RPC ปรับ room_limit ตามแพ็กเกจให้อัตโนมัติ
+  // (สถานะ active/expired คำนวณใหม่จากวันหมดอายุที่ส่งไปฝั่ง DB)
+  const handleChangeMemberPlan = useCallback(async (memberEmail, planType, expireDate) => {
+    setSavingPlan(true)
+    try {
+      const { data, error: rpcError } = await supabase.rpc('admin_update_member_plan', {
+        p_member_email: memberEmail,
+        p_plan_type: planType,
+        p_expire_date: expireDate || null,
+      })
+      if (rpcError) throw rpcError
+      if (data?.ok === false) throw new Error(ADMIN_PLAN_ERRORS[data?.error] || 'แก้แพ็กเกจไม่สำเร็จ')
+      const newExpire = data?.expire_date
+      onToast?.({
+        type: 'success',
+        message: `แก้เป็นแพ็กเกจ ${MEMBERSHIP_PLANS[planType]?.label || planType} แล้ว${newExpire ? ` (หมดอายุ ${formatDate(newExpire)})` : ''}`,
+      })
+      setPlanEdit(null)
+      await fetchMembers()
+    } catch (err) {
+      onToast?.({ type: 'error', message: err?.message || 'แก้แพ็กเกจไม่สำเร็จ' })
+    } finally {
+      setSavingPlan(false)
+    }
+  }, [fetchMembers, onToast])
 
   // ประวัติเข้าใช้งานของสมาชิกทุกคน (founder เท่านั้น — guard อยู่ที่ตัว RPC)
   const fetchActivity = useCallback(async () => {
@@ -2994,14 +3157,14 @@ function AdminPage({ onToast }) {
           type="button"
           onClick={refreshCurrentTab}
           disabled={refreshing}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 lg:py-2.5 lg:text-sm"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60 lg:py-2.5 lg:text-sm"
         >
           <Icon name="refresh" className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
           รีเฟรชข้อมูล
         </button>
       </div>
 
-      {/* แท็บ — โครงเดียวกับ CommsPage (min-h-11 ตามเกณฑ์ tap target) */}
+      {/* แท็บ — min-h-11 ตามเกณฑ์ tap target ของโปรเจกต์ */}
       <div className="mt-4 flex gap-1 overflow-x-auto rounded-xl border border-gray-200 bg-white p-1 dark:border-gray-800 dark:bg-gray-900">
         {ADMIN_TABS.map((t) => (
           <button
@@ -3010,7 +3173,7 @@ function AdminPage({ onToast }) {
             onClick={() => setTab(t.key)}
             className={`inline-flex min-h-11 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold transition-colors ${
               tab === t.key
-                ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300'
+                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
                 : 'text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-gray-800'
             }`}
           >
@@ -3030,23 +3193,9 @@ function AdminPage({ onToast }) {
           {activityLoading ? (
             <TableSkeleton />
           ) : activityError ? (
-            <div className="p-10 text-center">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400">
-                <Icon name="warning" className="h-6 w-6" />
-              </div>
-              <h3 className="mt-4 text-base font-semibold text-gray-900 dark:text-gray-100">ไม่สามารถโหลดประวัติได้</h3>
-              <p className="mx-auto mt-2 max-w-md text-sm text-gray-500 dark:text-gray-400">{activityError}</p>
-              <button
-                type="button"
-                onClick={fetchActivity}
-                className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500"
-              >
-                <Icon name="refresh" className="h-4 w-4" />
-                ลองอีกครั้ง
-              </button>
-            </div>
+            <EmptyState icon="warning" tone="rose" title="ไม่สามารถโหลดประวัติได้" hint={activityError} action={<button type="button" onClick={fetchActivity} className={BTN.primary}><Icon name="refresh" className="h-4 w-4" />ลองอีกครั้ง</button>} />
           ) : activity.length === 0 ? (
-            <div className="p-10 text-center text-sm text-gray-500 dark:text-gray-400">ยังไม่มีประวัติการเข้าใช้งาน</div>
+            <EmptyState icon="document" title="ยังไม่มีประวัติการเข้าใช้งาน" />
           ) : (
             <ActivityLogTable logs={activity} />
           )}
@@ -3077,29 +3226,9 @@ function AdminPage({ onToast }) {
             ))}
           </div>
         ) : pendingError ? (
-          <div className="p-10 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400">
-              <Icon name="warning" className="h-6 w-6" />
-            </div>
-            <h3 className="mt-4 text-base font-semibold text-gray-900 dark:text-gray-100">ไม่สามารถโหลดรายการได้</h3>
-            <p className="mx-auto mt-2 max-w-md text-sm text-gray-500 dark:text-gray-400">{pendingError}</p>
-            <button
-              type="button"
-              onClick={fetchPending}
-              className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-3 text-base font-semibold text-white shadow-sm hover:bg-amber-400 lg:py-2.5 lg:text-sm"
-            >
-              <Icon name="refresh" className="h-4 w-4" />
-              ลองอีกครั้ง
-            </button>
-          </div>
+          <EmptyState icon="warning" tone="rose" title="ไม่สามารถโหลดรายการได้" hint={pendingError} action={<button type="button" onClick={fetchPending} className={BTN.primary}><Icon name="refresh" className="h-4 w-4" />ลองอีกครั้ง</button>} />
         ) : pending.length === 0 ? (
-          <div className="p-10 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-500 dark:text-amber-400">
-              <Icon name="check" className="h-6 w-6" />
-            </div>
-            <h3 className="mt-4 text-base font-semibold text-gray-900 dark:text-gray-100">ไม่มีค่าสมาชิกรอตรวจ</h3>
-            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">ยังไม่มีสมาชิกส่งสลิปค่าต่ออายุในขณะนี้</p>
-          </div>
+          <EmptyState icon="check" tone="amber" title="ไม่มีค่าสมาชิกรอตรวจ" hint="ยังไม่มีสมาชิกส่งสลิปค่าต่ออายุในขณะนี้" />
         ) : (
           <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2">
             {pending.map((item) => {
@@ -3164,7 +3293,7 @@ function AdminPage({ onToast }) {
                       type="button"
                       onClick={() => handleApprove(item)}
                       disabled={isUpdating}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-base font-semibold text-white shadow-sm shadow-emerald-600/30 transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+                      className={BTN.primary}
                     >
                       {isApproving ? (
                         <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -3172,7 +3301,7 @@ function AdminPage({ onToast }) {
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
                         </svg>
                       ) : null}
-                      {isApproving ? 'กำลังอนุมัติ...' : '✅ อนุมัติ'}
+                      {isApproving ? 'กำลังอนุมัติ...' : (<><Icon name="check" className="h-5 w-5" /> อนุมัติ</>)}
                     </button>
                     <button
                       type="button"
@@ -3186,7 +3315,7 @@ function AdminPage({ onToast }) {
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
                         </svg>
                       ) : null}
-                      {isRejecting ? 'กำลังบันทึก...' : '❌ ปฏิเสธ'}
+                      {isRejecting ? 'กำลังบันทึก...' : (<><Icon name="close" className="h-5 w-5" /> ปฏิเสธ</>)}
                     </button>
                   </div>
                 </div>
@@ -3197,7 +3326,7 @@ function AdminPage({ onToast }) {
       </section>
 
       {/* ตารางสมาชิกทั้งหมด */}
-      <section className="mt-6 overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm">
+      <section className="overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm">
         <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-gray-800 px-6 py-5">
           <div>
             <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">สมาชิกทั้งหมด</h2>
@@ -3215,29 +3344,9 @@ function AdminPage({ onToast }) {
             ))}
           </div>
         ) : membersError ? (
-          <div className="p-10 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400">
-              <Icon name="warning" className="h-6 w-6" />
-            </div>
-            <h3 className="mt-4 text-base font-semibold text-gray-900 dark:text-gray-100">ไม่สามารถโหลดรายชื่อสมาชิกได้</h3>
-            <p className="mx-auto mt-2 max-w-md text-sm text-gray-500 dark:text-gray-400">{membersError}</p>
-            <button
-              type="button"
-              onClick={fetchMembers}
-              className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 lg:py-2.5 lg:text-sm"
-            >
-              <Icon name="refresh" className="h-4 w-4" />
-              ลองอีกครั้ง
-            </button>
-          </div>
+          <EmptyState icon="warning" tone="rose" title="ไม่สามารถโหลดรายชื่อสมาชิกได้" hint={membersError} action={<button type="button" onClick={fetchMembers} className={BTN.primary}><Icon name="refresh" className="h-4 w-4" />ลองอีกครั้ง</button>} />
         ) : sortedMembers.length === 0 ? (
-          <div className="p-10 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400">
-              <Icon name="document" className="h-6 w-6" />
-            </div>
-            <h3 className="mt-4 text-base font-semibold text-gray-900 dark:text-gray-100">ยังไม่มีสมาชิกในระบบ</h3>
-            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">สมาชิกจะปรากฏที่นี่เมื่อเริ่มใช้งานแพ็กเกจ</p>
-          </div>
+          <EmptyState icon="document" tone="gray" title="ยังไม่มีสมาชิกในระบบ" hint="สมาชิกจะปรากฏที่นี่เมื่อเริ่มใช้งานแพ็กเกจ" />
         ) : (
           <>
           <div className="hidden overflow-x-auto sm:block">
@@ -3249,6 +3358,7 @@ function AdminPage({ onToast }) {
                   <th className="px-6 py-3">วันหมดอายุ</th>
                   <th className="px-6 py-3">การใช้งาน</th>
                   <th className="px-6 py-3">สถานะ</th>
+                  <th className="px-6 py-3 text-right">จัดการ</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -3283,6 +3393,28 @@ function AdminPage({ onToast }) {
                           <span className={`h-1.5 w-1.5 rounded-full ${expired ? 'bg-rose-500' : 'bg-emerald-500'}`} />
                           {expired ? 'หมดอายุ' : 'ใช้งานได้'}
                         </span>
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-3.5 text-right">
+                        <div className="inline-flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setPlanEdit({ email: row.email, plan: planKey || 'starter', expireDate: row.expire_date ? String(row.expire_date).slice(0, 10) : '' })}
+                            className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-xs font-semibold text-gray-600 dark:text-gray-300 transition-colors hover:border-emerald-300 hover:text-emerald-700 dark:hover:border-emerald-700 dark:hover:text-emerald-300 lg:h-8"
+                            aria-label={`แก้แพ็กเกจ ${row.email}`}
+                          >
+                            <Icon name="banknotes" className="h-4 w-4" />
+                            แก้แพ็กเกจ/วันหมดอายุ
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEmailEdit({ email: row.email })}
+                            className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-xs font-semibold text-gray-600 dark:text-gray-300 transition-colors hover:border-emerald-300 hover:text-emerald-700 dark:hover:border-emerald-700 dark:hover:text-emerald-300 lg:h-8"
+                            aria-label={`เปลี่ยนอีเมล ${row.email}`}
+                          >
+                            <Icon name="envelope" className="h-4 w-4" />
+                            เปลี่ยนอีเมล
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )
@@ -3321,6 +3453,22 @@ function AdminPage({ onToast }) {
                     <span>หมดอายุ {row.expire_date ? formatDate(row.expire_date) : '—'}</span>
                     <span className="shrink-0 tabular-nums">{roomsUsed}/{roomLimit > 0 ? roomLimit : '∞'} ห้อง</span>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setPlanEdit({ email: row.email, plan: planKey || 'starter', expireDate: row.expire_date ? String(row.expire_date).slice(0, 10) : '' })}
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-sm font-semibold text-gray-600 dark:text-gray-300 transition-colors hover:border-emerald-300 hover:text-emerald-700 dark:hover:border-emerald-700 dark:hover:text-emerald-300"
+                  >
+                    <Icon name="banknotes" className="h-4 w-4" />
+                    แก้แพ็กเกจ/วันหมดอายุ
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEmailEdit({ email: row.email })}
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 text-sm font-semibold text-gray-600 dark:text-gray-300 transition-colors hover:border-emerald-300 hover:text-emerald-700 dark:hover:border-emerald-700 dark:hover:text-emerald-300"
+                  >
+                    <Icon name="envelope" className="h-4 w-4" />
+                    เปลี่ยนอีเมล (ลืมรหัส Gmail)
+                  </button>
                 </div>
               )
             })}
@@ -3330,6 +3478,115 @@ function AdminPage({ onToast }) {
       </section>
       </>
       )}
+
+      {emailEdit ? (
+        <Modal
+          title="เปลี่ยนอีเมลสมาชิก"
+          subtitle="สำหรับลูกค้าที่ลืมรหัส Gmail เข้าอีเมลเดิมไม่ได้"
+          onClose={() => setEmailEdit(null)}
+          maxWidth="sm:max-w-md"
+          footer={
+            <>
+              <button type="button" onClick={() => setEmailEdit(null)} className={BTN.secondary}>ยกเลิก</button>
+              <button
+                type="submit"
+                form="admin-email-form"
+                disabled={savingEmail || !emailEdit.newEmail?.trim()}
+                className={BTN.primary}
+              >
+                {savingEmail ? 'กำลังเปลี่ยน...' : 'ยืนยันเปลี่ยนอีเมล'}
+              </button>
+            </>
+          }
+        >
+          <form
+            id="admin-email-form"
+            onSubmit={(e) => {
+              e.preventDefault()
+              const next = emailEdit.newEmail?.trim()
+              if (next) handleChangeMemberEmail(emailEdit.email, next)
+            }}
+            className="space-y-4"
+          >
+            <div className="rounded-xl bg-gray-50 dark:bg-gray-950 px-3.5 py-3 text-sm">
+              <p className="text-gray-500 dark:text-gray-400">อีเมลปัจจุบัน</p>
+              <p className="mt-0.5 break-all font-semibold text-gray-900 dark:text-gray-100">{emailEdit.email}</p>
+            </div>
+            <Field label="อีเมลใหม่" required>
+              <input
+                type="email"
+                value={emailEdit.newEmail ?? ''}
+                onChange={(e) => setEmailEdit((p) => ({ ...p, newEmail: e.target.value }))}
+                className={inputClass}
+                placeholder="เช่น somchai.new@gmail.com"
+                required
+                autoFocus
+              />
+            </Field>
+            <p className="rounded-xl bg-amber-50 dark:bg-amber-950/40 px-3.5 py-2.5 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+              หลังเปลี่ยน ลูกค้ากด "ส่งลิงก์เข้าสู่ระบบ" ที่หน้าเข้าสู่ระบบด้วยอีเมลใหม่ได้ทันที — ข้อมูลห้อง บิล และสัญญาทั้งหมดยังอยู่ครบในบัญชีเดิม
+            </p>
+          </form>
+        </Modal>
+      ) : null}
+
+      {planEdit ? (
+        <Modal
+          title="แก้แพ็กเกจและวันหมดอายุ"
+          subtitle="อัปเดตแพ็กเกจและวันหมดอายุของสมาชิกให้ตรงตามที่ตกลงกัน"
+          onClose={() => setPlanEdit(null)}
+          maxWidth="sm:max-w-md"
+          footer={
+            <>
+              <button type="button" onClick={() => setPlanEdit(null)} className={BTN.secondary}>ยกเลิก</button>
+              <button
+                type="submit"
+                form="admin-plan-form"
+                disabled={savingPlan || !planEdit.plan}
+                className={BTN.primary}
+              >
+                {savingPlan ? 'กำลังบันทึก...' : 'บันทึกการเปลี่ยนแปลง'}
+              </button>
+            </>
+          }
+        >
+          <form
+            id="admin-plan-form"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (planEdit.plan) handleChangeMemberPlan(planEdit.email, planEdit.plan, planEdit.expireDate)
+            }}
+            className="space-y-4"
+          >
+            <div className="rounded-xl bg-gray-50 dark:bg-gray-950 px-3.5 py-3 text-sm">
+              <p className="text-gray-500 dark:text-gray-400">สมาชิก</p>
+              <p className="mt-0.5 break-all font-semibold text-gray-900 dark:text-gray-100">{planEdit.email}</p>
+            </div>
+            <Field label="แพ็กเกจ" required>
+              <select
+                value={planEdit.plan}
+                onChange={(e) => setPlanEdit((p) => ({ ...p, plan: e.target.value }))}
+                className={inputClass}
+              >
+                {ADMIN_PLAN_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="วันหมดอายุ" hint="เว้นว่าง = คงวันเดิมไว้ (ถ้าเลือกผู้ก่อตั้งระบบจะตั้งให้ 100 ปีอัตโนมัติ)">
+              <input
+                type="date"
+                value={planEdit.expireDate ?? ''}
+                onChange={(e) => setPlanEdit((p) => ({ ...p, expireDate: e.target.value }))}
+                className={inputClass}
+              />
+            </Field>
+            <p className="rounded-xl bg-sky-50 dark:bg-sky-950/40 px-3.5 py-2.5 text-xs leading-relaxed text-sky-700 dark:text-sky-300">
+              จำนวนห้องที่ใช้ได้จะปรับตามแพ็กเกจอัตโนมัติ (ทดลองใช้ 10 · Starter 20 · Pro 50 · ผู้ก่อตั้งไม่จำกัด) และสถานะจะเปลี่ยนเป็น "หมดอายุ" เองถ้าวันที่ตั้งอยู่ในอดีต
+            </p>
+          </form>
+        </Modal>
+      ) : null}
 
       {previewSlip && (
         <div
@@ -3346,7 +3603,7 @@ function AdminPage({ onToast }) {
 function PendingReviewSection({ items, loading, error, reviewing, onApprove, onReject, onRetry }) {
   const [previewSlip, setPreviewSlip] = useState(null)
   return (
-    <section className="mt-8 overflow-hidden rounded-2xl border border-amber-200 dark:border-amber-800/70 bg-white dark:bg-gray-900 shadow-lg shadow-amber-100/70">
+    <section className="overflow-hidden rounded-2xl border border-amber-200 dark:border-amber-800/70 bg-white dark:bg-gray-900 shadow-lg shadow-amber-100/70">
       <div className="flex items-center justify-between gap-4 border-b border-amber-100 dark:border-amber-800/50 bg-gradient-to-r from-amber-50 dark:from-amber-950/30 to-yellow-50 dark:to-yellow-950/30 px-6 py-5">
         <div className="flex items-center gap-3">
           <div className="relative flex h-11 w-11 items-center justify-center rounded-xl bg-amber-400 text-white shadow-lg shadow-amber-400/40">
@@ -3357,8 +3614,8 @@ function PendingReviewSection({ items, loading, error, reviewing, onApprove, onR
             <Icon name="warning" className="h-6 w-6" />
           </div>
           <div>
-            <h2 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100">รอตรวจสอบสลิป</h2>
-            <p className="text-sm text-amber-700 dark:text-amber-300">มีผู้เช่าแจ้งชำระเงินแล้ว โปรดตรวจสอบหลักฐานก่อนยืนยัน</p>
+            <h2 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100 lg:hidden">รอตรวจสอบสลิป</h2>
+            <p className="text-sm text-amber-700 dark:text-amber-300 lg:hidden">มีผู้เช่าแจ้งชำระเงินแล้ว โปรดตรวจสอบหลักฐานก่อนยืนยัน</p>
           </div>
         </div>
         <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 dark:bg-amber-900/40 px-3 py-1 text-xs font-semibold text-amber-800 dark:text-amber-200 ring-1 ring-inset ring-amber-200 dark:ring-amber-800/70">
@@ -3373,29 +3630,9 @@ function PendingReviewSection({ items, loading, error, reviewing, onApprove, onR
           ))}
         </div>
       ) : error ? (
-        <div className="p-10 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400">
-            <Icon name="warning" className="h-6 w-6" />
-          </div>
-          <h3 className="mt-4 text-base font-semibold text-gray-900 dark:text-gray-100">ไม่สามารถโหลดรายการได้</h3>
-          <p className="mx-auto mt-2 max-w-md text-sm text-gray-500 dark:text-gray-400">{error}</p>
-          <button
-            type="button"
-            onClick={onRetry}
-            className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-3 text-base font-semibold text-white shadow-sm hover:bg-amber-400 lg:py-2.5 lg:text-sm"
-          >
-            <Icon name="refresh" className="h-4 w-4" />
-            ลองอีกครั้ง
-          </button>
-        </div>
+        <EmptyState icon="warning" tone="rose" title="ไม่สามารถโหลดรายการได้" hint={error} action={<button type="button" onClick={onRetry} className={BTN.primary}><Icon name="refresh" className="h-4 w-4" />ลองอีกครั้ง</button>} />
       ) : items.length === 0 ? (
-        <div className="p-10 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-500 dark:text-amber-400">
-            <Icon name="check" className="h-6 w-6" />
-          </div>
-          <h3 className="mt-4 text-base font-semibold text-gray-900 dark:text-gray-100">ไม่มีรายการรอตรวจสอบ</h3>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">ยังไม่มีผู้เช่าแจ้งชำระเงินในขณะนี้</p>
-        </div>
+        <EmptyState icon="check" tone="amber" title="ไม่มีรายการรอตรวจสอบ" hint="ยังไม่มีผู้เช่าแจ้งชำระเงินในขณะนี้" />
       ) : (
         <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2">
           {items.map((item) => {
@@ -3458,7 +3695,7 @@ function PendingReviewSection({ items, loading, error, reviewing, onApprove, onR
                     type="button"
                     onClick={() => onApprove(item.id)}
                     disabled={isUpdating}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-base font-semibold text-white shadow-sm shadow-emerald-600/30 transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    className={BTN.primary}
                   >
                     {isApproving ? (
                       <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -3484,9 +3721,7 @@ function PendingReviewSection({ items, loading, error, reviewing, onApprove, onR
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
                       </svg>
                     ) : (
-                      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-                      </svg>
+                      <Icon name="close" className="h-5 w-5" />
                     )}
                     ปฏิเสธ
                   </button>
@@ -3503,16 +3738,7 @@ function PendingReviewSection({ items, loading, error, reviewing, onApprove, onR
           onClick={() => setPreviewSlip(null)}
         >
           <div className="relative max-h-[90vh] max-w-3xl" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              onClick={() => setPreviewSlip(null)}
-              className="absolute -right-3 -top-3 z-10 rounded-full bg-white dark:bg-gray-900 p-1.5 text-gray-600 dark:text-gray-400 shadow-lg transition-colors hover:text-gray-900 dark:hover:text-gray-100"
-              aria-label="ปิด"
-            >
-              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-              </svg>
-            </button>
+            <CloseButton variant="floating" onClose={() => setPreviewSlip(null)} />
             <img
               src={previewSlip}
               alt="สลิปโอนเงิน"
@@ -3565,7 +3791,7 @@ function RepairPortalLinkBand() {
             onClick={copy}
             className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-sky-600 px-3 text-xs font-bold text-white transition-colors hover:bg-sky-700 lg:min-h-0 lg:py-2"
           >
-            {copied ? '✓ คัดลอกแล้ว' : 'คัดลอกลิงก์'}
+            {copied ? (<><Icon name="check" className="h-4 w-4" /> คัดลอกแล้ว</>) : 'คัดลอกลิงก์'}
           </button>
           <a
             href="/repair"
@@ -3584,8 +3810,119 @@ function RepairPortalLinkBand() {
   )
 }
 
-function RepairSection({ items, loading, error, completingId, onComplete, onRetry }) {
+// Modal ปิดงานซ่อม — เลือกผล สำเร็จ/ไม่สำเร็จ + หมายเหตุสั้นๆ ก่อนบันทึกเป็นประวัติ
+function RepairOutcomeModal({ ticket, saving, onClose, onConfirm }) {
+  const [outcome, setOutcome] = useState('success')
+  const [note, setNote] = useState('')
+  const rental = Array.isArray(ticket?.rentals) ? ticket.rentals[0] : ticket?.rentals
+
+  const choices = [
+    {
+      key: 'success',
+      label: 'ซ่อมสำเร็จ',
+      icon: 'check',
+      hint: 'ส่งข้อความแจ้งผู้เช่าในกลุ่ม LINE อัตโนมัติ',
+      cls: 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-500',
+      idle: 'border-gray-200 dark:border-gray-700 hover:border-emerald-300 dark:hover:border-emerald-700',
+    },
+    {
+      key: 'failed',
+      label: 'ซ่อมไม่สำเร็จ',
+      icon: 'close',
+      hint: 'ไม่ส่งข้อความเข้า LINE — บันทึกผลเป็นประวัติเท่านั้น',
+      cls: 'border-rose-500 bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-500',
+      idle: 'border-gray-200 dark:border-gray-700 hover:border-rose-300 dark:hover:border-rose-700',
+    },
+  ]
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-4">
+      <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+      <div className="relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:max-w-md sm:rounded-2xl dark:bg-gray-900">
+        <div className="flex items-start justify-between gap-3 border-b border-gray-100 px-6 py-4 dark:border-gray-800">
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">ปิดงานซ่อม</h2>
+            <p className="mt-0.5 truncate text-sm text-gray-500 dark:text-gray-400">
+              {displayAssetName(rental || {})} · {rental?.cust_name || 'ไม่ระบุ'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 lg:mr-0 lg:h-auto lg:w-auto lg:p-1.5"
+            aria-label="ปิด"
+          >
+            <Icon name="close" className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form
+          id="repair-close-form"
+          onSubmit={(e) => {
+            e.preventDefault()
+            onConfirm(ticket, outcome, note)
+          }}
+          className="flex-1 space-y-4 overflow-y-auto px-6 py-4"
+        >
+          <p className="rounded-xl bg-gray-50 px-3.5 py-2.5 text-sm leading-relaxed text-gray-600 dark:bg-gray-950 dark:text-gray-400">
+            {ticket?.description}
+          </p>
+
+          <div className="grid gap-2.5">
+            {choices.map((c) => (
+              <button
+                key={c.key}
+                type="button"
+                onClick={() => setOutcome(c.key)}
+                aria-pressed={outcome === c.key}
+                className={`min-h-11 rounded-xl border px-4 py-3 text-left transition-colors ${
+                  outcome === c.key ? c.cls : c.idle
+                }`}
+              >
+                <span className="flex items-center gap-1.5 text-base font-semibold text-gray-900 dark:text-gray-100"><Icon name={c.icon} className="h-5 w-5" />{c.label}</span>
+                <span className="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">{c.hint}</span>
+              </button>
+            ))}
+          </div>
+
+          <div>
+            <label htmlFor="repair-done-note" className="mb-1.5 block text-sm font-semibold text-gray-700 dark:text-gray-300">
+              หมายเหตุ (ไม่บังคับ)
+            </label>
+            <textarea
+              id="repair-done-note"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={3}
+              className={inputClass}
+              placeholder={outcome === 'success' ? 'เช่น เปลี่ยนวาล์วน้ำใหม่ ใช้งานได้ปกติ' : 'เช่น ต้องสั่งอะไรเพิ่ม นัดซ่อมใหม่สัปดาห์หน้า'}
+            />
+          </div>
+        </form>
+
+        <div className="flex gap-3 border-t border-gray-100 px-6 py-4 dark:border-gray-800">
+          <button type="button" onClick={onClose} className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-3 text-base font-semibold text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800">
+            ยกเลิก
+          </button>
+          <button
+            type="submit"
+            form="repair-close-form"
+            disabled={saving}
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl bg-emerald-600 px-4 py-3 text-base font-semibold text-white shadow-sm shadow-emerald-600/30 transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {saving ? 'กำลังบันทึก...' : 'บันทึกปิดงาน'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function RepairSection({ items, loading, error, completingId, startingId, onComplete, onStart, onRetry }) {
   const [previewPhoto, setPreviewPhoto] = useState(null)
+  // กรองตามการ์ดสรุปที่กด — done ไม่มีในลิสต์ (กดแล้วพาไปหน้าประวัติซ่อมแทน)
+  const [filterStatus, setFilterStatus] = useState('all')
+  const navigate = useNavigate()
 
   const counts = {
     open: items.filter((t) => t.status === 'open').length,
@@ -3594,6 +3931,8 @@ function RepairSection({ items, loading, error, completingId, onComplete, onRetr
   }
   // เปิดก่อนเสร็จ — เรียงใหม่สุดขึ้นก่อน
   const active = items.filter((t) => t.status !== 'done')
+  // กรองตามการ์ดสรุปที่กดค้างไว้
+  const visible = filterStatus === 'all' ? active : active.filter((t) => t.status === filterStatus)
 
   const summary = [
     { key: 'open', label: 'เปิดใหม่', value: counts.open },
@@ -3602,15 +3941,15 @@ function RepairSection({ items, loading, error, completingId, onComplete, onRetr
   ]
 
   return (
-    <section className="mt-8 overflow-hidden rounded-2xl border border-sky-200 dark:border-sky-800/70 bg-white dark:bg-gray-900 shadow-lg shadow-sky-100/70 dark:shadow-none">
+    <section className="overflow-hidden rounded-2xl border border-sky-200 dark:border-sky-800/70 bg-white dark:bg-gray-900 shadow-lg shadow-sky-100/70 dark:shadow-none">
       <div className="flex items-center justify-between gap-4 border-b border-sky-100 dark:border-sky-800/50 bg-gradient-to-r from-sky-50 dark:from-sky-950/30 to-cyan-50 dark:to-cyan-950/30 px-4 py-4 sm:px-6 sm:py-5">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-500 text-xl text-white shadow-lg shadow-sky-500/40">
-            🔧
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-500 text-white shadow-lg shadow-sky-500/40">
+            <Icon name="wrench" className="h-6 w-6" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100">แจ้งซ่อม</h2>
-            <p className="truncate text-sm text-sky-700 dark:text-sky-300">ผู้เช่าแจ้งผ่าน LINE หรือลิงก์แจ้งซ่อมด้านล่าง</p>
+            <h2 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100 lg:hidden">แจ้งซ่อม</h2>
+            <p className="truncate text-sm text-sky-700 dark:text-sky-300 lg:hidden">ผู้เช่าแจ้งผ่าน LINE หรือลิงก์แจ้งซ่อมด้านล่าง</p>
           </div>
         </div>
         <span className="inline-flex shrink-0 items-center rounded-full bg-sky-100 dark:bg-sky-900/40 px-3 py-1 text-xs font-semibold text-sky-800 dark:text-sky-200 ring-1 ring-inset ring-sky-200 dark:ring-sky-800/70">
@@ -3622,15 +3961,24 @@ function RepairSection({ items, loading, error, completingId, onComplete, onRetr
           ผู้เช่าเข้าด้วยเบอร์โทรที่บันทึกไว้ในระบบ ไม่ต้องสมัคร ไม่ต้องมีรหัส */}
       <RepairPortalLinkBand />
 
-      {/* การ์ดสรุป 3 ใบ — 3 คอลัมน์พอดีจอ 375px */}
+      {/* การ์ดสรุป 3 ใบ — กดเพื่อกรองรายการด้านล่าง (ส่วน "เสร็จแล้ว" พาไปหน้าประวัติซ่อม) */}
       <div className="grid grid-cols-3 gap-2.5 px-4 pt-4 sm:gap-4 sm:px-6 sm:pt-5">
         {summary.map((s) => {
           const tone = REPAIR_TONES[s.key]
+          const selected = filterStatus === s.key
           return (
-            <div key={s.key} className={`rounded-2xl border p-3 sm:p-4 ${tone.card}`}>
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => (s.key === 'done' ? navigate('/repairs/recent') : setFilterStatus(selected ? 'all' : s.key))}
+              aria-pressed={s.key === 'done' ? undefined : selected}
+              className={`rounded-2xl border p-3 text-left transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 sm:p-4 ${tone.card} ${
+                s.key !== 'done' && selected ? 'ring-2 ring-sky-500 ring-offset-1 dark:ring-offset-gray-900' : ''
+              }`}
+            >
               <p className={`text-xs font-semibold sm:text-sm ${tone.text}`}>{s.label}</p>
               <p className={`mt-1 text-2xl font-bold tabular-nums tracking-tight ${tone.text}`}>{s.value}</p>
-            </div>
+            </button>
           )
         })}
       </div>
@@ -3642,36 +3990,19 @@ function RepairSection({ items, loading, error, completingId, onComplete, onRetr
           ))}
         </div>
       ) : error ? (
-        <div className="p-8 text-center sm:p-10">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400">
-            <Icon name="warning" className="h-6 w-6" />
-          </div>
-          <h3 className="mt-4 text-base font-semibold text-gray-900 dark:text-gray-100">ไม่สามารถโหลดรายการแจ้งซ่อมได้</h3>
-          <p className="mx-auto mt-2 max-w-md text-sm text-gray-500 dark:text-gray-400">{error}</p>
-          <button
-            type="button"
-            onClick={onRetry}
-            className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-sky-500 lg:py-2.5 lg:text-sm"
-          >
-            <Icon name="refresh" className="h-4 w-4" />
-            ลองอีกครั้ง
-          </button>
-        </div>
-      ) : active.length === 0 ? (
-        <div className="p-8 text-center sm:p-10">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400">
-            <Icon name="check" className="h-6 w-6" />
-          </div>
-          <h3 className="mt-4 text-base font-semibold text-gray-900 dark:text-gray-100">ไม่มีงานซ่อมค้าง</h3>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">ผู้เช่ายังไม่มีคำขอซ่อมใหม่ในขณะนี้</p>
-        </div>
+        <EmptyState icon="warning" tone="rose" title="ไม่สามารถโหลดรายการแจ้งซ่อมได้" hint={error} action={<button type="button" onClick={onRetry} className={BTN.primary}><Icon name="refresh" className="h-4 w-4" />ลองอีกครั้ง</button>} />
+      ) : visible.length === 0 ? (
+        <EmptyState icon="check" tone="emerald" title={filterStatus === 'all' ? 'ไม่มีงานซ่อมค้าง' : 'ไม่มีงานในสถานะนี้'} hint={filterStatus === 'all'
+              ? 'ผู้เช่ายังไม่มีคำขอซ่อมใหม่ในขณะนี้'
+              : `กดการ์ด "${filterStatus === 'open' ? 'เปิดใหม่' : 'กำลังดำเนินการ'}' อีกครั้งเพื่อดูทุกสถานะ`} />
       ) : (
         <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 sm:p-5">
-          {active.map((t) => {
+          {visible.map((t) => {
             const rental = Array.isArray(t.rentals) ? t.rentals[0] : t.rentals
             const itemDetails = displayAssetName(rental || {})
             const custName = rental?.cust_name || 'ไม่ระบุ'
             const isCompleting = completingId === t.id
+            const isStarting = startingId === t.id
             const tone = REPAIR_TONES[t.status] || REPAIR_TONES.open
             return (
               <div
@@ -3709,24 +4040,203 @@ function RepairSection({ items, loading, error, completingId, onComplete, onRetr
                   </div>
                 )}
 
-                <button
-                  type="button"
-                  onClick={() => onComplete(t)}
-                  disabled={isCompleting}
-                  className="mt-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-base font-semibold text-white shadow-sm shadow-emerald-600/30 transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isCompleting ? (
-                    <>
-                      <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
-                      </svg>
-                      กำลังบันทึก...
-                    </>
-                  ) : (
-                    '✅ เสร็จแล้ว'
-                  )}
-                </button>
+                {t.status === 'open' ? (
+                  <button
+                    type="button"
+                    onClick={() => onStart(t)}
+                    disabled={isStarting}
+                    className="mt-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-3 text-base font-semibold text-white shadow-sm shadow-amber-500/30 transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isStarting ? (
+                      <>
+                        <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
+                        </svg>
+                        กำลังบันทึก...
+                      </>
+                    ) : (
+                      (<><Icon name="wrench" className="h-5 w-5" /> เริ่มซ่อม</>)
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onComplete(t)}
+                    disabled={isCompleting}
+                    className="mt-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-base font-semibold text-white shadow-sm shadow-emerald-600/30 transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isCompleting ? (
+                      <>
+                        <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
+                        </svg>
+                        กำลังบันทึก...
+                      </>
+                    ) : (
+                      (<><Icon name="check" className="h-5 w-5" /> ปิดงานซ่อม — บันทึกผล</>)
+                    )}
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {previewPhoto ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-4" onClick={() => setPreviewPhoto(null)}>
+          <div className="relative max-h-[90vh] max-w-3xl" onClick={(e) => e.stopPropagation()}>
+            <CloseButton variant="floating" onClose={() => setPreviewPhoto(null)} />
+            <img src={previewPhoto} alt="รูปแจ้งซ่อม" className="max-h-[90vh] max-w-full rounded-xl object-contain shadow-2xl" />
+          </div>
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
+function AllRepairsSection({ items, loading, error, onRetry }) {
+  const [previewPhoto, setPreviewPhoto] = useState(null)
+  const [filterStatus, setFilterStatus] = useState('all')
+
+  const counts = {
+    all: items.length,
+    open: items.filter((t) => t.status === 'open').length,
+    in_progress: items.filter((t) => t.status === 'in_progress').length,
+    done: items.filter((t) => t.status === 'done').length,
+  }
+
+  const filteredItems = filterStatus === 'all' ? items : items.filter((t) => t.status === filterStatus)
+
+  const tabs = [
+    { key: 'all', label: 'ทั้งหมด', count: counts.all },
+    { key: 'open', label: 'เปิดใหม่', count: counts.open },
+    { key: 'in_progress', label: 'กำลังซ่อม', count: counts.in_progress },
+    { key: 'done', label: 'ประวัติซ่อม', count: counts.done },
+  ]
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-sky-200 dark:border-sky-800/70 bg-white dark:bg-gray-900 shadow-lg shadow-sky-100/70 dark:shadow-none">
+      <div className="flex items-center justify-between gap-4 border-b border-sky-100 dark:border-sky-800/50 bg-gradient-to-r from-sky-50 dark:from-sky-950/30 to-cyan-50 dark:to-cyan-950/30 px-4 py-4 sm:px-6 sm:py-5">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sky-500 text-white shadow-lg shadow-sky-500/40">
+            <Icon name="wrench" className="h-6 w-6" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100 lg:hidden">คำขอซ่อมทั้งหมด</h2>
+            <p className="truncate text-sm text-sky-700 dark:text-sky-300 lg:hidden">รวมทุกสถานะ · เรียงใหม่สุดขึ้นก่อน</p>
+          </div>
+        </div>
+        <span className="inline-flex shrink-0 items-center rounded-full bg-sky-100 dark:bg-sky-900/40 px-3 py-1 text-xs font-semibold text-sky-800 dark:text-sky-200 ring-1 ring-inset ring-sky-200 dark:ring-sky-800/70">
+          {loading ? 'กำลังโหลด...' : `${filteredItems.length} รายการ`}
+        </span>
+      </div>
+
+      {/* แท็บกรอง */}
+      <div className="border-b border-sky-100 dark:border-sky-800/50 bg-white dark:bg-gray-900">
+        <div className="flex gap-1 overflow-x-auto px-4 sm:px-6">
+          {tabs.map((tab) => {
+            const isActive = filterStatus === tab.key
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setFilterStatus(tab.key)}
+                className={`shrink-0 border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${
+                  isActive
+                    ? 'border-sky-500 text-sky-600 dark:text-sky-400'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                {tab.label}
+                <span className={`ml-2 rounded-full px-2 py-0.5 text-xs font-bold ${
+                  isActive
+                    ? 'bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300'
+                    : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+                }`}>
+                  {tab.count}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="space-y-3 p-4 sm:p-6">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-32 animate-pulse rounded-xl bg-sky-50 dark:bg-sky-950/30" />
+          ))}
+        </div>
+      ) : error ? (
+        <EmptyState icon="warning" tone="rose" title="ไม่สามารถโหลดรายการแจ้งซ่อมได้" hint={error} action={<button type="button" onClick={onRetry} className={BTN.primary}><Icon name="refresh" className="h-4 w-4" />ลองอีกครั้ง</button>} />
+      ) : filteredItems.length === 0 ? (
+        <EmptyState icon="document" tone="gray" title="ไม่มีรายการที่ตรงกัน" hint="ลองเปลี่ยนแท็บเพื่อดูรายการอื่น" />
+      ) : (
+        <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 sm:p-5">
+          {filteredItems.map((t) => {
+            const rental = Array.isArray(t.rentals) ? t.rentals[0] : t.rentals
+            const itemDetails = displayAssetName(rental || {})
+            const custName = rental?.cust_name || 'ไม่ระบุ'
+            const isFailed = t.status === 'done' && t.outcome === 'failed'
+            const tone = isFailed ? REPAIR_TONES.open : REPAIR_TONES[t.status] || REPAIR_TONES.open
+            const statusLabel =
+              t.status === 'done'
+                ? t.outcome === 'success'
+                  ? 'ซ่อมสำเร็จ'
+                  : isFailed
+                    ? 'ซ่อมไม่สำเร็จ'
+                    : 'เสร็จแล้ว'
+                : t.status === 'in_progress'
+                  ? 'กำลังซ่อม'
+                  : 'เปิดใหม่'
+
+            return (
+              <div
+                key={t.id}
+                className="flex flex-col gap-3 rounded-2xl border border-sky-200 dark:border-sky-800/70 bg-white dark:bg-gray-900 p-4 shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-bold text-gray-900 dark:text-gray-100">{itemDetails}</p>
+                    <p className="mt-0.5 truncate text-sm text-gray-600 dark:text-gray-400">{custName}</p>
+                  </div>
+                  <span className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${tone.card} ${tone.text}`}>
+                    {statusLabel}
+                  </span>
+                </div>
+
+                <p className="text-base leading-relaxed text-gray-800 dark:text-gray-200">{t.description}</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500">
+                  แจ้งเมื่อ {formatDate(t.created_at)}
+                  {t.status === 'done' && t.done_at ? ` · ปิดงาน ${formatDate(t.done_at)}` : ''}
+                </p>
+
+                {t.done_note ? (
+                  <p className="rounded-xl bg-gray-50 px-3.5 py-2.5 text-sm text-gray-600 dark:bg-gray-950 dark:text-gray-400">
+                    หมายเหตุ: {t.done_note}
+                  </p>
+                ) : null}
+
+                {t.photo_url ? (
+                  <button
+                    type="button"
+                    onClick={() => setPreviewPhoto(t.photo_url)}
+                    className="group relative block overflow-hidden rounded-xl border border-sky-200 dark:border-sky-800/70"
+                    aria-label="ดูรูปแจ้งซ่อมเต็มจอ"
+                  >
+                    <img src={t.photo_url} alt="รูปแจ้งซ่อม" className="h-40 w-full object-cover" loading="lazy" />
+                    <span className="absolute inset-x-0 bottom-0 bg-gray-900/60 px-3 py-1.5 text-center text-sm font-semibold text-white">
+                      แตะเพื่อดูรูปเต็มจอ
+                    </span>
+                  </button>
+                ) : (
+                  <div className="flex h-20 items-center justify-center rounded-xl border border-dashed border-sky-200 dark:border-sky-800/70 bg-sky-50/60 dark:bg-sky-950/30 text-sm text-sky-600 dark:text-sky-400">
+                    ไม่มีรูปประกอบ
+                  </div>
+                )}
               </div>
             )
           })}
@@ -3742,17 +4252,126 @@ function RepairSection({ items, loading, error, completingId, onComplete, onRetr
               className="absolute -right-3 -top-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 shadow-lg transition-colors hover:text-gray-900 dark:hover:text-gray-100"
               aria-label="ปิด"
             >
-              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-              </svg>
+              <Icon name="close" className="h-5 w-5" />
             </button>
-            <img src={previewPhoto} alt="รูปแจ้งซ่อม" className="max-h-[90vh] max-w-full rounded-xl object-contain shadow-2xl" />
+            <img src={previewPhoto} alt="รูปแจ้งซ่อม" className="max-h-[90vh] rounded-2xl shadow-2xl" />
           </div>
         </div>
       ) : null}
     </section>
   )
 }
+
+function AllPaymentsSection({ items, loading, error, onRetry }) {
+  const [filterPeriod, setFilterPeriod] = useState('all')
+
+  // แท็บเดือนย้อนหลัง 3 เดือน — เก็บเป็น ISO 'YYYY-MM' ให้เทียบกับ tx.period ได้ตรงๆ
+  // (formatPeriod รับเฉพาะรูปแบบนี้ ถ้าส่ง ISO timestamp เต็มเข้าไปจะได้ string ดิบกลับ ทำให้ label เพี้ยนและ count เป็น 0 เสมอ)
+  const periods = []
+  const now = new Date()
+  for (let i = 0; i < 3; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    periods.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+  }
+
+  // เทียบสองฝั่งผ่าน formatPeriod เพื่อรองรับ period เก่าที่เคยบันทึกเป็นข้อความไทย
+  const samePeriod = (a, b) => formatPeriod(a) === formatPeriod(b)
+  const filteredItems = filterPeriod === 'all' ? items : items.filter((tx) => samePeriod(tx.period, filterPeriod))
+
+  const tabs = [
+    { key: 'all', label: 'ทั้งหมด', count: items.length },
+    ...periods.map((p) => ({
+      key: p,
+      label: formatPeriod(p),
+      count: items.filter((tx) => samePeriod(tx.period, p)).length,
+    })),
+  ]
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-emerald-200 dark:border-emerald-800/70 bg-white dark:bg-gray-900 shadow-lg shadow-emerald-100/70 dark:shadow-none">
+      <div className="flex items-center justify-between gap-4 border-b border-emerald-100 dark:border-emerald-800/50 bg-gradient-to-r from-emerald-50 dark:from-emerald-950/30 to-teal-50 dark:to-teal-950/30 px-4 py-4 sm:px-6 sm:py-5">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-lg shadow-emerald-500/40">
+            <Icon name="banknotes" className="h-6 w-6" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100 lg:hidden">ชำระเงินทั้งหมด</h2>
+            <p className="truncate text-sm text-emerald-700 dark:text-emerald-300 lg:hidden">บิลที่ยืนยันการชำระแล้ว · เรียงใหม่สุดขึ้นก่อน</p>
+          </div>
+        </div>
+        <span className="inline-flex shrink-0 items-center rounded-full bg-emerald-100 dark:bg-emerald-900/40 px-3 py-1 text-xs font-semibold text-emerald-800 dark:text-emerald-200 ring-1 ring-inset ring-emerald-200 dark:ring-emerald-800/70">
+          {loading ? 'กำลังโหลด...' : `${filteredItems.length} รายการ`}
+        </span>
+      </div>
+
+      {/* แท็บกรอง */}
+      <div className="border-b border-emerald-100 dark:border-emerald-800/50 bg-white dark:bg-gray-900">
+        <div className="flex gap-1 overflow-x-auto px-4 sm:px-6">
+          {tabs.map((tab) => {
+            const isActive = filterPeriod === tab.key
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setFilterPeriod(tab.key)}
+                className={`shrink-0 border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${
+                  isActive
+                    ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}
+              >
+                {tab.label}
+                <span className={`ml-2 rounded-full px-2 py-0.5 text-xs font-bold ${
+                  isActive
+                    ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
+                    : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
+                }`}>
+                  {tab.count}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="space-y-3 p-4 sm:p-6">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-16 animate-pulse rounded-xl bg-emerald-50 dark:bg-emerald-950/30" />
+          ))}
+        </div>
+      ) : error ? (
+        <EmptyState icon="warning" tone="rose" title="ไม่สามารถโหลดรายการชำระเงินได้" hint={error} action={<button type="button" onClick={onRetry} className={BTN.primary}><Icon name="refresh" className="h-4 w-4" />ลองอีกครั้ง</button>} />
+      ) : filteredItems.length === 0 ? (
+        <EmptyState icon="document" tone="gray" title="ไม่มีรายการที่ตรงกัน" hint="ลองเปลี่ยนแท็บเพื่อดูรายการอื่น" />
+      ) : (
+        <div className="divide-y divide-emerald-100 dark:divide-emerald-800/50">
+          {filteredItems.map((tx) => {
+            const rental = Array.isArray(tx.rentals) ? tx.rentals[0] : tx.rentals
+            return (
+              <div key={tx.id} className="flex items-center gap-4 px-4 py-4 sm:px-6 sm:py-5">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                  <Icon name="check" className="h-6 w-6" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-base font-bold text-gray-900 dark:text-gray-100">{rental?.cust_name || 'ไม่ระบุ'}</p>
+                  <p className="mt-0.5 truncate text-sm text-gray-600 dark:text-gray-400">
+                    {displayAssetName(rental || {})} · {formatPeriod(tx.period) || formatDate(tx.created_at)}
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-base font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{formatCurrency(txAmount(tx))}</p>
+                  <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{formatDate(tx.created_at)}</p>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </section>
+  )
+}
+
 
 // EMPTY_FORM, inputClass, CollapsibleSection, Toggle, AddRentalModal
 // ย้ายไป src/utils/asset.js, src/components/styles.js, src/components/formControls.jsx,
@@ -3786,18 +4405,9 @@ function LineBindingModal({ code, custName, onClose }) {
 
       <div className="relative flex max-h-[92vh] w-full flex-col overflow-y-auto overflow-x-hidden rounded-t-3xl bg-white dark:bg-gray-900 shadow-2xl sm:max-h-[90vh] sm:max-w-lg sm:rounded-2xl">
         <div className="relative bg-gradient-to-br from-emerald-600 to-teal-600 px-6 py-6 text-white">
-          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-100">เพิ่มสินทรัพย์สำเร็จ</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-100">เพิ่มผู้เช่าสำเร็จ</p>
           <h2 className="mt-1 text-xl font-bold tracking-tight">ผูกกลุ่มไลน์สำหรับทวงหนี้อัตโนมัติ</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-lg text-emerald-100 transition-colors hover:bg-white/10 hover:text-white lg:right-4 lg:top-4 lg:h-auto lg:w-auto lg:p-1.5"
-            aria-label="ปิด"
-          >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <CloseButton variant="floating" onClose={onClose} />
         </div>
 
         <div className="px-6 py-6">
@@ -3807,6 +4417,11 @@ function LineBindingModal({ code, custName, onClose }) {
             </p>
           )}
 
+          <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-900/20 px-3.5 py-2.5 text-xs leading-relaxed text-amber-800 dark:text-amber-200">
+            <Icon name="refresh" className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>รหัสถูกออกใหม่ให้ผู้เช่ารายนี้แล้ว — ต้องพิมพ์รหัสนี้ในกลุ่มไลน์ก่อน ระบบจึงจะส่งบิลเข้ากลุ่ม (รหัสและกลุ่มของผู้เช่าก่อนหน้าใช้ต่อไม่ได้)</span>
+          </div>
+
           <div className="mt-4 rounded-2xl border-2 border-dashed border-emerald-300 dark:border-emerald-800/70 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-5 text-center">
             <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">รหัสผูกกลุ่มของคุณ</p>
             <p className="mt-2 font-mono text-4xl font-bold tracking-[0.2em] text-gray-900 dark:text-gray-100">{code}</p>
@@ -3815,14 +4430,14 @@ function LineBindingModal({ code, custName, onClose }) {
               onClick={copyCode}
               className="mt-4 inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500 lg:min-h-0 lg:px-3 lg:py-1.5 lg:text-xs"
             >
-              {copied ? '✓ คัดลอกแล้ว' : 'คัดลอกรหัส'}
+              {copied ? (<><Icon name="check" className="h-4 w-4" /> คัดลอกแล้ว</>) : 'คัดลอกรหัส'}
             </button>
           </div>
 
           <ol className="mt-6 space-y-4">
             {steps.map((step, i) => (
               <li key={i} className="flex gap-3">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-sm font-bold text-white shadow-sm shadow-indigo-600/30">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold text-white shadow-sm shadow-emerald-600/30">
                   {i + 1}
                 </span>
                 <div>
@@ -3836,7 +4451,7 @@ function LineBindingModal({ code, custName, onClose }) {
           <button
             type="button"
             onClick={onClose}
-            className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-indigo-600 px-4 py-4 text-base font-semibold text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500 sm:py-3 sm:text-sm"
+            className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-4 text-base font-semibold text-white shadow-sm shadow-emerald-600/30 transition-colors hover:bg-emerald-500 sm:py-3 sm:text-sm"
           >
             เข้าใจแล้ว
           </button>
@@ -3898,13 +4513,15 @@ function MeterBillModal({ rental, onClose, onConfirm, onResendBill, onResendRece
   const lastElec = Number(rental.last_elec_meter) || 0
   const waterRate = Number(rental.water_rate) || 0
   const elecRate = Number(rental.elec_rate) || 0
+  const minWater = Number(rental.min_water_charge) || 0
+  const minElec = Number(rental.min_elec_charge) || 0
 
   const curWater = Number(waterCurrent) || 0
   const curElec = Number(elecCurrent) || 0
   const waterUnits = Math.max(0, curWater - lastWater)
-  const waterCost = waterUnits * waterRate
+  const waterCost = Math.max(waterUnits * waterRate, minWater)
   const elecUnits = Math.max(0, curElec - lastElec)
-  const elecCost = elecUnits * elecRate
+  const elecCost = Math.max(elecUnits * elecRate, minElec)
   const totalAmount = amount + (utilityEnabled ? waterCost + elecCost : 0)
 
   // ตัวเลือกงวด: 3 เดือนก่อนย้อนหลัง จนถึงเดือนหน้า (value = ISO สำหรับบันทึก, label = ไทยสำหรับแสดง)
@@ -3975,7 +4592,7 @@ function MeterBillModal({ rental, onClose, onConfirm, onResendBill, onResendRece
       <div className="relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white dark:bg-gray-900 shadow-2xl sm:max-h-[90vh] sm:max-w-lg sm:rounded-2xl">
         <div className="flex items-start justify-between border-b border-gray-100 dark:border-gray-800 px-6 py-5">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-600/30">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-lg shadow-emerald-600/30">
               <Icon name="banknotes" className="h-5 w-5" />
             </div>
             <div>
@@ -3983,13 +4600,11 @@ function MeterBillModal({ rental, onClose, onConfirm, onResendBill, onResendRece
               <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">{rental.cust_name} · {displayAssetName(rental)}</p>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 lg:mr-0 lg:h-auto lg:w-auto lg:p-1.5" aria-label="ปิด">
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-          </button>
+          <CloseButton onClose={onClose} />
         </div>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
-          <div className="rounded-xl bg-indigo-50 dark:bg-indigo-950/30 px-4 py-3 text-sm text-indigo-700 dark:text-indigo-300">
+          <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
             ค่าเช่า / ค่างวด: <span className="font-semibold">{formatCurrency(amount)}</span>
           </div>
 
@@ -4003,7 +4618,7 @@ function MeterBillModal({ rental, onClose, onConfirm, onResendBill, onResendRece
             {periodHasBill ? (
               <div className="mt-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 px-3 py-2.5">
                 <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
-                  ⚠️ งวดนี้มีบิลอยู่แล้ว — ไม่สามารถสร้างบิลซ้ำได้
+                  <Icon name="warning" className="h-5 w-5" /> งวดนี้มีบิลอยู่แล้ว — ไม่สามารถสร้างบิลซ้ำได้
                 </p>
                 <p className="mt-1 text-xs text-amber-600/90 dark:text-amber-400/80">
                   {billIsPaid
@@ -4023,7 +4638,7 @@ function MeterBillModal({ rental, onClose, onConfirm, onResendBill, onResendRece
                         กำลังส่ง...
                       </>
                     ) : (
-                      <>📤 ส่งบิลนี้เข้าไลน์อีกครั้ง</>
+                      <><Icon name="send" className="h-5 w-5" /> ส่งบิลนี้เข้าไลน์อีกครั้ง</>
                     )}
                   </button>
                   {billIsPaid && (
@@ -4039,7 +4654,7 @@ function MeterBillModal({ rental, onClose, onConfirm, onResendBill, onResendRece
                           กำลังส่ง...
                         </>
                       ) : (
-                        <>🧾 ส่งใบเสร็จอีกครั้ง</>
+                        <><Icon name="receipt" className="h-5 w-5" /> ส่งใบเสร็จอีกครั้ง</>
                       )}
                     </button>
                   )}
@@ -4094,11 +4709,11 @@ function MeterBillModal({ rental, onClose, onConfirm, onResendBill, onResendRece
               onChange={(e) => setSendToLine(e.target.checked)}
               className="h-6 w-6 rounded border-gray-300 dark:border-gray-600 text-blue-600 dark:text-blue-400 focus:ring-blue-500 lg:h-4 lg:w-4"
             />
-            📥 ส่งบิลเข้าไลน์อัตโนมัติ
+            <Icon name="send" className="h-5 w-5" /> ส่งบิลเข้าไลน์อัตโนมัติ
           </label>
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
-            <button type="button" onClick={onClose} disabled={saving} className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-4 text-base font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm">ยกเลิก</button>
-            <button type="button" onClick={handleConfirm} disabled={saving || periodHasBill} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-4 text-base font-semibold text-white shadow-sm transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm">
+            <button type="button" onClick={onClose} disabled={saving} className={`${BTN.secondary} w-full sm:w-auto`}>ยกเลิก</button>
+            <button type="button" onClick={handleConfirm} disabled={saving || periodHasBill} className={`${BTN.primary} w-full sm:w-auto`}>
               {saving ? (<><svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" /></svg>กำลังสร้างบิล...</>) : periodHasBill ? 'งวดนี้มีบิลแล้ว' : 'สร้างบิล'}
             </button>
           </div>
@@ -4141,17 +4756,15 @@ function RenewModal({ rental, onClose, onConfirm }) {
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">ต่อสัญญา</h2>
             <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">{rental.cust_name} · {displayAssetName(rental)}</p>
           </div>
-          <button type="button" onClick={onClose} className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 lg:mr-0 lg:h-auto lg:w-auto lg:p-1.5" aria-label="ปิด">
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-          </button>
+          <CloseButton onClose={onClose} />
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-5">
           <label htmlFor="renew_lease_end" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">วันสิ้นสุดสัญญาใหม่</label>
           <input id="renew_lease_end" type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
         </div>
         <div className="flex flex-col-reverse gap-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-6 py-4 sm:flex-row sm:items-center sm:justify-end">
-          <button type="button" onClick={onClose} disabled={saving} className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-4 text-base font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm">ยกเลิก</button>
-          <button type="button" onClick={handleConfirm} disabled={saving} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-4 text-base font-semibold text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm">
+          <button type="button" onClick={onClose} disabled={saving} className={`${BTN.secondary} w-full sm:w-auto`}>ยกเลิก</button>
+          <button type="button" onClick={handleConfirm} disabled={saving} className={`${BTN.primary} w-full sm:w-auto`}>
             {saving ? 'กำลังบันทึก...' : 'บันทึก'}
           </button>
         </div>
@@ -4212,7 +4825,7 @@ function LeaseActionModal({ rental, mode, onClose, onConfirm }) {
           )}
         </div>
         <div className="flex flex-col-reverse gap-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-6 py-4 sm:flex-row sm:items-center sm:justify-end">
-          <button type="button" onClick={onClose} disabled={saving} className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-4 text-base font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm">ยกเลิก</button>
+          <button type="button" onClick={onClose} disabled={saving} className={`${BTN.secondary} w-full sm:w-auto`}>ยกเลิก</button>
           <button type="button" onClick={handleConfirm} disabled={saving} className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-4 text-base font-semibold text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm ${isDelete ? 'bg-rose-600 hover:bg-rose-500' : 'bg-amber-500 hover:bg-amber-400'}`}>
             {saving ? 'กำลังดำเนินการ...' : confirmLabel}
           </button>
@@ -4226,6 +4839,7 @@ function AssetDetailModal({ rental, onClose, onToast }) {
   const [copied, setCopied] = useState(false)
   const [reminders, setReminders] = useState(null)
   const [expandedReminder, setExpandedReminder] = useState(null)
+  const [showEdit, setShowEdit] = useState(false)
 
   // ประวัติการติดต่อ: reminders ของทุกบิลของห้องนี้ (ค้นผ่าน transaction_id แบบ client-side)
   useEffect(() => {
@@ -4272,9 +4886,38 @@ function AssetDetailModal({ rental, onClose, onToast }) {
       await navigator.clipboard.writeText(String(code))
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
-      onToast?.({ type: 'success', message: 'คัดลอกแล้ว' })
-    } catch {
-      onToast?.({ type: 'error', message: 'คัดลอกรหัสไม่สำเร็จ' })
+    } catch (err) {
+      console.error('Copy error:', err)
+    }
+  }
+
+  const handleSaveEdit = async (patch) => {
+    try {
+      const { error } = await supabase
+        .from('rentals')
+        .update(patch)
+        .eq('id', rental.id)
+
+      if (error) throw error
+
+      // Audit log
+      const auditFields = ['bill_day', 'penalty_day', 'min_water_charge', 'min_elec_charge']
+      for (const field of auditFields) {
+        if (patch[field] !== undefined && patch[field] !== rental[field]) {
+          await supabase.from('rental_audit_log').insert({
+            rental_id: rental.id,
+            field_name: field,
+            old_value: String(rental[field] ?? ''),
+            new_value: String(patch[field] ?? ''),
+          })
+        }
+      }
+
+      onToast?.({ type: 'success', message: 'บันทึกแล้ว' })
+      onClose()
+    } catch (err) {
+      console.error('Save rental edit:', err)
+      onToast?.({ type: 'error', message: err.message || 'บันทึกไม่สำเร็จ' })
     }
   }
 
@@ -4311,7 +4954,7 @@ function AssetDetailModal({ rental, onClose, onToast }) {
       <div className="relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white dark:bg-gray-900 shadow-2xl sm:max-h-[85vh] sm:max-w-lg sm:rounded-2xl">
         <div className="flex items-start justify-between border-b border-gray-100 dark:border-gray-800 px-6 py-5">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/30">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-lg shadow-emerald-600/30">
               <Icon name="document" className="h-5 w-5" />
             </div>
             <div>
@@ -4319,16 +4962,16 @@ function AssetDetailModal({ rental, onClose, onToast }) {
               <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">{rental.cust_name} · {displayAssetName(rental)}</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 lg:mr-0 lg:h-auto lg:w-auto lg:p-1.5"
-            aria-label="ปิด"
-          >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setShowEdit(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500"
+            >
+              <Icon name="edit" className="h-4 w-4" /> แก้ไข
+            </button>
+            <CloseButton onClose={onClose} />
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5">
@@ -4336,7 +4979,7 @@ function AssetDetailModal({ rental, onClose, onToast }) {
             <p className="text-sm font-bold text-emerald-800 dark:text-emerald-200">เชื่อมต่อ LINE</p>
             {rental.group_id ? (
               <span className="mt-2 inline-flex items-center rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white">
-                🔗 ผูกกลุ่มแล้ว
+                <Icon name="link" className="h-4 w-4" /> ผูกกลุ่มแล้ว
               </span>
             ) : (
               <div className="mt-2">
@@ -4346,7 +4989,7 @@ function AssetDetailModal({ rental, onClose, onToast }) {
                   onClick={copyBindingCode}
                   className="mt-3 inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500 lg:min-h-0 lg:px-3 lg:py-1.5 lg:text-xs"
                 >
-                  {copied ? '✓ คัดลอกแล้ว' : 'คัดลอกรหัส'}
+                  {copied ? (<><Icon name="check" className="h-4 w-4" /> คัดลอกแล้ว</>) : 'คัดลอกรหัส'}
                 </button>
                 <ol className="mt-3 space-y-1 text-xs leading-relaxed text-gray-600 dark:text-gray-400">
                   <li>1) เพิ่มเพื่อนบอท PayRentPro ใน LINE {import.meta.env.VITE_LINE_BOT_ID ? `(ID: ${import.meta.env.VITE_LINE_BOT_ID})` : '(ดู ID บอทในคู่มือ)'}</li>
@@ -4379,7 +5022,7 @@ function AssetDetailModal({ rental, onClose, onToast }) {
             ) : (
               <ol className="mt-3 ml-4 border-l-2 border-gray-200 dark:border-gray-700 pl-5">
                 {reminders.map((r, i) => {
-                  const icon = r.kind === 'due_soon' ? '⏰' : r.kind === 'chase' ? '⚠️' : r.kind === 'receipt' ? '🧾' : '💬'
+                  const icon = r.kind === 'due_soon' ? 'clock' : r.kind === 'chase' ? 'warning' : r.kind === 'receipt' ? 'receipt' : 'megaphone'
                   const expanded = expandedReminder === i
                   const at = r.sent_at
                     ? new Date(r.sent_at).toLocaleString('th-TH', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' น.'
@@ -4387,7 +5030,7 @@ function AssetDetailModal({ rental, onClose, onToast }) {
                   return (
                     <li key={`${r.sent_at ?? ''}-${i}`} className="relative pb-4 last:pb-0">
                       <span className="absolute -left-[35px] top-0 flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-base shadow-sm">
-                        {icon}
+                        <Icon name={icon} className="h-5 w-5" />
                       </span>
                       <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{at}</p>
                       <button
@@ -4397,7 +5040,7 @@ function AssetDetailModal({ rental, onClose, onToast }) {
                       >
                         {r.message_text || '—'}
                       </button>
-                      <span className="mt-0.5 inline-block text-xs font-medium text-indigo-500 dark:text-indigo-400">
+                      <span className="mt-0.5 inline-block text-xs font-medium text-emerald-500 dark:text-emerald-400">
                         {expanded ? 'ย่อ' : 'อ่านทั้งหมด'}
                       </span>
                     </li>
@@ -4412,10 +5055,130 @@ function AssetDetailModal({ rental, onClose, onToast }) {
           <button
             type="button"
             onClick={onClose}
-            className="w-full rounded-xl bg-indigo-600 px-4 py-4 text-base font-semibold text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500 lg:py-2.5 lg:text-sm"
+            className={`${BTN.primary} w-full`}
           >
             ปิด
           </button>
+        </div>
+      </div>
+
+      {showEdit && (
+        <EditRentalModal
+          rental={rental}
+          onClose={() => setShowEdit(false)}
+          onSave={handleSaveEdit}
+        />
+      )}
+    </div>
+  )
+}
+
+function EditRentalModal({ rental, onClose, onSave }) {
+  const [form, setForm] = useState({
+    bill_day: rental.bill_day ?? rental.due_date ?? 1,
+    penalty_day: rental.penalty_day ?? rental.due_date ?? 1,
+    min_water_charge: rental.min_water_charge ?? 0,
+    min_elec_charge: rental.min_elec_charge ?? 0,
+  })
+  const [saving, setSaving] = useState(false)
+
+  const handleSubmit = async () => {
+    setSaving(true)
+    try {
+      await onSave(form)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center sm:p-4">
+      <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+
+      <div className="relative flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white dark:bg-gray-900 shadow-2xl sm:max-w-md sm:rounded-2xl">
+        <div className="border-b border-gray-100 dark:border-gray-800 px-6 py-5">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">แก้ไขรายละเอียดห้อง</h2>
+          <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">{rental.cust_name} · {displayAssetName(rental)}</p>
+        </div>
+
+        <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
+          <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-4 py-3">
+            <p className="text-sm font-bold text-amber-800 dark:text-amber-200">รอบบิล & ค่าปรับ</p>
+            <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+              วันส่งบิล (bill_day) = วันที่ส่งบิลเข้าไลน์ · วันเริ่มคิดค่าปรับ (penalty_day) = วันที่เกินแล้วเริ่มปรับ
+            </p>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">วันส่งบิล (1-31)</label>
+            <input
+              type="number"
+              min="1"
+              max="31"
+              value={form.bill_day}
+              onChange={(e) => setForm({ ...form, bill_day: Number(e.target.value) })}
+              className={inputClass}
+            />
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">วันเริ่มคิดค่าปรับ (1-31)</label>
+            <input
+              type="number"
+              min="1"
+              max="31"
+              value={form.penalty_day}
+              onChange={(e) => setForm({ ...form, penalty_day: Number(e.target.value) })}
+              className={inputClass}
+            />
+          </div>
+
+          <div className="rounded-xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/30 px-4 py-3">
+            <p className="text-sm font-bold text-sky-800 dark:text-sky-200">ค่าขั้นต่ำน้ำไฟ</p>
+            <p className="mt-1 text-xs text-sky-700 dark:text-sky-300">
+              ถ้าคำนวณแล้วยอดต่ำกว่าขั้นต่ำ = ใช้ยอดขั้นต่ำ (ใช้ได้ทั้งบิลรวมและบิลแยก)
+            </p>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">ค่าน้ำขั้นต่ำ (฿)</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={form.min_water_charge}
+              onChange={(e) => setForm({ ...form, min_water_charge: Number(e.target.value) })}
+              className={inputClass}
+            />
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">ค่าไฟขั้นต่ำ (฿)</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={form.min_elec_charge}
+              onChange={(e) => setForm({ ...form, min_elec_charge: Number(e.target.value) })}
+              className={inputClass}
+            />
+          </div>
+        </div>
+
+        <div className="border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-6 py-4">
+          <div className="flex gap-3">
+            <button type="button" onClick={onClose} className={`${BTN.secondary} flex-1`}>
+              ยกเลิก
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={saving}
+              className={`${BTN.primary} flex-1`}
+            >
+              {saving ? 'กำลังบันทึก...' : 'บันทึก'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -4553,7 +5316,7 @@ function SettingsModal({ open, onClose, onSaved }) {
       <div className="relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white dark:bg-gray-900 shadow-2xl sm:max-h-[90vh] sm:max-w-lg sm:rounded-2xl">
         <div className="flex items-start justify-between border-b border-gray-100 dark:border-gray-800 px-6 py-5">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/30">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-lg shadow-emerald-600/30">
               <Icon name="cog" className="h-5 w-5" />
             </div>
             <div>
@@ -4561,16 +5324,7 @@ function SettingsModal({ open, onClose, onSaved }) {
               <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">กำหนดช่องทางที่ผู้เช่าใช้โอนเงินให้คุณ</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 lg:mr-0 lg:h-auto lg:w-auto lg:p-1.5"
-            aria-label="ปิด"
-          >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <CloseButton onClose={onClose} />
         </div>
 
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
@@ -4616,7 +5370,7 @@ function SettingsModal({ open, onClose, onSaved }) {
                     <button
                       type="button"
                       onClick={() => setForm((prev) => ({ ...prev, payment_type: 'promptpay' }))}
-                      className={`rounded-xl border-2 px-4 py-3 text-left transition-colors ${!isBank ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/30' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-gray-300 dark:hover:border-gray-500'}`}
+                      className={`rounded-xl border-2 px-4 py-3 text-left transition-colors ${!isBank ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/30' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-gray-300 dark:hover:border-gray-500'}`}
                     >
                       <span className="block text-sm font-semibold text-gray-900 dark:text-gray-100">พร้อมเพย์ (PromptPay)</span>
                       <span className="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">เบอร์โทร / เลขบัตรประชาชน</span>
@@ -4624,7 +5378,7 @@ function SettingsModal({ open, onClose, onSaved }) {
                     <button
                       type="button"
                       onClick={() => setForm((prev) => ({ ...prev, payment_type: 'bank' }))}
-                      className={`rounded-xl border-2 px-4 py-3 text-left transition-colors ${isBank ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/30' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-gray-300 dark:hover:border-gray-500'}`}
+                      className={`rounded-xl border-2 px-4 py-3 text-left transition-colors ${isBank ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/30' : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-gray-300 dark:hover:border-gray-500'}`}
                     >
                       <span className="block text-sm font-semibold text-gray-900 dark:text-gray-100">บัญชีธนาคาร</span>
                       <span className="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">โอนผ่านเลขบัญชีธนาคาร</span>
@@ -4643,7 +5397,7 @@ function SettingsModal({ open, onClose, onSaved }) {
                     onChange={updateField('promptpay_name')}
                     placeholder="เช่น สมชาย ใจดี"
                     required
-                    className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 shadow-sm transition placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 shadow-sm transition placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                   />
                 </div>
 
@@ -4658,7 +5412,7 @@ function SettingsModal({ open, onClose, onSaved }) {
                         value={form.bank_code}
                         onChange={updateField('bank_code')}
                         required
-                        className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 shadow-sm transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                        className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 shadow-sm transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                       >
                         <option value="" disabled>เลือกธนาคาร</option>
                         {BANKS.map((b) => (
@@ -4678,7 +5432,7 @@ function SettingsModal({ open, onClose, onSaved }) {
                         onChange={updateField('bank_account')}
                         placeholder="เช่น 1234567890"
                         required
-                        className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 shadow-sm transition placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                        className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 shadow-sm transition placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                       />
                     </div>
                   </>
@@ -4695,7 +5449,7 @@ function SettingsModal({ open, onClose, onSaved }) {
                       onChange={updateField('promptpay')}
                       placeholder="เช่น 0812345678 หรือ 1234567890123"
                       required
-                      className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 shadow-sm transition placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                      className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3.5 py-2.5 text-sm text-gray-900 dark:text-gray-100 shadow-sm transition placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                     />
                   </div>
                 )}
@@ -4708,14 +5462,14 @@ function SettingsModal({ open, onClose, onSaved }) {
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-4 text-base font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm"
+              className={`${BTN.secondary} w-full sm:w-auto`}
             >
               ยกเลิก
             </button>
             <button
               type="submit"
               disabled={saving || loading}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-4 text-base font-semibold text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm"
+              className={`${BTN.primary} w-full sm:w-auto`}
             >
               {saving ? (
                 <>
@@ -4853,19 +5607,10 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine, 
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
       <div className="relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white dark:bg-gray-900 shadow-2xl sm:max-h-[90vh] sm:max-w-md sm:rounded-2xl">
-        <div className="relative bg-gradient-to-br from-indigo-600 to-violet-600 px-6 py-6 text-white">
-          <p className="text-sm font-medium text-indigo-100">ใบแจ้งหนี้ / INVOICE</p>
+        <div className="relative bg-gradient-to-br from-emerald-600 to-teal-600 px-6 py-6 text-white">
+          <p className="text-sm font-medium text-emerald-100">ใบแจ้งหนี้ / INVOICE</p>
           <h2 className="mt-1 text-xl font-bold tracking-tight">PayRentPro</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="absolute right-2 top-2 flex h-11 w-11 items-center justify-center rounded-lg text-indigo-100 transition-colors hover:bg-white/10 hover:text-white lg:right-4 lg:top-4 lg:h-auto lg:w-auto lg:p-1.5"
-            aria-label="ปิด"
-          >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <CloseButton variant="floating" onClose={onClose} />
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-6">
           {editing ? (
@@ -4941,7 +5686,7 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine, 
                   type="button"
                   onClick={handleSaveEdit}
                   disabled={savingEdit || !editForm.reason.trim()}
-                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {savingEdit ? (
                     <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -4957,7 +5702,7 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine, 
           <>
           {justEdited && (
             <div className="mb-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 px-4 py-2.5 text-sm font-medium text-amber-700 dark:text-amber-300 ring-1 ring-inset ring-amber-200 dark:ring-amber-800/70">
-              ✏️ แก้ยอดแล้ว — ลิงก์บิลเดิมที่ผู้เช่าเปิดอยู่จะแสดงยอดใหม่อัตโนมัติ
+              <Icon name="pencil" className="h-4 w-4" /> แก้ยอดแล้ว — ลิงก์บิลเดิมที่ผู้เช่าเปิดอยู่จะแสดงยอดใหม่อัตโนมัติ
             </div>
           )}
           <div className={`mb-5 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset ${isPaid ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-800/70' : 'bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-800/70'}`}>
@@ -4967,7 +5712,7 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine, 
 
           {invoice.sent && (
             <div className="mb-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 px-4 py-2.5 text-sm font-medium text-emerald-700 dark:text-emerald-300 ring-1 ring-inset ring-emerald-200 dark:ring-emerald-800/70">
-              ✅ ส่งบิลเข้าไลน์สำเร็จแล้ว
+              <Icon name="check" className="h-4 w-4" /> ส่งบิลเข้าไลน์สำเร็จแล้ว
             </div>
           )}
 
@@ -5002,7 +5747,7 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine, 
           <div className="mt-5 flex flex-col items-center">
             {invoice.paymentType === 'bank' ? (
               <div className="w-full rounded-2xl border border-blue-100 dark:border-blue-800/50 bg-gradient-to-br from-blue-50 dark:from-blue-950/30 to-slate-50 dark:to-slate-950/30 p-5 text-center shadow-sm">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/30">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-600 text-white shadow-lg shadow-emerald-600/30">
                   <Icon name="banknotes" className="h-6 w-6" />
                 </div>
                 <p className="mt-3 text-sm font-semibold text-gray-900 dark:text-gray-100">โอนเข้าบัญชีธนาคาร</p>
@@ -5045,9 +5790,9 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine, 
             <button
               type="button"
               onClick={startEdit}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-indigo-200 dark:border-indigo-800/70 bg-indigo-50 dark:bg-indigo-950/30 px-4 py-4 text-base font-semibold text-indigo-700 dark:text-indigo-300 shadow-sm transition-colors hover:bg-indigo-100 dark:hover:bg-indigo-800/50 lg:py-2.5 lg:text-sm"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 dark:border-emerald-800/70 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-4 text-base font-semibold text-emerald-700 dark:text-emerald-300 shadow-sm transition-colors hover:bg-emerald-100 dark:hover:bg-emerald-800/50 lg:py-2.5 lg:text-sm"
             >
-              ✏️ แก้ไขยอดบิล
+              <Icon name="pencil" className="h-5 w-5" /> แก้ไขยอดบิล
             </button>
           )}
           {isPaid && (
@@ -5063,7 +5808,7 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine, 
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
                 </svg>
               ) : (
-                <span className="text-base leading-none">🧾</span>
+                <Icon name="receipt" className="h-5 w-5" />
               )}
               {issuingReceipt ? 'กำลังออกใบเสร็จ...' : 'ออกใบเสร็จ (ส่งเข้าไลน์)'}
             </button>
@@ -5085,11 +5830,11 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine, 
                 กำลังส่ง...
               </>
             ) : invoice.sent ? (
-              '✅ ส่งสำเร็จแล้ว'
+              (<><Icon name="check" className="h-4 w-4" /> ส่งสำเร็จแล้ว</>)
             ) : justEdited ? (
-              '📤 ส่งบิลฉบับแก้ไขเข้าไลน์'
+              (<><Icon name="send" className="h-4 w-4" /> ส่งบิลฉบับแก้ไขเข้าไลน์</>)
             ) : (
-              '📤 ส่งบิลเข้าไลน์'
+              (<><Icon name="send" className="h-4 w-4" /> ส่งบิลเข้าไลน์</>)
             )}
           </button>
           <div className={`grid gap-3 ${invoice.paymentType === 'bank' ? 'grid-cols-1' : 'grid-cols-2'}`}>
@@ -5108,7 +5853,7 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine, 
             <button
               type="button"
               onClick={onCopyLink}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-indigo-200 dark:border-indigo-800/70 bg-indigo-50 dark:bg-indigo-950/30 px-3 py-4 text-base font-semibold text-indigo-700 dark:text-indigo-300 shadow-sm transition-colors hover:bg-indigo-100 dark:hover:bg-indigo-800/50 lg:py-2.5 lg:text-sm"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 dark:border-emerald-800/70 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-4 text-base font-semibold text-emerald-700 dark:text-emerald-300 shadow-sm transition-colors hover:bg-emerald-100 dark:hover:bg-emerald-800/50 lg:py-2.5 lg:text-sm"
             >
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
@@ -5121,7 +5866,7 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine, 
             onClick={handleMarkPaid}
             disabled={isPaid || marking}
             className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-4 text-base font-semibold text-white shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 lg:py-2.5 lg:text-sm ${
-              isPaid ? 'bg-emerald-500' : 'bg-blue-600 hover:bg-blue-500'
+              isPaid ? 'bg-emerald-500' : 'bg-emerald-600 hover:bg-emerald-500'
             }`}
           >
             {marking ? (
@@ -5174,7 +5919,7 @@ function Toast({ toast, onClose }) {
         </svg>
         <span className="flex-1">{toast.message}</span>
         <button type="button" onClick={onClose} className="shrink-0 opacity-80 transition-opacity hover:opacity-100" aria-label="ปิด">
-          ✕
+          <Icon name="close" className="h-4 w-4" />
         </button>
       </div>
     </div>
@@ -5183,9 +5928,9 @@ function Toast({ toast, onClose }) {
 
 function TrialWelcomeScreen({ starting, notice, onStart, onSignOut }) {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-indigo-50 dark:from-indigo-950/30 via-white to-white px-4 py-10 dark:from-gray-950 dark:via-gray-950 dark:to-gray-950">
-      <div className="w-full max-w-md rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-8 shadow-xl shadow-indigo-100/60">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/30">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-emerald-50 dark:from-emerald-950/30 via-white to-white px-4 py-10 dark:from-gray-950 dark:via-gray-950 dark:to-gray-950">
+      <div className="w-full max-w-md rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-8 shadow-xl shadow-emerald-100/60">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-600/30">
           <Icon name="building" className="h-7 w-7" />
         </div>
         <h1 className="mt-5 text-center text-2xl font-bold tracking-tight text-gray-900 dark:text-gray-100">เริ่มใช้งานฟรี 30 วัน</h1>
@@ -5201,7 +5946,7 @@ function TrialWelcomeScreen({ starting, notice, onStart, onSignOut }) {
           type="button"
           onClick={onStart}
           disabled={starting}
-          className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-base font-semibold text-white shadow-lg shadow-indigo-600/30 transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+          className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-base font-semibold text-white shadow-lg shadow-emerald-600/30 transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {starting ? (
             <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -5242,9 +5987,9 @@ function ExpiredScreen({ promptpayNumber, onSignOut }) {
         <button
           type="button"
           onClick={() => navigate('/membership')}
-          className="mt-6 w-full rounded-xl bg-indigo-600 px-4 py-3 text-base font-semibold text-white shadow-lg shadow-indigo-600/30 transition-colors hover:bg-indigo-500"
+          className="mt-6 w-full rounded-xl bg-emerald-600 px-4 py-3 text-base font-semibold text-white shadow-lg shadow-emerald-600/30 transition-colors hover:bg-emerald-500"
         >
-          💎 ต่ออายุออนไลน์ (สแกน QR + อัปโหลดสลิป)
+          <Icon name="gem" className="h-5 w-5" /> ต่ออายุออนไลน์ (สแกน QR + อัปโหลดสลิป)
         </button>
         <button
           type="button"
@@ -5254,7 +5999,7 @@ function ExpiredScreen({ promptpayNumber, onSignOut }) {
           {showRenew ? 'ซ่อนวิธีต่ออายุแบบแจ้งโอน' : 'ต่ออายุด้วยการแจ้งโอนผ่าน LINE'}
         </button>
         {showRenew && (
-          <div className="mt-3 rounded-xl border border-indigo-200 dark:border-indigo-800/70 bg-indigo-50 dark:bg-indigo-950/30 px-4 py-4 text-sm leading-relaxed text-indigo-900 dark:text-indigo-200">
+          <div className="mt-3 rounded-xl border border-emerald-200 dark:border-emerald-800/70 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-4 text-sm leading-relaxed text-emerald-900 dark:text-emerald-200">
             ชำระค่าสมาชิกผ่านพร้อมเพย์ <span className="font-bold">{pp}</span> แล้วส่งสลิปที่ LINE ของเรา
             ทีมงานจะต่ออายุให้หลังตรวจสอบสลิป
           </div>
@@ -5277,12 +6022,24 @@ function App() {
 
   useEffect(() => {
     let active = true
-    supabase.auth.getSession().then(({ data }) => {
-      if (active) {
-        setSession(data.session)
-        setAuthLoading(false)
-      }
-    })
+    // จอขาวตอน F5: getSession() ใช้ Web Locks ตีความหมด (แท็บอื่นถือ lock อยู่ /
+    // refresh token ล้ม) แล้ว reject — ถ้าไม่ .catch ค่า authLoading จะค้างเป็น
+    // true ตลอดไป หน้าเลยติดที่ "กำลังโหลด..." บนพื้นขาวเฉย ๆ ต้องปิด loading เสมอ
+    const finishLoading = (sessionOrNull) => {
+      if (!active) return
+      setSession(sessionOrNull)
+      setAuthLoading(false)
+    }
+    // เบาะหลัง: getSession ค้างโดยไม่ resolve สักที (lock ตาย) — ปล่อยผ่านหน้ารอ
+    // ไปเรื่อย ๆ ไม่ได้ ให้ตัดสินใจแทนที่ 15 วิ โดย session จริงยังมาทีหลังได้
+    // ผ่าน onAuthStateChange ด้านล่าง
+    let settled = false
+    const settle = () => { settled = true }
+    supabase.auth.getSession().then(({ data }) => { settle(); finishLoading(data.session) },
+      (err) => { settle(); console.warn('getSession failed:', err?.message || err); finishLoading(null) })
+    const hangFallback = setTimeout(() => {
+      if (active && !settled) finishLoading(null)
+    }, 15000)
 
     // fallback กรณีถูกพากลับมาพร้อม magic link แบบ PKCE (?code=...)
     // ปกติ detectSessionInUrl ของ supabase จัดการตอน init แล้ว — ตรงนี้เป็นเบาะหลัง
@@ -5301,6 +6058,9 @@ function App() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session)
+      // INITIAL_SESSION ยิงเสมอหลัง subscribe — ใช้เป็นสัญญาณปิด loading อีกทาง
+      // (เผื่อ getSession ค้างแต่ event มาถึงก่อน)
+      if (event === 'INITIAL_SESSION') setAuthLoading(false)
 
       // บันทึกการเข้าสู่ระบบ — fire-and-forget ไม่ให้ล้มแล้วบล็อกการใช้งาน
       // SIGNED_IN ยิงซ้ำทุกครั้งที่ token refresh และทุกแท็บที่เปิดอยู่
@@ -5318,6 +6078,7 @@ function App() {
 
     return () => {
       active = false
+      clearTimeout(hangFallback)
       subscription.unsubscribe()
     }
   }, [])
@@ -5377,10 +6138,19 @@ function Dashboard({ userEmail = '' }) {
   const [summary, setSummary] = useState({ paidIncome: 0, paidThisMonth: 0, outstanding: 0, monthly: [] })
   const [showMonthly, setShowMonthly] = useState(false)
   const [overdueBills, setOverdueBills] = useState([])
+  const [pendingUtilityBills, setPendingUtilityBills] = useState([])
+  const [utilityModal, setUtilityModal] = useState(null)
+  const [utilityListModal, setUtilityListModal] = useState(false)
+  const [mobileView, setMobileView] = useState(null) // 'slips' | 'overdue' | 'utility' | 'more' | null
   const [repairTickets, setRepairTickets] = useState([])
   const [repairLoading, setRepairLoading] = useState(true)
   const [repairError, setRepairError] = useState(null)
+  const [allPayments, setAllPayments] = useState([])
+  const [paymentsLoading, setPaymentsLoading] = useState(true)
+  const [paymentsError, setPaymentsError] = useState(null)
   const [completingRepairId, setCompletingRepairId] = useState(null)
+  const [startingRepairId, setStartingRepairId] = useState(null)
+  const [closingRepair, setClosingRepair] = useState(null) // ticket ที่เปิด modal ปิดงานอยู่
   const [txInsights, setTxInsights] = useState([])
   const knownPendingIdsRef = useRef(null)
   const [paymentInfo, setPaymentInfo] = useState({
@@ -5500,7 +6270,7 @@ function Dashboard({ userEmail = '' }) {
     try {
       const { data, error } = await supabase
         .from('repair_tickets')
-        .select('id, description, status, photo_url, created_at, rentals(cust_name, item_details, sub_label)')
+        .select('id, description, status, photo_url, created_at, started_at, done_at, outcome, done_note, rentals(cust_name, item_details, sub_label)')
         .order('created_at', { ascending: false })
       if (error) throw error
       setRepairTickets(Array.isArray(data) ? data : [])
@@ -5511,28 +6281,80 @@ function Dashboard({ userEmail = '' }) {
     }
   }, [])
 
-  // ปิดงานซ่อม → update status แล้วให้ RPC push แจ้งกลุ่ม LINE
-  const handleCompleteRepair = useCallback(async (ticket) => {
+  // หน้า /finance/recent — บิลที่ยืนยันชำระแล้ว เรียงใหม่สุดก่อน
+  // (แยกจาก txInsights ซึ่งดึงทุกสถานะไว้คำนวณกราฟแดชบอร์ด ไม่เหมาะป้อนหน้ารายการ)
+  const fetchAllPayments = useCallback(async () => {
+    setPaymentsLoading(true)
+    setPaymentsError(null)
+    try {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('id, status, total_amount, base_amount, period, created_at, rentals(cust_name, item_details, sub_label)')
+        .eq('status', 'paid')
+        .order('created_at', { ascending: false })
+        .limit(100)
+      if (error) throw error
+      setAllPayments(Array.isArray(data) ? data : [])
+    } catch (err) {
+      setPaymentsError(err?.message || 'เกิดข้อผิดพลาดในการดึงข้อมูล')
+    } finally {
+      setPaymentsLoading(false)
+    }
+  }, [])
+
+  // เริ่มซ่อม — เปลี่ยน open → in_progress และจดเวลาไว้ทำประวัติ
+  const handleStartRepair = useCallback(async (ticket) => {
+    if (!ticket?.id) return
+    setStartingRepairId(ticket.id)
+    try {
+      const { error } = await supabase
+        .from('repair_tickets')
+        .update({ status: 'in_progress', started_at: new Date().toISOString() })
+        .eq('id', ticket.id)
+      if (error) throw error
+      setToast({ type: 'success', message: 'เริ่มซ่อมแล้ว — สถานะเปลี่ยนเป็นกำลังซ่อม' })
+      await fetchRepairTickets(true)
+    } catch (err) {
+      setToast({ type: 'error', message: err?.message || 'อัปเดตสถานะไม่สำเร็จ' })
+    } finally {
+      setStartingRepairId(null)
+    }
+  }, [fetchRepairTickets])
+
+  // ปิดงานซ่อม — บันทึกผล (สำเร็จ/ไม่สำเร็จ) + หมายเหตุเป็นประวัติ
+  // ผล "สำเร็จ" เท่านั้นที่ push แจ้งกลุ่ม LINE (ข้อความของ RPC คือ "ซ่อมเสร็จเรียบร้อย"
+  // การส่งข้อความนี้ให้งานที่ซ่อมไม่สำเร็จจะสับสน)
+  const handleCompleteRepair = useCallback(async (ticket, outcome, note) => {
     if (!ticket?.id) return
     setCompletingRepairId(ticket.id)
     try {
       const { error } = await supabase
         .from('repair_tickets')
-        .update({ status: 'done', done_at: new Date().toISOString() })
+        .update({
+          status: 'done',
+          done_at: new Date().toISOString(),
+          outcome,
+          done_note: note?.trim() ? note.trim() : null,
+        })
         .eq('id', ticket.id)
       if (error) throw error
 
-      // แจ้งกลุ่ม LINE — ถ้าห้องยังไม่ผูกกลุ่มก็ถือว่าปิดงานสำเร็จแล้ว
-      const { data: notifyResult, error: notifyError } = await supabase.rpc('notify_repair_done', {
-        p_ticket_id: ticket.id,
-      })
-      if (notifyError) throw notifyError
+      if (outcome === 'success') {
+        // แจ้งกลุ่ม LINE — ถ้าห้องยังไม่ผูกกลุ่มก็ถือว่าปิดงานสำเร็จแล้ว
+        const { data: notifyResult, error: notifyError } = await supabase.rpc('notify_repair_done', {
+          p_ticket_id: ticket.id,
+        })
+        if (notifyError) throw notifyError
 
-      if (notifyResult?.ok === false && notifyResult?.error === 'no_group') {
-        setToast({ type: 'warning', message: 'ปิดงานซ่อมแล้ว — ห้องนี้ยังไม่ได้ผูกกลุ่ม LINE' })
+        if (notifyResult?.ok === false && notifyResult?.error === 'no_group') {
+          setToast({ type: 'warning', message: 'ปิดงานซ่อมแล้ว — ห้องนี้ยังไม่ได้ผูกกลุ่ม LINE' })
+        } else {
+          setToast({ type: 'success', message: 'ปิดงานซ่อมแล้ว แจ้งผู้เช่าใน LINE เรียบร้อย' })
+        }
       } else {
-        setToast({ type: 'success', message: 'ปิดงานซ่อมแล้ว แจ้งผู้เช่าใน LINE เรียบร้อย' })
+        setToast({ type: 'warning', message: 'บันทึกปิดงานแล้ว — ซ่อมไม่สำเร็จ (ไม่ส่งข้อความเข้า LINE)' })
       }
+      setClosingRepair(null)
       await fetchRepairTickets(true)
     } catch (err) {
       setToast({ type: 'error', message: err?.message || 'ปิดงานซ่อมไม่สำเร็จ' })
@@ -5617,6 +6439,46 @@ function Dashboard({ userEmail = '' }) {
     }
   }, [])
 
+  // ห้องที่ส่งบิลค่าเช่าไปแล้ว (ไม่มีน้ำไฟ) แต่ยังไม่ได้ส่งบิลน้ำไฟแยก
+  // เงื่อนไข: มี tx ล่าสุดที่ water_units=0 และ elec_units=0 และ utility_enabled=true
+  const fetchPendingUtilityBills = useCallback(async () => {
+    try {
+      // ดึงห้องที่เปิด utility_enabled
+      const { data: rentalsData, error: rentalsError } = await supabase
+        .from('rentals')
+        .select('id, cust_name, item_details, sub_label, utility_enabled, biz_type')
+        .eq('utility_enabled', true)
+      if (rentalsError) throw rentalsError
+      const utilityRentals = (rentalsData || []).filter((r) => normalizeBizType(r.biz_type) === 'property')
+
+      if (utilityRentals.length === 0) {
+        setPendingUtilityBills([])
+        return
+      }
+
+      // ดึงบิลล่าสุดของแต่ละห้อง
+      const { data: txData, error: txError } = await supabase
+        .from('transactions')
+        .select('rental_id, period, water_units, elec_units, created_at')
+        .in('rental_id', utilityRentals.map((r) => r.id))
+        .order('created_at', { ascending: false })
+      if (txError) throw txError
+
+      // กรองเฉพาะห้องที่บิลล่าสุดไม่มีน้ำไฟ
+      const pending = []
+      for (const rental of utilityRentals) {
+        const lastTx = (txData || []).find((t) => t.rental_id === rental.id)
+        if (lastTx && Number(lastTx.water_units || 0) === 0 && Number(lastTx.elec_units || 0) === 0) {
+          pending.push({ ...rental, lastPeriod: lastTx.period })
+        }
+      }
+      setPendingUtilityBills(pending)
+    } catch (err) {
+      console.error('Pending utility bills fetch error:', err)
+      setPendingUtilityBills([])
+    }
+  }, [])
+
   // ข้อมูลดิบสำหรับกราฟใหม่บนแดชบอร์ด (Aging + รายรับแยกประเภท) — แยกจาก fetch สรุปเดิม
   // ดึงครั้งเดียวทั้ง transactions แล้วคำนวณต่อ client-side (สัญญา join เอา biz_type/due_date)
   const fetchTxInsights = useCallback(async () => {
@@ -5651,9 +6513,10 @@ function Dashboard({ userEmail = '' }) {
     fetchPendingReviews()
     fetchSummary()
     fetchOverdue()
+    fetchPendingUtilityBills()
     fetchTxInsights()
     fetchRepairTickets()
-  }, [fetchPendingReviews, fetchSummary, fetchOverdue, fetchTxInsights, fetchRepairTickets])
+  }, [fetchPendingReviews, fetchSummary, fetchOverdue, fetchPendingUtilityBills, fetchTxInsights, fetchRepairTickets])
 
   // polling แบบเรียลไทม์ (ทุก 20 วินาที) — รีเฟรชการ์ดสรุป + สินทรัพย์ด้วย
   useEffect(() => {
@@ -5775,7 +6638,7 @@ function Dashboard({ userEmail = '' }) {
     })
   }
 
-  const handleCreateBill = async (rental, meters, sendToLine = true, periodArg) => {
+  const handleCreateBill = async (rental, meters, sendToLine = true, periodArg, isUtilityOnly = false) => {
     setToast(null)
     try {
       const amount = Number(getValue(rental, AMOUNT_KEYS))
@@ -5797,10 +6660,14 @@ function Dashboard({ userEmail = '' }) {
       const waterCurrent = utilityEnabled ? Number(meters?.waterCurrent) || 0 : 0
       const elecCurrent = utilityEnabled ? Number(meters?.elecCurrent) || 0 : 0
       const waterUnits = utilityEnabled ? Math.max(0, waterCurrent - lastWater) : 0
-      const waterCost = utilityEnabled ? waterUnits * (Number(rental.water_rate) || 0) : 0
+      const minWater = Number(rental.min_water_charge) || 0
+      const minElec = Number(rental.min_elec_charge) || 0
+      const waterCost = utilityEnabled ? Math.max(waterUnits * (Number(rental.water_rate) || 0), minWater) : 0
       const elecUnits = utilityEnabled ? Math.max(0, elecCurrent - lastElec) : 0
-      const elecCost = utilityEnabled ? elecUnits * (Number(rental.elec_rate) || 0) : 0
-      const totalAmount = amount + waterCost + elecCost
+      const elecCost = utilityEnabled ? Math.max(elecUnits * (Number(rental.elec_rate) || 0), minElec) : 0
+      // บิลน้ำไฟแยก (isUtilityOnly=true) ไม่มีค่าเช่า
+      const baseAmount = isUtilityOnly ? 0 : amount
+      const totalAmount = baseAmount + waterCost + elecCost
 
       // guard: กันสร้างบิลซ้ำงวดเดิม — เทียบทั้งค่า ISO ที่บันทึกใหม่และค่าเดิมฟอร์แมตไทย
       const periodLabel = formatPeriod(period)
@@ -5819,7 +6686,7 @@ function Dashboard({ userEmail = '' }) {
         .insert([{
           rental_id: rental.id,
           period,
-          base_amount: amount,
+          base_amount: baseAmount,
           water_units: waterUnits,
           water_cost: waterCost,
           elec_units: elecUnits,
@@ -5827,6 +6694,7 @@ function Dashboard({ userEmail = '' }) {
           total_amount: totalAmount,
           status: 'unpaid',
           secure_token: secureToken,
+          is_utility_only: isUtilityOnly,
         }])
         .select()
         .single()
@@ -5920,6 +6788,147 @@ function Dashboard({ userEmail = '' }) {
       fetchRentals()
     } catch (err) {
       setToast({ type: 'error', message: err?.message || 'ต่อสัญญาไม่สำเร็จ' })
+    }
+  }
+
+  // สร้างบิลน้ำไฟแยก (ไม่มีค่าเช่า base_amount=0)
+  const handleCreateUtilityBill = async (data) => {
+    const { rental, waterCurrent, elecCurrent, period } = data
+    setToast(null)
+    try {
+      const secureToken = generateSecureToken()
+      const custName = getValue(rental, ['cust_name', 'tenant_name', 'customer', 'customer_name', 'name']) ?? 'ไม่ระบุ'
+      const itemDetails = displayAssetName({ sub_label: rental?.sub_label, item_details: getValue(rental, ['item_details', 'property_name', 'property', 'unit', 'room']) })
+      const { data: rentalGroup } = await supabase
+        .from('rentals')
+        .select('group_id')
+        .eq('id', rental.id)
+        .maybeSingle()
+      const lineGroupId = rentalGroup?.group_id || ''
+
+      // คำนวณน้ำไฟ (ใช้ค่าขั้นต่ำถ้ามี)
+      const lastWater = Number(rental.last_water_meter) || 0
+      const lastElec = Number(rental.last_elec_meter) || 0
+      const waterUnits = Math.max(0, Number(waterCurrent) - lastWater)
+      const elecUnits = Math.max(0, Number(elecCurrent) - lastElec)
+      const minWater = Number(rental.min_water_charge) || 0
+      const minElec = Number(rental.min_elec_charge) || 0
+      const waterCost = Math.max(waterUnits * (Number(rental.water_rate) || 0), minWater)
+      const elecCost = Math.max(elecUnits * (Number(rental.elec_rate) || 0), minElec)
+      const totalAmount = waterCost + elecCost
+
+      if (totalAmount === 0) {
+        setToast({ type: 'warning', message: 'ยอดน้ำไฟเป็น 0 ไม่สามารถสร้างบิลได้' })
+        return
+      }
+
+      // guard: กันสร้างบิลซ้ำงวดเดิม
+      const periodLabel = formatPeriod(period)
+      const { data: existingTxs } = await supabase
+        .from('transactions')
+        .select('id, period')
+        .eq('rental_id', rental.id)
+      if ((existingTxs || []).some((t) => t.period === period || t.period === periodLabel)) {
+        setToast({ type: 'warning', message: `งวดนี้มีบิลอยู่แล้ว (${periodLabel}) — ไม่สามารถสร้างบิลซ้ำได้` })
+        return
+      }
+
+      const { data: tx, error: insertError } = await supabase
+        .from('transactions')
+        .insert([{
+          rental_id: rental.id,
+          period,
+          base_amount: 0, // บิลน้ำไฟแยก ไม่มีค่าเช่า
+          water_units: waterUnits,
+          water_cost: waterCost,
+          elec_units: elecUnits,
+          elec_cost: elecCost,
+          total_amount: totalAmount,
+          status: 'unpaid',
+          secure_token: secureToken,
+          is_utility_only: true, // ธงบิลน้ำไฟแยก
+        }])
+        .select()
+        .single()
+      if (insertError) {
+        if (insertError.code === '23505' || /uniq_tx_rental_period/i.test(insertError.message || '')) {
+          setToast({ type: 'warning', message: `งวดนี้มีบิลอยู่แล้ว (${periodLabel}) — ไม่สามารถสร้างบิลซ้ำได้` })
+          return
+        }
+        throw insertError
+      }
+
+      // อัปเดตเลขมิเตอร์
+      const { error: updateError } = await supabase
+        .from('rentals')
+        .update({ last_water_meter: Number(waterCurrent), last_elec_meter: Number(elecCurrent) })
+        .eq('id', rental.id)
+      if (updateError) throw updateError
+      fetchRentals()
+
+      // ส่งเข้าไลน์
+      try {
+        const { data: rpcData, error: rpcError } = await supabase.rpc('send_bill_to_line', { p_tx_id: tx.id })
+        if (rpcError) throw rpcError
+        if (rpcData?.ok === false && rpcData?.error === 'no_group') {
+          setToast({ type: 'warning', message: 'สร้างบิลน้ำไฟแล้ว แต่ห้องนี้ยังไม่ได้ผูกกลุ่ม LINE — ส่งไม่ได้' })
+        } else if (rpcData?.ok === false) {
+          setToast({ type: 'error', message: 'ส่งบิลน้ำไฟเข้าไลน์ไม่สำเร็จ' })
+        } else {
+          setToast({ type: 'success', message: 'ส่งบิลน้ำไฟเข้า LINE แล้ว' })
+        }
+      } catch (err) {
+        console.error('Send utility bill to LINE failed:', err)
+        setToast({ type: 'error', message: 'ส่งบิลน้ำไฟเข้าไลน์ไม่สำเร็จ' })
+      }
+
+      fetchSummary()
+      fetchPendingUtilityBills()
+      setUtilityModal(null)
+      setUtilityListModal(false)
+    } catch (err) {
+      setToast({ type: 'error', message: err?.message || 'สร้างบิลน้ำไฟไม่สำเร็จ' })
+    }
+  }
+
+  // Mobile handlers
+  const handleMobileApprove = async (item) => {
+    await handleApproveWithReceipt(item)
+  }
+
+  const handleMobileReject = async (item) => {
+    if (!item?.id) return
+    await handleReviewTransaction(item.id, 'rejected')
+  }
+
+  const handleMobileMarkCash = async (item, amount) => {
+    if (!item?.id) return
+    const ok = await handleReviewTransaction(item.id, 'paid')
+    if (!ok) return
+    const rental = Array.isArray(item.rentals) ? item.rentals[0] : item.rentals
+    await issueReceiptAndSend({
+      txId: item.id,
+      custName: rental?.cust_name || item.cust_name || 'ไม่ระบุ',
+      itemDetails: displayAssetName(rental || item),
+      period: item.period ? formatPeriod(item.period) : '—',
+      total: amount,
+      base: amount,
+      txDate: new Date().toISOString(),
+      groupId: rental?.group_id || '',
+    })
+  }
+
+  const handleMobileUtilitySubmit = async (rental, waterCurrent, elecCurrent) => {
+    await handleSendUtilityBill(rental, waterCurrent, elecCurrent)
+    setMobileView(null)
+  }
+
+  const handleMobileContactTenant = (rental) => {
+    // Open LINE chat or show contact info
+    if (rental.group_id) {
+      window.open(`https://line.me/R/ti/g/${rental.group_id}`, '_blank')
+    } else {
+      setToast({ type: 'warning', message: 'ห้องนี้ยังไม่ได้ผูกกลุ่ม LINE' })
     }
   }
 
@@ -6165,21 +7174,39 @@ function Dashboard({ userEmail = '' }) {
 
   const location = useLocation()
   const isAssets = location.pathname === '/assets'
-  const isFinance = location.pathname === '/finance'
-  const isComms = location.pathname === '/comms'
+  const isProfit = location.pathname === '/profit'
   const isSettings = location.pathname === '/settings'
   const isAudit = location.pathname === '/audit'
   const isActivity = location.pathname === '/activity'
   const isMembership = location.pathname === '/membership'
   const isAdmin = location.pathname === '/admin'
-  // 4 หน้างานค้าง — ย้ายออกจากแดชบอร์ดแล้ว หน้าละเรื่อง (แดชบอร์ดเหลือแค่ภาพรวม)
-  const isPending = location.pathname === '/pending'
-  const isOverdue = location.pathname === '/overdue'
-  const isRepairs = location.pathname === '/repairs'
-  const isLeases = location.pathname === '/leases'
-  const isTaskPage = isPending || isOverdue || isRepairs || isLeases
-  const taskPage = TASK_PAGES.find((t) => t.to === location.pathname) || null
 
+  // Finance group
+  const isPending = location.pathname === '/finance/pending'
+  const isOverdue = location.pathname === '/finance/overdue'
+  const isRecentPayments = location.pathname === '/finance/recent'
+
+  // Repairs group
+  const isRepairsActive = location.pathname === '/repairs/active'
+  const isRecentRepairs = location.pathname === '/repairs/recent'
+
+  // Leases group
+  const isLeasesExpired = location.pathname === '/leases/expired'
+  const isLeasesExpiring = location.pathname === '/leases/expiring'
+
+  // Docs group
+  const isDocsAnnouncements = location.pathname === '/docs/announcements'
+  const isDocsNotes = location.pathname === '/docs/notes'
+  const isDocsFiles = location.pathname === '/docs/files'
+
+  // หน้า "ล่าสุด" 2 หน้าต้องอยู่ใน isTaskPage ด้วย ไม่งั้นตกไป branch แดชบอร์ด
+  const isTaskPage =
+    isPending || isOverdue || isRecentPayments || isRepairsActive || isRecentRepairs || isLeasesExpired || isLeasesExpiring
+
+  // โหลดรายการชำระเฉพาะตอนเข้าหน้า "ชำระเงินทั้งหมด" — ไม่ต้องดึงทุกครั้งที่เปิดแอป
+  useEffect(() => {
+    if (isRecentPayments) fetchAllPayments()
+  }, [isRecentPayments, fetchAllPayments])
   const stats = useMemo(() => computeStats(rentals), [rentals])
   const expiringLeases = useMemo(() => {
     return (rentals || []).filter((r) => r?.lease_end_date && String(r?.room_status ?? '').toLowerCase() !== 'vacant' && isExpiringSoon(r.lease_end_date))
@@ -6265,9 +7292,9 @@ function Dashboard({ userEmail = '' }) {
   // แถว KPI บนสุด — เงิน/อัตราเก็บได้ (แถวสถานะห้องแยกไปอีกชุดด้านล่าง)
   const kpiCards = [
     { icon: 'banknotes', label: 'รายรับเดือนนี้', value: formatCurrency(summary.paidThisMonth), hint: 'แตะเพื่อดูแยกรายเดือน', tone: 'green', onClick: () => setShowMonthly(true) },
-    { icon: 'chart', label: 'อัตราเก็บเงินได้', value: collectionRate === null ? '—' : `${Math.round(collectionRate)}%`, hint: 'ยอดชำระ ÷ ยอดบิลเดือนนี้', tone: collectionRate === null ? 'indigo' : collectionRate >= 90 ? 'green' : collectionRate >= 70 ? 'yellow' : 'red' },
+    { icon: 'chart', label: 'อัตราเก็บเงินได้', value: collectionRate === null ? '—' : `${Math.round(collectionRate)}%`, hint: 'ยอดชำระ ÷ ยอดบิลเดือนนี้', tone: collectionRate === null ? 'emerald' : collectionRate >= 90 ? 'green' : collectionRate >= 70 ? 'yellow' : 'red' },
     { icon: 'warning', label: 'ยอดค้างชำระรวม', value: formatCurrency(summary.outstanding), hint: 'บิลที่ยังไม่ได้รับชำระ', tone: 'red' },
-    { icon: 'building', label: 'สินทรัพย์ทั้งหมด', value: stats.total, hint: `มีผู้เช่า ${stats.occupied} · ว่าง ${stats.vacant}`, tone: 'indigo' },
+    { icon: 'building', label: 'สินทรัพย์ทั้งหมด', value: stats.total, hint: `มีผู้เช่า ${stats.occupied} · ว่าง ${stats.vacant}`, tone: 'emerald' },
   ]
 
   // แถวสถานะห้อง — การ์ดไล่สีทึบ
@@ -6278,31 +7305,32 @@ function Dashboard({ userEmail = '' }) {
     { icon: 'check', label: 'มีผู้เช่า', value: stats.occupied, hint: 'สัญญาที่ยังใช้งาน', tone: 'slate' },
   ]
 
-  // สรุปด่วน — กดแล้วไปยัง "หน้า" ที่จัดการเรื่องนั้น (เดิมเลื่อนหาการ์ดในหน้าเดียวกัน)
+  // Task counts สำหรับ sidebar badges
   const activeRepairCount = repairTickets.filter((t) => t.status !== 'done').length
+  const expiredLeasesCount = expiringLeases90.filter((r) => {
+    const days = daysUntil(r.lease_end_date)
+    return days !== null && days < 0
+  }).length
+  const expiringLeasesCount = expiringLeases90.filter((r) => {
+    const days = daysUntil(r.lease_end_date)
+    return days !== null && days >= 0 && days <= 90
+  }).length
+
   const taskCounts = {
     pending: pendingReviews.length,
     overdue: overdueBills.length,
     repairs: activeRepairCount,
-    leases: stats.expiringSoon,
+    expired: expiredLeasesCount,
+    expiring: expiringLeasesCount,
+    leases: stats.expiringSoon, // backward compatibility
   }
   const quickItems = [
-    { icon: 'check', label: 'รอตรวจสลิป', hint: 'ผู้เช่าส่งหลักฐานการโอน', value: pendingReviews.length, tone: 'amber', to: '/pending' },
-    { icon: 'warning', label: 'ค้างชำระเกินกำหนด', hint: 'ส่งบิล/แจ้งเตือนซ้ำ', value: overdueBills.length, tone: 'rose', to: '/overdue' },
-    { icon: 'cog', label: 'งานซ่อมค้าง', hint: 'คำขอที่ยังไม่ปิดงาน', value: activeRepairCount, tone: 'sky', to: '/repairs' },
-    { icon: 'document', label: 'สัญญาใกล้หมดอายุ', hint: 'ต่อสัญญาหรือแจ้งย้ายออก', value: stats.expiringSoon, tone: 'emerald', to: '/leases' },
+    { icon: 'check', label: 'รอตรวจสลิป', hint: 'ผู้เช่าส่งหลักฐานการโอน', value: pendingReviews.length, tone: 'amber', to: '/finance/pending' },
+    { icon: 'warning', label: 'ค้างชำระเกินกำหนด', hint: 'ส่งบิล/แจ้งเตือนซ้ำ', value: overdueBills.length, tone: 'rose', to: '/finance/overdue' },
+    { icon: 'banknotes', label: 'ยังไม่ได้ส่งบิลน้ำไฟ', hint: 'ส่งบิลค่าเช่าแล้ว แต่น้ำไฟยังไม่ส่ง', value: pendingUtilityBills.length, tone: 'amber', to: pendingUtilityBills.length > 0 ? '#' : '/assets', onClick: pendingUtilityBills.length > 0 ? (e) => { e.preventDefault(); setUtilityListModal(true) } : undefined },
+    { icon: 'cog', label: 'งานซ่อมค้าง', hint: 'คำขอที่ยังไม่ปิดงาน', value: activeRepairCount, tone: 'sky', to: '/repairs/active' },
+    { icon: 'document', label: 'สัญญาใกล้หมดอายุ', hint: 'ต่อสัญญาหรือแจ้งย้ายออก', value: stats.expiringSoon, tone: 'emerald', to: '/leases/expiring' },
   ]
-
-  // ตารางล่าง — 5 รายการล่าสุดของแต่ละฝั่ง
-  const recentPayments = txInsights
-    .filter((tx) => String(tx?.status ?? '').toLowerCase() === 'paid')
-    .slice()
-    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
-    .slice(0, 5)
-  const recentRepairs = repairTickets
-    .slice()
-    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
-    .slice(0, 5)
 
   // membership gate: กำลังโหลดสถานะ → จอว่าง, ยังไม่มีแถวสมาชิก → หน้าเริ่มทดลองใช้ฟรี
   if (!membership) {
@@ -6343,13 +7371,13 @@ function Dashboard({ userEmail = '' }) {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
-      <Sidebar businessName={paymentInfo.business_name} membership={membership} />
+      <Sidebar businessName={paymentInfo.business_name} membership={membership} taskCounts={taskCounts} email={userEmail} />
 
       <div className="lg:pl-64">
         <header className="sticky top-0 z-30 border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 backdrop-blur">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 py-3 sm:gap-4 sm:px-6 sm:py-4 lg:px-8">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 lg:hidden">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 lg:hidden">
                 <Icon name="building" className="h-6 w-6" />
               </div>
               <div className="min-w-0">
@@ -6358,10 +7386,10 @@ function Dashboard({ userEmail = '' }) {
                   {paymentInfo.business_name || 'PayRentPro'}
                 </h1>
                 <h1 className="hidden text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100 sm:text-2xl lg:block">
-                  {taskPage ? taskPage.label : isAudit ? 'ประวัติแก้ไข' : isActivity ? 'ประวัติเข้าใช้งาน' : isSettings ? 'ตั้งค่าบัญชี' : isAssets ? 'รายการสินทรัพย์' : isFinance ? 'กำไรสุทธิ' : isComms ? 'ประกาศและเอกสาร' : isMembership ? 'สมาชิกของฉัน' : isAdmin ? 'ผู้ดูแลระบบ' : 'แดชบอร์ด'}
+                  {PAGE_TITLES[location.pathname]?.[0] ?? (isAudit ? 'ประวัติแก้ไข' : isActivity ? 'ประวัติเข้าใช้งาน' : isSettings ? 'ตั้งค่าบัญชี' : isAssets ? 'รายการสินทรัพย์' : isProfit ? 'กำไรสุทธิ' : isDocsAnnouncements ? 'ประกาศและเอกสาร' : isMembership ? 'สมาชิกของฉัน' : isAdmin ? 'ผู้ดูแลระบบ' : 'แดชบอร์ด')}
                 </h1>
                 <p className="hidden text-sm text-gray-500 dark:text-gray-400 lg:block">
-                  {taskPage ? taskPage.subtitle : isAudit ? 'บันทึกการแก้ไขยอดและเหตุผล' : isActivity ? 'ใครเข้า-ออกระบบ เมื่อไหร่ จาก IP ไหน' : isSettings ? 'ตั้งค่าเลขพร้อมเพย์ / บัญชีธนาคารสำหรับรับเงิน' : isAssets ? 'จัดการสัญญาเช่าและสินทรัพย์ทั้งหมด' : isFinance ? 'รายรับ รายจ่าย และกำไรสุทธิของแต่ละเดือน' : isComms ? 'แจ้งข่าวผู้เช่า จดบันทึก และเก็บไฟล์เอกสาร' : isMembership ? 'แพ็กเกจ การใช้งาน และการต่ออายุ' : isAdmin ? 'จัดการสมาชิกและค่าสมาชิกรอตรวจทั้งหมด' : 'ภาพรวมการเก็บค่าเช่าและการติดตามหนี้'}
+                  {PAGE_TITLES[location.pathname]?.[1] ?? (isAudit ? 'บันทึกการแก้ไขยอดและเหตุผล' : isActivity ? 'ใครเข้า-ออกระบบ เมื่อไหร่ จาก IP ไหน' : isSettings ? 'ตั้งค่าเลขพร้อมเพย์ / บัญชีธนาคารสำหรับรับเงิน' : isAssets ? 'จัดการสัญญาเช่าและสินทรัพย์ทั้งหมด' : isProfit ? 'รายรับ รายจ่าย และกำไรสุทธิของแต่ละเดือน' : isDocsAnnouncements ? 'แจ้งข่าวผู้เช่า จดบันทึก และเก็บไฟล์เอกสาร' : isMembership ? 'แพ็กเกจ การใช้งาน และการต่ออายุ' : isAdmin ? 'จัดการสมาชิกและค่าสมาชิกรอตรวจทั้งหมด' : 'ภาพรวมการเก็บค่าเช่าและการติดตามหนี้')}
                 </p>
               </div>
             </div>
@@ -6373,7 +7401,7 @@ function Dashboard({ userEmail = '' }) {
 
               {/* มือถือ/แท็บเล็ต: ปุ่มรองทั้งหมดยุบเข้าเมนู ⋯ (เหลือ ชื่อ + กระดิ่ง + โปรไฟล์ + ⋯) */}
               <HeaderOverflowMenu
-                onExportCsv={!isAssets && !isSettings && !isAudit && !isActivity && !isMembership && !isAdmin && !isFinance && !isComms && !isTaskPage ? handleExportCsv : null}
+                onExportCsv={!isAssets && !isSettings && !isAudit && !isActivity && !isMembership && !isAdmin && !isProfit && !isDocsAnnouncements && !isTaskPage ? handleExportCsv : null}
                 onRefresh={() => { fetchRentals(); fetchSummary(); fetchPendingReviews(); fetchTxInsights(); fetchRepairTickets() }}
                 loading={loading}
                 lastUpdated={lastUpdated}
@@ -6390,7 +7418,7 @@ function Dashboard({ userEmail = '' }) {
                   onClick={handleExportCsv}
                   className="hidden items-center gap-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:text-gray-300 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 lg:inline-flex"
                 >
-                  ⬇️ Export CSV
+                  <Icon name="download" className="h-4 w-4" /> Export CSV
                 </button>
               )}
               {lastUpdated && (
@@ -6408,7 +7436,7 @@ function Dashboard({ userEmail = '' }) {
                     value={assetSearch}
                     onChange={(e) => setAssetSearch(e.target.value)}
                     placeholder="ค้นหาชื่อผู้เช่า / ห้อง"
-                    className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 py-2.5 pl-11 pr-4 text-base text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                    className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 py-2.5 pl-11 pr-4 text-base text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
                   />
                 </div>
               )}
@@ -6417,7 +7445,7 @@ function Dashboard({ userEmail = '' }) {
                   <button
                     type="button"
                     onClick={handleOpenAddAsset}
-                    className="hidden shrink-0 items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-base font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-500 lg:inline-flex"
+                    className="hidden shrink-0 items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-base font-semibold text-white shadow-sm shadow-emerald-600/30 transition-colors hover:bg-emerald-500 lg:inline-flex"
                   >
                     <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -6440,7 +7468,7 @@ function Dashboard({ userEmail = '' }) {
                 type="button"
                 onClick={() => { fetchRentals(); fetchSummary(); fetchPendingReviews(); fetchTxInsights(); fetchRepairTickets() }}
                 disabled={loading}
-                className="hidden items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60 lg:inline-flex"
+                className="hidden items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60 lg:inline-flex"
               >
                 <Icon name="refresh" className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                 <span className="hidden xl:inline">รีเฟรชข้อมูล</span>
@@ -6453,7 +7481,7 @@ function Dashboard({ userEmail = '' }) {
                 aria-pressed={largeText}
                 className={`hidden items-center justify-center rounded-xl border px-4 py-2.5 text-base shadow-sm transition-colors lg:inline-flex ${
                   largeText
-                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 underline decoration-2 underline-offset-4'
+                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-300 underline decoration-2 underline-offset-4'
                     : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
                 }`}
               >
@@ -6468,7 +7496,7 @@ function Dashboard({ userEmail = '' }) {
                 aria-label={theme === 'dark' ? 'สลับเป็นโหมดสว่าง' : 'สลับเป็นโหมดมืด'}
                 className="hidden items-center justify-center rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-2.5 text-base shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800 lg:inline-flex"
               >
-                <span className="leading-none">{theme === 'dark' ? '☀️' : '🌙'}</span>
+                <Icon name={theme === 'dark' ? 'sun' : 'moon'} className="h-5 w-5" />
               </button>
 
               {/* เมนูโปรไฟล์ — ตัวเดียวใช้ทั้ง desktop และมือถือ (แทนปุ่มออกจากระบบเดิมของ header
@@ -6485,7 +7513,7 @@ function Dashboard({ userEmail = '' }) {
               <button
                 type="button"
                 onClick={handleOpenAddAsset}
-                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-4 py-3 text-base font-semibold text-white shadow-sm shadow-blue-600/30 transition-colors hover:bg-blue-500"
+                className={`${BTN.primary} w-full`}
               >
                 <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -6495,7 +7523,7 @@ function Dashboard({ userEmail = '' }) {
               <button
                 type="button"
                 onClick={handleOpenAddTenant}
-                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-3 text-base font-semibold text-white shadow-sm shadow-emerald-600/30 transition-colors hover:bg-emerald-500"
+                className={`${BTN.primary} w-full`}
               >
                 <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0ZM4 19.235v-.11a6.375 6.375 0 0 1 12.75 0v.109A12.318 12.318 0 0 1 10.374 21c-2.331 0-4.512-.645-6.374-1.766Z" />
@@ -6519,16 +7547,18 @@ function Dashboard({ userEmail = '' }) {
             <MembershipPage membership={membership} onToast={setToast} onRefreshMembership={fetchMembership} />
           ) : isAdmin ? (
             <AdminPage onToast={setToast} />
-          ) : isFinance ? (
+          ) : isProfit ? (
             <FinancePage onToast={setToast} />
-          ) : isComms ? (
-            <CommsPage onToast={setToast} />
+          ) : isDocsAnnouncements ? (
+            <AnnouncementsPage onToast={setToast} />
+          ) : isDocsNotes ? (
+            <NotesPage onToast={setToast} />
+          ) : isDocsFiles ? (
+            <DocumentsPage onToast={setToast} />
           ) : isTaskPage ? (
             <>
-              <TaskTabs counts={taskCounts} />
-
               {isPending ? (
-                <div className="space-y-4 [&>section]:mt-0">
+                <div className="space-y-4">
                   <PendingReviewSection
                     items={pendingReviews}
                     loading={pendingLoading}
@@ -6540,7 +7570,7 @@ function Dashboard({ userEmail = '' }) {
                   />
                 </div>
               ) : isOverdue ? (
-                <div className="space-y-4 [&>section]:mt-0">
+                <div className="space-y-4">
                   {overdueBills.length === 0 ? (
                     <TaskEmptyCard
                       icon="check"
@@ -6556,47 +7586,51 @@ function Dashboard({ userEmail = '' }) {
                       onSendReminders={handleSendDueSoonReminders}
                     />
                   )}
-                  {/* "ชำระเงินล่าสุด" อยู่คู่กับหน้าทวงหนี้ — ดูว่าใครจ่ายแล้วเทียบกับใครยังค้าง */}
-                  <RecentPaymentsCard items={recentPayments} />
+                  {/* ทางเข้าไปหน้า "ชำระเงินล่าสุด" — เทียบว่าใครจ่ายแล้วกับใครยังค้าง (แทนการ์ดย่อเดิม) */}
+                  <SeeAllLinkBar to="/finance/recent" tone="emerald">ดูชำระเงินทั้งหมด</SeeAllLinkBar>
                 </div>
-              ) : isRepairs ? (
-                <div className="space-y-4 [&>section]:mt-0">
+              ) : isRecentPayments ? (
+                <div className="space-y-4">
+                  <AllPaymentsSection items={allPayments} loading={paymentsLoading} error={paymentsError} onRetry={fetchAllPayments} />
+                </div>
+              ) : isRepairsActive ? (
+                <div className="space-y-4">
                   <RepairSection
                     items={repairTickets}
                     loading={repairLoading}
                     error={repairError}
                     completingId={completingRepairId}
-                    onComplete={handleCompleteRepair}
+                    startingId={startingRepairId}
+                    onStart={handleStartRepair}
+                    onComplete={setClosingRepair}
                     onRetry={fetchRepairTickets}
                   />
-                  <RecentRepairsCard items={recentRepairs} />
+                  <SeeAllLinkBar to="/repairs/recent" tone="sky">ดูคำขอซ่อมทั้งหมด</SeeAllLinkBar>
                 </div>
-              ) : (
-                <div className="space-y-4 [&>section]:mt-0">
-                  {expiringLeases90.length === 0 ? (
-                    <TaskEmptyCard
-                      icon="check"
-                      title="ไม่มีสัญญาที่ใกล้หมดอายุ"
-                      hint="สัญญาที่จะสิ้นสุดภายใน 90 วันข้างหน้าจะขึ้นที่นี่"
-                    />
-                  ) : (
-                    <>
-                      <ExpiredLeasesSection
-                        rentals={rentals}
-                        onViewDetails={setDetailRental}
-                        onRenew={setRenewRental}
-                        onMoveOut={(rental) => setConfirmAction({ type: 'moveout', rental })}
-                      />
-                      <ExpiringSoonLeasesSection
-                        rentals={rentals}
-                        onViewDetails={setDetailRental}
-                        onRenew={setRenewRental}
-                        onMoveOut={(rental) => setConfirmAction({ type: 'moveout', rental })}
-                      />
-                    </>
-                  )}
+              ) : isRecentRepairs ? (
+                <div className="space-y-4">
+                  {/* fetchRepairTickets ดึงทุกสถานะอยู่แล้ว (ไม่มี filter) — ใช้ตัวเดียวกับหน้าค้างดำเนินการ */}
+                  <AllRepairsSection items={repairTickets} loading={repairLoading} error={repairError} onRetry={fetchRepairTickets} />
                 </div>
-              )}
+              ) : isLeasesExpired ? (
+                <div className="space-y-4">
+                  <ExpiredLeasesSection
+                    rentals={rentals}
+                    onViewDetails={setDetailRental}
+                    onRenew={setRenewRental}
+                    onMoveOut={(rental) => setConfirmAction({ type: 'moveout', rental })}
+                  />
+                </div>
+              ) : isLeasesExpiring ? (
+                <div className="space-y-4">
+                  <ExpiringSoonLeasesSection
+                    rentals={rentals}
+                    onViewDetails={setDetailRental}
+                    onRenew={setRenewRental}
+                    onMoveOut={(rental) => setConfirmAction({ type: 'moveout', rental })}
+                  />
+                </div>
+              ) : null}
             </>
           ) : isAssets ? (
             <>
@@ -6609,7 +7643,7 @@ function Dashboard({ userEmail = '' }) {
                   value={assetSearch}
                   onChange={(e) => setAssetSearch(e.target.value)}
                   placeholder="ค้นหาชื่อผู้เช่า / ห้อง"
-                  className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 py-3 pl-11 pr-4 text-base text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                  className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 py-3 pl-11 pr-4 text-base text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
                 />
               </div>
 
@@ -6631,8 +7665,51 @@ function Dashboard({ userEmail = '' }) {
             </>
           ) : (
             <>
+              {/* Mobile Dashboard: 4 ฟังก์ชันหลัก */}
+              {mobileView === 'slips' ? (
+                <MobileSlipReview
+                  items={pendingReviews}
+                  onApprove={handleMobileApprove}
+                  onReject={handleMobileReject}
+                  onMarkCash={handleMobileMarkCash}
+                  onBack={() => setMobileView(null)}
+                />
+              ) : mobileView === 'overdue' ? (
+                <MobileOverdueList
+                  rentals={rentals.filter((r) => {
+                    const txs = r.transactions || []
+                    return txs.some((tx) => tx.status !== 'paid')
+                  })}
+                  onBack={() => setMobileView(null)}
+                  onContactTenant={handleMobileContactTenant}
+                />
+              ) : mobileView === 'utility' ? (
+                <MobileUtilityInput
+                  rentals={pendingUtilityBills}
+                  onSubmit={handleMobileUtilitySubmit}
+                  onBack={() => setMobileView(null)}
+                />
+              ) : (
+                <>
+                  <MobileDashboard
+                    summary={summary}
+                    pendingReviews={pendingReviews}
+                    overdueRentals={rentals.filter((r) => {
+                      const txs = r.transactions || []
+                      return txs.some((tx) => tx.status !== 'paid')
+                    })}
+                    pendingUtilityBills={pendingUtilityBills}
+                    onViewSummary={() => setShowMonthly(true)}
+                    onViewPendingReviews={() => setMobileView('slips')}
+                    onViewOverdue={() => setMobileView('overdue')}
+                    onViewUtilityBills={() => setMobileView('utility')}
+                    onShowMoreMenu={() => {}}
+                  />
+                </>
+              )}
+
               {/* หัวเรื่องหน้า — เดสก์ท็อปมีหัวเรื่องใน header อยู่แล้ว จึงโชว์เฉพาะบรรทัดข้อมูล ณ เวลา */}
-              <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+              <div className="mb-5 hidden flex-wrap items-end justify-between gap-3 lg:flex">
                 <div className="min-w-0">
                   <h2 className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-50 sm:text-2xl">ภาพรวมระบบ</h2>
                   <p className="mt-1 truncate text-sm text-gray-500 dark:text-gray-400">
@@ -6643,21 +7720,21 @@ function Dashboard({ userEmail = '' }) {
               </div>
 
               {/* 1. KPI การ์ดขาว แถบสีซ้าย */}
-              <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+              <div className="hidden grid-cols-2 gap-3 sm:gap-4 lg:grid lg:grid-cols-4">
                 {kpiCards.map((card) => (
                   <KpiCard key={card.label} {...card} />
                 ))}
               </div>
 
               {/* 2. สถานะห้อง การ์ดไล่สีทึบ */}
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+              <div className="mt-4 hidden grid-cols-2 gap-3 sm:gap-4 lg:grid lg:grid-cols-4">
                 {roomCards.map((card) => (
                   <RoomStatusCard key={card.label} {...card} />
                 ))}
               </div>
 
               {/* 3. กราฟ (กว้าง) + สรุปด่วน (ราง) */}
-              <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+              <div className="mt-6 hidden grid-cols-1 gap-4 lg:grid lg:grid-cols-3">
                 <div className="lg:col-span-2">
                   <RevenueBar monthly={monthlyByType} />
                 </div>
@@ -6665,7 +7742,7 @@ function Dashboard({ userEmail = '' }) {
               </div>
 
               {/* 4. กราฟรองสองคอลัมน์ */}
-              <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div className="mt-4 hidden grid-cols-1 gap-4 lg:grid lg:grid-cols-2">
                 <AgingBarChart buckets={agingBuckets} />
                 <OccupancyDonut occupied={stats.occupied} vacant={stats.vacant} />
               </div>
@@ -6695,6 +7772,15 @@ function Dashboard({ userEmail = '' }) {
         onAssigned={handleTenantAssigned}
         onToast={setToast}
       />
+
+      {closingRepair ? (
+        <RepairOutcomeModal
+          ticket={closingRepair}
+          saving={completingRepairId === closingRepair.id}
+          onClose={() => setClosingRepair(null)}
+          onConfirm={handleCompleteRepair}
+        />
+      ) : null}
 
       <InvoiceModal
         invoice={invoice}
@@ -6777,6 +7863,29 @@ function Dashboard({ userEmail = '' }) {
       />
 
       {showMonthly && <MonthlyBreakdownModal monthly={summary.monthly} onClose={() => setShowMonthly(false)} />}
+
+      {utilityModal && (
+        <UtilityBillModal
+          rental={utilityModal}
+          onClose={() => setUtilityModal(null)}
+          onConfirm={async (data) => {
+            await handleCreateUtilityBill(data)
+          }}
+          onToast={setToast}
+        />
+      )}
+
+      {utilityListModal && (
+        <UtilityListModal
+          rentals={pendingUtilityBills}
+          onClose={() => setUtilityListModal(false)}
+          onSelect={(rental) => {
+            setUtilityListModal(false)
+            setUtilityModal(rental)
+          }}
+        />
+      )}
+
       <Toast toast={toast} onClose={closeToast} />
     </div>
   )

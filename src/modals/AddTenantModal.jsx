@@ -94,7 +94,9 @@ export function AddTenantModal({ open, rentals, onClose, onAssigned, onToast }) 
       if (updateError) throw updateError
 
       onToast?.({ type: 'success', message: 'เพิ่มผู้เช่าเรียบร้อยแล้ว' })
-      await onAssigned?.({ rental: selectedAsset, custName: form.cust_name.trim() })
+      // ส่ง payload (ที่มี binding_code ใหม่) กลับไปด้วย — LineBindingModal ต้องโชว์รหัสใหม่
+      // ไม่ใช่รหัสเก่าจาก selectedAsset ที่จับไว้ก่อนหน้า update
+      await onAssigned?.({ rental: { ...selectedAsset, ...payload }, custName: form.cust_name.trim() })
       onClose()
     } catch (err) {
       setError(err?.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล')
@@ -150,7 +152,7 @@ export function AddTenantModal({ open, rentals, onClose, onAssigned, onToast }) 
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="ค้นหาห้อง/ทะเบียน"
-                  className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 py-3 pl-11 pr-4 text-base text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900"
+                  className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 py-3 pl-11 pr-4 text-base text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200 dark:focus:ring-emerald-900"
                 />
               </div>
 
@@ -159,7 +161,7 @@ export function AddTenantModal({ open, rentals, onClose, onAssigned, onToast }) 
                   type="button"
                   onClick={() => setBizFilter('all')}
                   className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                    bizFilter === 'all' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                    bizFilter === 'all' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
                   }`}
                 >
                   ทั้งหมด
@@ -170,7 +172,7 @@ export function AddTenantModal({ open, rentals, onClose, onAssigned, onToast }) 
                     type="button"
                     onClick={() => setBizFilter(t.value)}
                     className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                      bizFilter === t.value ? 'bg-indigo-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                      bizFilter === t.value ? 'bg-emerald-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
                     }`}
                   >
                     {t.icon} {t.tab}
@@ -199,7 +201,7 @@ export function AddTenantModal({ open, rentals, onClose, onAssigned, onToast }) 
                         key={asset.id}
                         type="button"
                         onClick={() => selectAsset(asset)}
-                        className="flex flex-col gap-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 text-left shadow-sm transition-colors hover:border-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/30"
+                        className="flex flex-col gap-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 text-left shadow-sm transition-colors hover:border-emerald-400 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/30"
                       >
                         <div className="flex items-start gap-2">
                           <span className="text-xl leading-none">{meta.icon}</span>
@@ -292,7 +294,7 @@ export function AddTenantModal({ open, rentals, onClose, onAssigned, onToast }) 
                 type="button"
                 onClick={fillMock}
                 disabled={saving}
-                className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-60"
+                className="text-sm font-medium text-emerald-600 dark:text-emerald-400 hover:underline disabled:opacity-60"
               >
                 เติมข้อมูลตัวอย่าง
               </button>
@@ -308,7 +310,7 @@ export function AddTenantModal({ open, rentals, onClose, onAssigned, onToast }) 
                 <button
                   type="submit"
                   disabled={saving}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-4 text-base font-semibold text-white shadow-sm transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-4 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm"
                 >
                   {saving ? (
                     <>

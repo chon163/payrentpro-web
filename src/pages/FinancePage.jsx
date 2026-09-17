@@ -600,8 +600,8 @@ export default function FinancePage({ onToast }) {
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-50 sm:text-2xl">กำไรสุทธิ</h2>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">รายรับ − รายจ่าย ของแต่ละเดือน</p>
+          <h2 className="text-xl font-bold tracking-tight text-gray-900 dark:text-gray-50 sm:text-2xl lg:hidden">กำไรสุทธิ</h2>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 lg:hidden">รายรับ − รายจ่าย ของแต่ละเดือน</p>
         </div>
         <PeriodPicker year={year} month={month} onChange={handlePeriod} />
       </div>

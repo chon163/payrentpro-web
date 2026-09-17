@@ -388,7 +388,7 @@ async function handleImage(groupId: string, messageId: string) {
   // หาบิลของห้อง เรียงจาก created_at ล่าสุด
   const { data: bills, error: billsError } = await supabase
     .from('transactions')
-    .select('id, status, slip_image_url, created_at')
+    .select('id, status, slip_image_url, total_amount, created_at')
     .eq('rental_id', rentalId)
     .order('created_at', { ascending: false })
   if (billsError) {
@@ -410,6 +410,21 @@ async function handleImage(groupId: string, messageId: string) {
     return
   }
 
+  // ── ตรวจสลิปอัตโนมัติด้วย EasySlip ────────────────────────────────
+  const autoVerifyResult = await autoVerifyTenantSlip(
+    imageBytes,
+    target.id,
+    Number(target.total_amount ?? 0),
+    groupId,
+  )
+
+  if (autoVerifyResult.approved) {
+    // ยอดตรง → ปิดบิลเลย ไม่ต้องรอเจ้าของ
+    console.log(`Auto-approved bill ${target.id}, amount ${autoVerifyResult.amount}`)
+    return
+  }
+
+  // ยอดไม่ตรง / อ่านไม่ออก / ซ้ำ → flow เดิม (pending_review รอเจ้าของ)
   const { error: updateError } = await supabase
     .from('transactions')
     .update({ slip_image_url: slipImageUrl, status: 'pending_review' })
@@ -468,6 +483,171 @@ function bytesToBase64(bytes: Uint8Array): string {
     binary += String.fromCharCode(bytes[i])
   }
   return btoa(binary)
+}
+
+// ── ตรวจสลิปผู้เช่าอัตโนมัติด้วย EasySlip ─────────────────────────
+const EASYSLIP_VERIFY_URL = 'https://api.easyslip.com/v2/verify/bank'
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024
+
+interface AutoVerifyResult {
+  approved: boolean
+  amount?: number
+  bank?: string
+  txnRef?: string
+  reason?: string
+}
+
+async function autoVerifyTenantSlip(
+  imageBytes: Uint8Array,
+  transactionId: string,
+  expectedAmount: number,
+  groupId: string,
+): Promise<AutoVerifyResult> {
+  // ยิง EasySlip API
+  const apiKey = Deno.env.get('EASYSLIP_API_KEY') ?? ''
+  if (!apiKey) {
+    console.error('EASYSLIP_API_KEY is not set')
+    return { approved: false, reason: 'no_api_key' }
+  }
+
+  if (imageBytes.byteLength > MAX_IMAGE_BYTES) {
+    console.log('image too large for EasySlip')
+    return { approved: false, reason: 'image_too_large' }
+  }
+
+  let slip: any = null
+  try {
+    const form = new FormData()
+    form.append('image', new Blob([imageBytes], { type: 'image/jpeg' }), 'slip.jpg')
+    form.append('checkDuplicate', 'true')
+
+    const res = await fetch(EASYSLIP_VERIFY_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: form,
+    })
+
+    const payload = await res.json().catch(() => null)
+
+    if (!res.ok || payload?.success !== true) {
+      const code = String(payload?.error?.code ?? payload?.message ?? '')
+      console.error('EasySlip verify failed:', res.status, code)
+      return { approved: false, reason: 'read_failed' }
+    }
+
+    if (payload?.data?.isDuplicate === true) {
+      console.log('EasySlip detected duplicate slip')
+      await pushLine(groupId, 'ได้รับสลิปแล้ว กำลังตรวจสอบ ⏳\n(ระบบตรวจพบสลิปซ้ำ รอเจ้าของตรวจสอบ)')
+      return { approved: false, reason: 'duplicate' }
+    }
+
+    slip = payload?.data?.rawSlip ?? null
+  } catch (err) {
+    console.error('EasySlip request error:', err)
+    return { approved: false, reason: 'network_error' }
+  }
+
+  const txnRef = String(slip?.transRef ?? '').trim()
+  const slipAmount = Number(slip?.amount?.amount ?? slip?.amount?.local?.amount ?? NaN)
+  const bank = String(slip?.sender?.bank?.short ?? slip?.sender?.bank?.name ?? '').trim() || null
+
+  if (!txnRef || !Number.isFinite(slipAmount)) {
+    console.log('EasySlip could not read slip')
+    await pushLine(groupId, 'ได้รับสลิปแล้ว กำลังตรวจสอบ ⏳')
+    return { approved: false, reason: 'read_failed' }
+  }
+
+  // กันสลิปซ้ำ: unique(txn_ref) ใน slip_verifications
+  const { error: dedupError } = await supabase
+    .from('slip_verifications')
+    .insert({ txn_ref: txnRef, kind: 'tenant', ref_id: transactionId, amount: slipAmount, bank })
+
+  if (dedupError) {
+    if (dedupError.code === '23505') {
+      console.log(`duplicate slip blocked: ${txnRef}`)
+      await pushLine(groupId, 'ได้รับสลิปแล้ว กำลังตรวจสอบ ⏳\n(ระบบตรวจพบสลิปซ้ำ รอเจ้าของตรวจสอบ)')
+      return { approved: false, reason: 'duplicate' }
+    }
+    console.error('slip_verifications insert error:', dedupError)
+    return { approved: false, reason: 'db_error' }
+  }
+
+  // เช็คยอด: สลิปต้อง >= ยอดบิล (ปัดเป็นสตางค์ก่อนเทียบ)
+  const matched = Number.isFinite(expectedAmount) && Math.round(slipAmount * 100) >= Math.round(expectedAmount * 100)
+
+  if (!matched) {
+    console.log(`amount mismatch: slip ${slipAmount} < expected ${expectedAmount}`)
+    await pushLine(
+      groupId,
+      `ได้รับสลิปแล้ว กำลังตรวจสอบ ⏳\n(ยอดสลิป ฿${formatBaht(slipAmount)} ไม่ตรงกับบิล ฿${formatBaht(expectedAmount)})`,
+    )
+    return { approved: false, amount: slipAmount, bank, txnRef, reason: 'amount_mismatch' }
+  }
+
+  // ยอดตรง → ปิดบิลเลย
+  const { error: updateError } = await supabase
+    .from('transactions')
+    .update({ status: 'paid', paid_amount: expectedAmount })
+    .eq('id', transactionId)
+
+  if (updateError) {
+    console.error('update transaction to paid error:', updateError)
+    return { approved: false, reason: 'update_error' }
+  }
+
+  // ส่งใบเสร็จเข้ากลุ่ม (send_receipt_to_line ต้องการ public URL)
+  // สร้างใบเสร็จ PNG แล้วอัปโหลด bucket receipts ก่อน
+  const receiptUrl = await generateAndUploadReceipt(transactionId)
+  if (receiptUrl) {
+    const { error: receiptError } = await supabase.rpc('send_receipt_to_line', {
+      p_tx_id: transactionId,
+      p_public_url: receiptUrl,
+    })
+    if (receiptError) {
+      console.error('send_receipt_to_line error:', receiptError)
+    }
+  }
+
+  // ข้อความตอบกลับในกลุ่ม
+  await pushLine(
+    groupId,
+    `รับการชำระเงินแล้ว ✅ ยอด ฿${formatBaht(expectedAmount)}\n${receiptUrl ? 'ใบเสร็จส่งให้แล้วครับ 🙏' : 'กำลังสร้างใบเสร็จ...'}`,
+  )
+
+  return { approved: true, amount: slipAmount, bank, txnRef }
+}
+
+// สร้างใบเสร็จ PNG + อัปโหลด bucket receipts (public) → คืน public URL
+// (ยังไม่ได้ทำ receipt generator จริง → ใช้ placeholder)
+async function generateAndUploadReceipt(transactionId: string): Promise<string | null> {
+  // TODO: เรียก RPC/Edge Function สร้างรูปใบเสร็จจริง
+  // ตอนนี้ return null ไปก่อน (ไม่ส่งรูปใบเสร็จ)
+  return null
+}
+
+// push message เข้ากลุ่ม (ไม่ใช่ reply — ใช้ได้นอก event)
+async function pushLine(groupId: string, text: string) {
+  const token = Deno.env.get('LINE_CHANNEL_ACCESS_TOKEN') ?? ''
+  if (!token || !groupId) return
+
+  try {
+    const res = await fetch(`${LINE_API_BASE}/bot/message/push`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        to: groupId,
+        messages: [{ type: 'text', text }],
+      }),
+    })
+    if (!res.ok) {
+      console.error('LINE push failed:', res.status, await res.text())
+    }
+  } catch (err) {
+    console.error('LINE push error:', err)
+  }
 }
 
 function json(data: unknown, status = 200) {

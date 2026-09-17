@@ -92,16 +92,7 @@ export function AddAssetModal({ open, onClose, onCreated, onToast }) {
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">เพิ่มสินทรัพย์ใหม่</h2>
             <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">กรอกข้อมูลของห้อง/รถ/อุปกรณ์ — ยังไม่มีผู้เช่า</p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-600 dark:hover:text-gray-300 lg:mr-0 lg:h-auto lg:w-auto lg:p-1.5"
-            aria-label="ปิด"
-          >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <CloseButton onClose={onClose} />
         </div>
 
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
@@ -123,9 +114,9 @@ export function AddAssetModal({ open, onClose, onCreated, onToast }) {
                     key={t.value}
                     type="button"
                     onClick={() => selectBizType(t.value)}
-                    className="flex w-full items-center gap-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-5 py-4 text-left shadow-sm transition-colors hover:border-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-900/30"
+                    className="flex w-full items-center gap-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-5 py-4 text-left shadow-sm transition-colors hover:border-emerald-400 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/30"
                   >
-                    <span className="text-3xl leading-none">{t.icon}</span>
+                    <span className="text-emerald-600 dark:text-emerald-400"><Icon name={t.icon} className="h-7 w-7" /></span>
                     <span className="min-w-0">
                       <span className="block text-base font-bold text-gray-900 dark:text-gray-100">{t.label}</span>
                       <span className="mt-0.5 block truncate text-sm text-gray-500 dark:text-gray-400">{t.examples}</span>
@@ -137,13 +128,13 @@ export function AddAssetModal({ open, onClose, onCreated, onToast }) {
               <>
                 <CollapsibleSection title="ข้อมูลสินทรัพย์" subtitle="ประเภท ห้อง/ทะเบียน และค่าเช่า" icon="document" defaultOpen>
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between gap-3 rounded-xl border border-indigo-100 dark:border-indigo-800/50 bg-indigo-50 dark:bg-indigo-950/30 px-4 py-3">
-                      <p className="text-sm font-bold text-indigo-900 dark:text-indigo-200">{typeMeta.icon} {typeMeta.label}</p>
+                    <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-100 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3">
+                      <p className="flex items-center gap-1.5 text-sm font-bold text-emerald-900 dark:text-emerald-200"><Icon name={typeMeta.icon} className="h-4 w-4" />{typeMeta.label}</p>
                       <button
                         type="button"
                         onClick={() => setField('biz_type', '')}
                         disabled={saving}
-                        className="shrink-0 rounded-lg bg-white dark:bg-gray-900 px-3 py-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 shadow-sm transition-colors hover:bg-indigo-100 dark:hover:bg-indigo-800/50"
+                        className="shrink-0 rounded-lg bg-white dark:bg-gray-900 px-3 py-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400 shadow-sm transition-colors hover:bg-emerald-100 dark:hover:bg-emerald-800/50"
                       >
                         เปลี่ยนประเภท
                       </button>
@@ -276,7 +267,7 @@ export function AddAssetModal({ open, onClose, onCreated, onToast }) {
                 type="button"
                 onClick={fillMock}
                 disabled={saving}
-                className="text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-60"
+                className="text-sm font-medium text-emerald-600 dark:text-emerald-400 hover:underline disabled:opacity-60"
               >
                 เติมข้อมูลตัวอย่าง
               </button>
@@ -295,7 +286,7 @@ export function AddAssetModal({ open, onClose, onCreated, onToast }) {
               <button
                 type="submit"
                 disabled={saving || !form.biz_type}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-4 text-base font-semibold text-white shadow-sm transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-4 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto lg:py-2.5 lg:text-sm"
               >
                 {saving ? (
                   <>

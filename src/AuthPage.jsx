@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 import { DEMO_ACCOUNT_EMAIL, DEMO_ACCOUNT_PASSWORD } from './utils/demoAccount'
+import { Icon } from './components/ui'
 
 // โหมดเทสชั่วคราว (คืนก่อนขายจริง): ทำงานเฉพาะเมื่อ VITE_DEV_LOGIN=true ใน env ท้องถิ่น
 const DEV_LOGIN = import.meta.env.VITE_DEV_LOGIN === 'true'
@@ -128,7 +129,7 @@ export default function AuthPage() {
     <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-950 px-4 py-8">
       <div className="w-full max-w-sm rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-6 shadow-sm sm:p-8">
         <div className="mb-6 flex flex-col items-center text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/30">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-lg shadow-emerald-600/30">
             <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
             </svg>
@@ -150,7 +151,7 @@ export default function AuthPage() {
               type="button"
               onClick={signInWithGoogle}
               disabled={googleLoading || loading}
-              className="inline-flex w-full items-center justify-center gap-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-4 text-sm font-semibold text-gray-700 dark:text-gray-200 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex w-full items-center justify-center gap-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-4 text-sm font-semibold text-gray-700 dark:text-gray-200 shadow-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <GoogleLogo />
               {googleLoading ? 'กำลังไปที่ Google...' : 'ดำเนินการต่อด้วย Google'}
@@ -175,14 +176,14 @@ export default function AuthPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="admin@payrentpro.com"
-                  className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-gray-100 shadow-sm transition placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  className="w-full rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-4 py-3 text-sm text-gray-900 dark:text-gray-100 shadow-sm transition placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                 />
                 <p className="mt-2 text-center text-xs text-gray-400 dark:text-gray-500">เราจะส่งลิงก์เข้าสู่ระบบไปที่อีเมลของคุณ</p>
               </div>
               <button
                 type="submit"
                 disabled={loading || googleLoading}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loading ? 'กำลังส่ง...' : 'ส่งลิงก์เข้าสู่ระบบ'}
               </button>
@@ -200,7 +201,7 @@ export default function AuthPage() {
                 disabled={demoLoading || loading || googleLoading}
                 className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {demoLoading ? 'กำลังเข้าโหมดเดโม่...' : '👀 เข้าโหมดเดโม่ (ไม่ต้องสมัคร)'}
+                {demoLoading ? 'กำลังเข้าโหมดเดโม่...' : (<><Icon name="eye" className="h-5 w-5" /> เข้าโหมดเดโม่ (ไม่ต้องสมัคร)</>)}
               </button>
               <p className="mt-2 text-center text-[11px] leading-relaxed text-emerald-700/70 dark:text-emerald-300/60">
                 12 ห้อง · บิล 6 เดือน · รายรับรายจ่าย · แจ้งซ่อม — เป็นบัญชีสาธารณะ
@@ -211,7 +212,7 @@ export default function AuthPage() {
         ) : (
           <div className="space-y-4">
             <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 px-4 py-5 text-center">
-              <p className="text-3xl">📧</p>
+              <Icon name="envelope" className="mx-auto h-12 w-12 text-emerald-500" />
               <p className="mt-2 text-base font-bold text-gray-900 dark:text-gray-100">ตรวจสอบอีเมลของคุณ</p>
               <p className="mt-2 text-sm leading-relaxed text-gray-600 dark:text-gray-300">
                 เราได้ส่งลิงก์เข้าสู่ระบบไปที่ <span className="font-semibold text-gray-900 dark:text-gray-100">{email}</span> แล้ว
@@ -222,14 +223,14 @@ export default function AuthPage() {
               type="button"
               onClick={handleResend}
               disabled={loading || resendIn > 0}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? 'กำลังส่ง...' : resendIn > 0 ? `ส่งอีเมลอีกครั้ง (${resendIn} วิ)` : 'ส่งอีเมลอีกครั้ง'}
             </button>
             <button
               type="button"
               onClick={handleReset}
-              className="w-full rounded-xl px-4 py-3 text-center text-sm font-medium text-indigo-600 dark:text-indigo-400 transition-colors hover:text-indigo-500 dark:hover:text-indigo-300"
+              className="w-full rounded-xl px-4 py-3 text-center text-sm font-medium text-emerald-600 dark:text-emerald-400 transition-colors hover:text-emerald-500 dark:hover:text-emerald-300"
             >
               ใช้อีเมลอื่น
             </button>

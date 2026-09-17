@@ -17,7 +17,7 @@ export function CollapsibleSection({ title, subtitle, icon, defaultOpen = false,
         className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-800"
       >
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400">
             <Icon name={icon} className="h-5 w-5" />
           </div>
           <div>
@@ -44,7 +44,7 @@ export function Toggle({ checked, onChange, label }) {
   return (
     <button type="button" onClick={() => onChange(!checked)} className="flex w-full items-center justify-between gap-3">
       <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</span>
-      <span className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${checked ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
+      <span className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${checked ? 'bg-emerald-600' : 'bg-gray-300 dark:bg-gray-600'}`}>
         <span className={`inline-block h-4 w-4 transform rounded-full bg-white dark:bg-gray-900 shadow transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
       </span>
     </button>

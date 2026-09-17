@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from './supabaseClient'
+import { Icon } from './components/ui'
 
 // ═══════════════════════════════════════════════════════════════════
 // หน้าแจ้งซ่อมสำหรับผู้เช่า — เข้าด้วยเบอร์โทร ไม่ต้องสมัคร ไม่ต้องจำรหัส
@@ -81,8 +82,8 @@ function LoginCard({ onLoggedIn }) {
     <div className="min-h-screen bg-gradient-to-b from-sky-50 via-cyan-50 to-emerald-50 px-4 py-10">
       <div className="mx-auto max-w-md space-y-4">
         <div className="rounded-3xl bg-gradient-to-br from-sky-500 to-cyan-500 px-6 py-7 text-center text-white shadow-lg shadow-sky-200/70">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20 text-3xl">
-            🔧
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20">
+            <Icon name="wrench" className="h-7 w-7" />
           </div>
           <h1 className="mt-3 text-xl font-bold">แจ้งซ่อม</h1>
           <p className="mt-1 text-sm text-sky-50">แจ้งปัญหาในห้องพัก · ดูสถานะได้ทุกเมื่อ</p>
@@ -295,7 +296,7 @@ function RepairList({ items, loading }) {
   if (items.length === 0) {
     return (
       <div className="rounded-3xl border border-gray-100 bg-white px-5 py-10 text-center shadow-sm">
-        <p className="text-3xl">📋</p>
+        <Icon name="document" className="mx-auto h-10 w-10 text-gray-300" />
         <p className="mt-2 text-sm font-semibold text-gray-700">ยังไม่มีประวัติแจ้งซ่อม</p>
         <p className="mt-1 text-xs text-gray-400">เมื่อแจ้งเรื่องแล้ว จะเห็นสถานะที่นี่</p>
       </div>
@@ -454,7 +455,7 @@ export default function RepairPortalPage() {
         <div className="rounded-3xl bg-gradient-to-br from-sky-500 to-cyan-500 px-6 py-5 text-white shadow-lg shadow-sky-200/70">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm font-medium text-sky-100">แจ้งซ่อม 🔧</p>
+              <p className="text-sm font-medium text-sky-100">แจ้งซ่อม</p>
               <p className="mt-0.5 truncate text-lg font-bold">
                 {rentals.length === 1 ? rentals[0].name : `${rentals.length || ''} ห้องของคุณ`.trim() || 'ห้องของคุณ'}
               </p>

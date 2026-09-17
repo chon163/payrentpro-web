@@ -5,6 +5,7 @@ import { bankName } from './payment'
 import { createPromptpayQR } from './utils/promptpay'
 import { formatPeriod } from './utils/period'
 import { displayAssetName } from './utils/assetName'
+import { Icon } from './components/ui'
 
 function formatCurrency(value) {
   const n = Number(value)
@@ -49,16 +50,16 @@ function TabBar({ tab, onChange }) {
       <button
         type="button"
         onClick={() => onChange('bill')}
-        className={tab === 'bill' ? `${base} bg-indigo-600 text-white shadow-sm` : `${base} text-gray-500 hover:bg-gray-50`}
+        className={tab === 'bill' ? `${base} bg-emerald-600 text-white shadow-sm` : `${base} text-gray-500 hover:bg-gray-50`}
       >
-        🧾 บิลงวดนี้
+        <Icon name="receipt" className="h-4 w-4" /> บิลงวดนี้
       </button>
       <button
         type="button"
         onClick={() => onChange('history')}
-        className={tab === 'history' ? `${base} bg-indigo-600 text-white shadow-sm` : `${base} text-gray-500 hover:bg-gray-50`}
+        className={tab === 'history' ? `${base} bg-emerald-600 text-white shadow-sm` : `${base} text-gray-500 hover:bg-gray-50`}
       >
-        📚 ประวัติทั้งหมด
+        <Icon name="document" className="h-4 w-4" /> ประวัติทั้งหมด
       </button>
     </div>
   )
@@ -79,13 +80,13 @@ function HistoryPanel({ rows, loading, error, onRetry }) {
   if (error) {
     return (
       <div className="rounded-3xl border border-gray-100 bg-white px-6 py-8 text-center shadow-sm">
-        <p className="text-3xl">📭</p>
+        <Icon name="document" className="mx-auto h-10 w-10 text-gray-300" />
         <p className="mt-2 text-sm font-semibold text-gray-700">ไม่สามารถโหลดประวัติได้</p>
         <p className="mt-1 text-xs text-gray-400">{error}</p>
         <button
           type="button"
           onClick={onRetry}
-          className="mt-4 inline-flex h-11 items-center justify-center rounded-xl bg-indigo-600 px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-indigo-500"
+          className="mt-4 inline-flex h-11 items-center justify-center rounded-xl bg-emerald-600 px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-500"
         >
           ลองอีกครั้ง
         </button>
@@ -96,7 +97,7 @@ function HistoryPanel({ rows, loading, error, onRetry }) {
   if (rows.length === 0) {
     return (
       <div className="rounded-3xl border border-gray-100 bg-white px-6 py-10 text-center shadow-sm">
-        <p className="text-3xl">📭</p>
+        <Icon name="document" className="mx-auto h-10 w-10 text-gray-300" />
         <p className="mt-2 text-sm font-semibold text-gray-700">ยังไม่มีประวัติบิล</p>
       </div>
     )
@@ -127,12 +128,12 @@ function HistoryPanel({ rows, loading, error, onRetry }) {
           return (
             <li
               key={`${row.period ?? 'x'}-${i}`}
-              className={`flex items-center justify-between gap-3 px-5 py-3.5 ${row.is_current ? 'bg-indigo-50/60' : ''}`}
+              className={`flex items-center justify-between gap-3 px-5 py-3.5 ${row.is_current ? 'bg-emerald-50/60' : ''}`}
             >
               <div className="min-w-0">
                 <p className="truncate text-sm font-bold text-gray-900">
                   งวด {formatPeriod(row.period)}
-                  {row.is_current ? <span className="ml-1.5 text-xs font-semibold text-indigo-600">· งวดนี้</span> : null}
+                  {row.is_current ? <span className="ml-1.5 text-xs font-semibold text-emerald-600">· งวดนี้</span> : null}
                 </p>
                 <p className="mt-0.5 text-xs text-gray-400">ออกบิล {formatDate(row.created_at)}</p>
               </div>
@@ -307,9 +308,9 @@ function BillPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-indigo-50 via-violet-50 to-rose-50 p-4">
+      <div className="min-h-screen bg-gradient-to-b from-emerald-50 via-teal-50 to-rose-50 p-4">
         <div className="mx-auto max-w-md animate-pulse space-y-4 pt-6">
-          <div className="h-36 rounded-3xl bg-indigo-200/60" />
+          <div className="h-36 rounded-3xl bg-emerald-200/60" />
           <div className="h-32 rounded-3xl bg-white/70" />
           <div className="h-64 rounded-3xl bg-white/70" />
         </div>
@@ -319,13 +320,13 @@ function BillPage() {
 
   if (notFound || !bill) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-indigo-50 to-violet-50 p-4">
-        <div className="w-full max-w-md rounded-3xl border border-gray-100 bg-white p-8 text-center shadow-lg shadow-indigo-100/60">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-orange-100 text-3xl">
-            📭
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-emerald-50 to-teal-50 p-4">
+        <div className="w-full max-w-md rounded-3xl border border-gray-100 bg-white p-8 text-center shadow-lg shadow-emerald-100/60">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-orange-100 text-orange-500">
+            <Icon name="document" className="h-8 w-8" />
           </div>
           <h1 className="mt-4 text-lg font-bold text-gray-900">ไม่พบข้อมูลบิลค่ะ</h1>
-          <p className="mt-2 text-sm leading-relaxed text-gray-500">ลิงก์บิลไม่ถูกต้อง หรือบิลนี้ไม่มีอยู่ในระบบ<br />ลองตรวจสอบลิงก์อีกครั้งนะคะ 🙏</p>
+          <p className="mt-2 text-sm leading-relaxed text-gray-500">ลิงก์บิลไม่ถูกต้อง หรือบิลนี้ไม่มีอยู่ในระบบ<br />ลองตรวจสอบลิงก์อีกครั้งนะคะ</p>
         </div>
       </div>
     )
@@ -354,12 +355,12 @@ function BillPage() {
   //    ที่บอทส่งให้ใช้ได้ทุกสถานะบิล (ไม่ติด early return ด้านล่าง) ──
   if (tab === 'history') {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-indigo-50 via-violet-50 to-rose-50 text-gray-900">
+      <div className="min-h-screen bg-gradient-to-b from-emerald-50 via-teal-50 to-rose-50 text-gray-900">
         <div className="mx-auto max-w-md space-y-4 px-4 py-6">
-          <div className="rounded-3xl bg-gradient-to-br from-indigo-500 to-violet-500 px-6 py-6 text-white shadow-lg shadow-indigo-200/70">
-            <p className="text-base font-medium text-indigo-100">ประวัติการชำระเงิน 📚</p>
+          <div className="rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-500 px-6 py-6 text-white shadow-lg shadow-emerald-200/70">
+            <p className="text-base font-medium text-emerald-100">ประวัติการชำระเงิน</p>
             <p className="mt-1 text-xl font-bold">{custName}</p>
-            <p className="mt-3 text-sm text-indigo-100">{itemDetails}</p>
+            <p className="mt-3 text-sm text-emerald-100">{itemDetails}</p>
           </div>
 
           <TabBar tab={tab} onChange={switchTab} />
@@ -367,7 +368,7 @@ function BillPage() {
           <HistoryPanel rows={history} loading={historyLoading} error={historyError} onRetry={fetchHistory} />
 
           <div className="pt-2 text-center">
-            <p className="text-xs text-gray-400">จัดการโดย PayRentPro 🏠</p>
+            <p className="text-xs text-gray-400">จัดการโดย PayRentPro</p>
           </div>
         </div>
       </div>
@@ -385,7 +386,7 @@ function BillPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
               </svg>
             </div>
-            <h1 className="mt-5 text-2xl font-bold">ขอบคุณที่ชำระเงินนะคะ 🙏</h1>
+            <h1 className="mt-5 text-2xl font-bold">ขอบคุณที่ชำระเงินนะคะ</h1>
             <p className="mt-2 text-sm text-emerald-50">คุณ{custName}</p>
             <div className="mx-auto mt-6 w-fit rounded-2xl bg-white/15 px-6 py-3">
               <p className="text-xs text-emerald-50">ยอดที่ชำระ</p>
@@ -398,7 +399,7 @@ function BillPage() {
             <TabBar tab={tab} onChange={switchTab} />
           </div>
 
-          <p className="mt-6 text-center text-xs text-gray-400">จัดการโดย PayRentPro 🏠</p>
+          <p className="mt-6 text-center text-xs text-gray-400">จัดการโดย PayRentPro</p>
         </div>
       </div>
     )
@@ -406,20 +407,20 @@ function BillPage() {
 
   // ── ยังไม่ชำระ / รอตรวจสอบ ────────────────────────────────
   return (
-    <div className="min-h-screen bg-gradient-to-b from-indigo-50 via-violet-50 to-rose-50 text-gray-900">
+    <div className="min-h-screen bg-gradient-to-b from-emerald-50 via-teal-50 to-rose-50 text-gray-900">
       <div className="mx-auto max-w-md space-y-4 px-4 py-6">
         {/* 1) หัว: ทักทาย + สถานะ */}
-        <div className="rounded-3xl bg-gradient-to-br from-indigo-500 to-violet-500 px-6 py-6 text-white shadow-lg shadow-indigo-200/70">
+        <div className="rounded-3xl bg-gradient-to-br from-emerald-500 to-teal-500 px-6 py-6 text-white shadow-lg shadow-emerald-200/70">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-base font-medium text-indigo-100">สวัสดีค่ะ 🏠</p>
+              <p className="text-base font-medium text-emerald-100">สวัสดีค่ะ</p>
               <p className="mt-1 text-xl font-bold">{custName}</p>
             </div>
             <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ring-1 ring-inset ${badge.cls}`}>
               {badge.label}
             </span>
           </div>
-          <p className="mt-3 text-sm text-indigo-100">{itemDetails} · งวด {formatPeriod(bill.period)}</p>
+          <p className="mt-3 text-sm text-emerald-100">{itemDetails} · งวด {formatPeriod(bill.period)}</p>
         </div>
 
         <TabBar tab={tab} onChange={switchTab} />
@@ -433,7 +434,7 @@ function BillPage() {
 
         {/* 3) รายละเอียด */}
         <div className="rounded-3xl border border-gray-100 bg-white px-6 py-4 shadow-sm">
-          <p className="text-sm font-bold text-gray-900">รายละเอียดค่าใช้จ่าย 🧾</p>
+          <p className="text-sm font-bold text-gray-900">รายละเอียดค่าใช้จ่าย</p>
           <ul className="mt-3 divide-y divide-gray-50">
             {detailLines.map((line) => (
               <li key={line.label} className="flex items-center justify-between gap-3 py-2.5">
@@ -453,9 +454,9 @@ function BillPage() {
           <button
             type="button"
             onClick={scrollToPay}
-            className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-green-600 text-lg font-bold text-white shadow-lg shadow-green-300/60 transition-colors hover:bg-green-500 active:bg-green-700"
+            className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-lg font-bold text-white shadow-lg shadow-emerald-300/60 transition-colors hover:bg-emerald-500 active:bg-emerald-700"
           >
-            ชำระเงินเลย 💰
+            <Icon name="banknotes" className="h-6 w-6" /> ชำระเงินเลย
           </button>
         )}
 
@@ -465,7 +466,7 @@ function BillPage() {
             <p className="text-3xl">⏳</p>
             <p className="mt-2 text-base font-bold text-sky-800">ได้รับแจ้งการชำระแล้ว กำลังตรวจสอบ</p>
             <p className="mt-1 text-sm leading-relaxed text-sky-700">
-              {bill.paid_amount > 0 ? `แจ้งชำระยอด ${formatCurrency(bill.paid_amount)} · ` : ''}เจ้าของห้องจะยืนยันให้เร็วที่สุดนะคะ 🙏
+              {bill.paid_amount > 0 ? `แจ้งชำระยอด ${formatCurrency(bill.paid_amount)} · ` : ''}เจ้าของห้องจะยืนยันให้เร็วที่สุดนะคะ
             </p>
           </div>
         )}
@@ -476,13 +477,13 @@ function BillPage() {
             {isBank ? (
               hasBankAccount(bill) ? (
                 <div className="text-center">
-                  <p className="text-3xl">🏦</p>
+                  <Icon name="banknotes" className="mx-auto h-10 w-10 text-gray-400" />
                   <p className="mt-2 text-base font-bold text-gray-900">โอนเข้าบัญชีธนาคาร</p>
                   <p className="mt-2 text-sm leading-relaxed text-gray-600">{bankPaymentText(bill, accountName)}</p>
                 </div>
               ) : (
                 <div className="rounded-2xl bg-amber-50 px-5 py-5 text-center">
-                  <p className="text-3xl">💛</p>
+                  <Icon name="warning" className="mx-auto h-10 w-10 text-amber-500" />
                   <p className="mt-2 text-sm font-semibold text-amber-700">ยังไม่ได้ตั้งค่าบัญชีรับเงิน กรุณาติดต่อเจ้าของห้องนะคะ</p>
                 </div>
               )
@@ -506,7 +507,7 @@ function BillPage() {
                       <div className="h-[260px] w-[260px] animate-pulse rounded-xl bg-gray-100" />
                     )}
                   </div>
-                  <p className="mt-4 text-base font-bold text-gray-900">สแกนจ่ายผ่านแอปธนาคาร 📱</p>
+                  <p className="mt-4 text-base font-bold text-gray-900">สแกนจ่ายผ่านแอปธนาคาร</p>
                   {accountName && (
                     <p className="mt-1 text-sm text-gray-600">บัญชี: <span className="font-semibold">{accountName}</span></p>
                   )}
@@ -523,16 +524,16 @@ function BillPage() {
                     inputMode="decimal"
                     value={customAmount}
                     onChange={(e) => setCustomAmount(e.target.value)}
-                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-right text-lg font-bold tabular-nums text-gray-900 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                    className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-right text-lg font-bold tabular-nums text-gray-900 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-200"
                   />
-                  <p className="mt-1.5 text-xs text-gray-400">QR Code จะอัปเดตตามยอดที่พิมพ์ทันทีเลยค่ะ ✨</p>
+                  <p className="mt-1.5 text-xs text-gray-400">QR Code จะอัปเดตตามยอดที่พิมพ์ทันทีเลยค่ะ</p>
                 </div>
 
                 <button
                   type="button"
                   onClick={handleMarkPaid}
                   disabled={marking}
-                  className="mt-4 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 text-lg font-bold text-white shadow-lg shadow-blue-300/60 transition-colors hover:bg-blue-500 active:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
+                  className="mt-4 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-lg font-bold text-white shadow-lg shadow-emerald-300/60 transition-colors hover:bg-emerald-500 active:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {marking ? (
                     <>
@@ -543,7 +544,7 @@ function BillPage() {
                       กำลังส่งข้อมูล...
                     </>
                   ) : (
-                    '✅ แจ้งการชำระเงิน'
+                    (<><Icon name="check" className="h-5 w-5" /> แจ้งการชำระเงิน</>)
                   )}
                 </button>
 
@@ -551,7 +552,7 @@ function BillPage() {
                   <a
                     href={qrDataUrl}
                     download="promptpay-qr.png"
-                    className="mt-2 flex h-11 items-center justify-center text-center text-xs font-medium text-indigo-500 underline underline-offset-2"
+                    className="mt-2 flex h-11 items-center justify-center text-center text-xs font-medium text-emerald-500 underline underline-offset-2"
                   >
                     บันทึกรูป QR Code
                   </a>
@@ -559,7 +560,7 @@ function BillPage() {
               </>
             ) : (
               <div className="rounded-2xl bg-amber-50 px-5 py-5 text-center">
-                <p className="text-3xl">💛</p>
+                <Icon name="warning" className="mx-auto h-10 w-10 text-amber-500" />
                 <p className="mt-2 text-sm font-semibold text-amber-700">ยังไม่ได้ตั้งค่าบัญชีรับเงิน กรุณาติดต่อเจ้าของห้องนะคะ</p>
               </div>
             )}
@@ -568,8 +569,8 @@ function BillPage() {
 
         {/* 6) ท้ายหน้า */}
         <div className="pt-2 text-center">
-          <p className="text-sm text-gray-500">ชำระแล้วส่งสลิปในกลุ่ม LINE ได้เลยนะคะ 🙏</p>
-          <p className="mt-1 text-xs text-gray-400">จัดการโดย PayRentPro 🏠</p>
+          <p className="text-sm text-gray-500">ชำระแล้วส่งสลิปในกลุ่ม LINE ได้เลยนะคะ</p>
+          <p className="mt-1 text-xs text-gray-400">จัดการโดย PayRentPro</p>
         </div>
       </div>
 

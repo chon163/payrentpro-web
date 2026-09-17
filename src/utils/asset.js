@@ -16,7 +16,7 @@ export const BIZ_TYPES = [
     value: 'property',
     label: 'อสังหาริมทรัพย์',
     tab: 'อสังหา',
-    icon: '🏠',
+    icon: 'building',
     examples: 'หอพัก/ห้องเช่า',
     itemLabel: 'ห้อง',
     placeholder: 'เช่น 101',
@@ -28,7 +28,7 @@ export const BIZ_TYPES = [
     value: 'vehicle',
     label: 'ยานพาหนะ',
     tab: 'ยานพาหนะ',
-    icon: '🚗',
+    icon: 'truck',
     examples: 'รถเช่า/แท็กซี่',
     itemLabel: 'ทะเบียนรถ',
     placeholder: 'กก 1234',
@@ -40,7 +40,7 @@ export const BIZ_TYPES = [
     value: 'other',
     label: 'อุปกรณ์/อื่นๆ',
     tab: 'อุปกรณ์/อื่นๆ',
-    icon: '🛠️',
+    icon: 'wrench',
     examples: 'เครื่องจักร/กล้อง/บริการรายเดือน',
     itemLabel: 'รายการ',
     placeholder: 'เช่น กล้อง Sony A7, เครื่องจักร CNC-01',
@@ -172,6 +172,10 @@ export function buildAssetInsert(form, landlordId) {
 // update แถวเดิมให้มีผู้เช่า — ไม่แตะข้อมูลห้อง/ค่าปรับ/มิเตอร์แม้แต่คอลัมน์เดียว
 // (deposit_amount แตะได้ เพราะเป็น "เงินมัดจำที่เก็บจริงจากผู้เช่ารายนี้"
 //  ตั้งต้นด้วยค่าประกันของห้องแล้วให้เจ้าของแก้เป็นยอดที่เก็บได้จริง)
+//
+// บังคับผูกกลุ่ม LINE ใหม่ทุกครั้งที่ผู้เช่าเข้า: ล้าง group_id + ออก binding_code ใหม่
+// move-out เคลียร์ให้แล้ว แต่ห้องอาจว่างด้วยทางอื่น (ข้อมูลเก่า/แก้ตรงใน DB) —
+// ถ้าไม่ล้างตรงนี้ กลุ่มไลน์ของผู้เช่าเก่าจะยังผูกอยู่และรับบิลของผู้เช่าใหม่
 export function buildTenantUpdate(form) {
   return {
     room_status: 'occupied',
@@ -182,6 +186,8 @@ export function buildTenantUpdate(form) {
     move_in_date: form.move_in_date || null,
     lease_end_date: form.lease_end_date || null,
     deposit_amount: num(form.deposit_amount),
+    group_id: null,
+    binding_code: generateBindingCode(),
   }
 }
 

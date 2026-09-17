@@ -1,6 +1,6 @@
 import { StrictMode, lazy, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Route, Routes, Navigate } from 'react-router-dom'
 // ฟอนต์ไทย Sarabun — ฝังมากับแอปเพื่อให้ใบเสร็จที่วาดบน canvas ได้ฟอนต์เดียวกันทุกเครื่อง
 // (เดิมพึ่งฟอนต์ระบบ เครื่องที่ไม่มีฟอนต์ไทยจะวาดออกมาเป็นอักขระเพี้ยน)
 import '@fontsource/sarabun/thai-400.css'
@@ -44,18 +44,43 @@ createRoot(document.getElementById('root')).render(
         <Route path="/" element={<PublicHomeRoute />} />
         <Route path="/login" element={<LoginRoute />} />
         <Route path="/assets" element={<App />} />
-        {/* 4 หน้างานค้าง — แยกออกจากแดชบอร์ดเพื่อให้หน้าภาพรวมไม่รก (หน้าละเรื่อง) */}
-        <Route path="/pending" element={<App />} />
-        <Route path="/overdue" element={<App />} />
-        <Route path="/repairs" element={<App />} />
-        <Route path="/leases" element={<App />} />
-        <Route path="/finance" element={<App />} />
-        <Route path="/comms" element={<App />} />
+
+        {/* Redirects from old routes */}
+        <Route path="/pending" element={<Navigate to="/finance/pending" replace />} />
+        <Route path="/overdue" element={<Navigate to="/finance/overdue" replace />} />
+        <Route path="/repairs" element={<Navigate to="/repairs/active" replace />} />
+        <Route path="/leases" element={<Navigate to="/leases/expiring" replace />} />
+        <Route path="/comms" element={<Navigate to="/docs/announcements" replace />} />
+        <Route path="/finance" element={<Navigate to="/profit" replace />} />
+
+        {/* Finance group */}
+        <Route path="/finance/pending" element={<App />} />
+        <Route path="/finance/overdue" element={<App />} />
+        <Route path="/finance/recent" element={<App />} />
+
+        {/* Repairs group */}
+        <Route path="/repairs/active" element={<App />} />
+        <Route path="/repairs/recent" element={<App />} />
+
+        {/* Leases group */}
+        <Route path="/leases/expired" element={<App />} />
+        <Route path="/leases/expiring" element={<App />} />
+
+        {/* Profit */}
+        <Route path="/profit" element={<App />} />
+
+        {/* Docs group */}
+        <Route path="/docs/announcements" element={<App />} />
+        <Route path="/docs/notes" element={<App />} />
+        <Route path="/docs/files" element={<App />} />
+
+        {/* Settings & Admin */}
         <Route path="/settings" element={<App />} />
         <Route path="/audit" element={<App />} />
         <Route path="/activity" element={<App />} />
         <Route path="/membership" element={<App />} />
         <Route path="/admin" element={<App />} />
+
         <Route path="/bill/:secure_token" element={<BillPage />} />
         {/* หน้าแจ้งซ่อมของผู้เช่า — public ไม่ต้อง login (คุมสิทธิ์ที่ RPC ด้วย token) */}
         <Route path="/repair" element={<RepairPortalPage />} />

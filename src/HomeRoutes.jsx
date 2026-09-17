@@ -12,14 +12,23 @@ export function PublicHomeRoute() {
 
   useEffect(() => {
     let active = true
+    // กันจอขาวแบบเดียวกับ App.jsx: getSession() reject ได้ (Web Locks / refresh token ล้ม)
+    // ถ้าไม่ .catch ค่า checking จะค้าง true → ติดหน้า "กำลังโหลด..." บนพื้นขาวตลอดไป
     supabase.auth.getSession().then(({ data }) => {
       if (active) {
         setSession(data.session)
         setChecking(false)
       }
+    }, (err) => {
+      console.warn('getSession failed:', err?.message || err)
+      if (active) {
+        setSession(null)
+        setChecking(false)
+      }
     })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession)
+      if (event === 'INITIAL_SESSION' && active) setChecking(false)
     })
     return () => {
       active = false
@@ -46,7 +55,7 @@ export function LoginRoute() {
     let active = true
     supabase.auth.getSession().then(({ data }) => {
       if (active && data.session) navigate('/', { replace: true })
-    })
+    }, (err) => console.warn('getSession failed:', err?.message || err))
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) navigate('/', { replace: true })
     })
