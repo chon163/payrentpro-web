@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Icon } from './ui'
 import { formatCurrency } from '../utils/format'
 
@@ -7,10 +6,12 @@ export function MobileDashboard({
   summary,
   pendingReviews,
   overdueRentals,
+  urgentOverdueRentals,
   pendingUtilityBills,
   onViewSummary,
   onViewPendingReviews,
   onViewOverdue,
+  onViewUrgentOverdue,
   onViewUtilityBills,
   onShowMoreMenu,
 }) {
@@ -62,7 +63,33 @@ export function MobileDashboard({
         </div>
       </button>
 
-      {/* 3. ดูคนค้าง */}
+      {/* 3. ค้างเกิน 3 วัน — การ์ดแดงเข้ม */}
+      {urgentOverdueRentals && urgentOverdueRentals.length > 0 && (
+        <button
+          type="button"
+          onClick={onViewUrgentOverdue}
+          className="group w-full overflow-hidden rounded-2xl bg-red-600 dark:bg-red-700 border-2 border-red-700 dark:border-red-800 p-5 text-left shadow-md transition-all active:scale-[0.98]"
+        >
+          <div className="flex items-center justify-between">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/20">
+                  <Icon name="warning" className="h-6 w-6 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-white">⚠️ ค้างเกิน 3 วัน</p>
+                  <p className="text-xs text-red-100">{urgentOverdueRentals.length} รายการ</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/30">
+              <span className="text-base font-bold text-white">{urgentOverdueRentals.length}</span>
+            </div>
+          </div>
+        </button>
+      )}
+
+      {/* 4. ดูคนค้างทั้งหมด */}
       <button
         type="button"
         onClick={onViewOverdue}
@@ -75,7 +102,7 @@ export function MobileDashboard({
                 <Icon name="warning" className="h-5 w-5 text-red-600 dark:text-red-400" />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-red-900 dark:text-red-100">ค้างชำระ</p>
+                <p className="text-sm font-semibold text-red-900 dark:text-red-100">ค้างชำระทั้งหมด</p>
                 <p className="text-xs text-red-600 dark:text-red-400">{overdueRentals?.length || 0} ห้อง</p>
               </div>
             </div>

@@ -17,6 +17,7 @@ export const BIZ_TYPES = [
     label: 'อสังหาริมทรัพย์',
     tab: 'อสังหา',
     icon: 'building',
+    emoji: '🏠',
     examples: 'หอพัก/ห้องเช่า',
     itemLabel: 'ห้อง',
     placeholder: 'เช่น 101',
@@ -29,6 +30,7 @@ export const BIZ_TYPES = [
     label: 'ยานพาหนะ',
     tab: 'ยานพาหนะ',
     icon: 'truck',
+    emoji: '🚗',
     examples: 'รถเช่า/แท็กซี่',
     itemLabel: 'ทะเบียนรถ',
     placeholder: 'กก 1234',
@@ -41,6 +43,7 @@ export const BIZ_TYPES = [
     label: 'อุปกรณ์/อื่นๆ',
     tab: 'อุปกรณ์/อื่นๆ',
     icon: 'wrench',
+    emoji: '🔧',
     examples: 'เครื่องจักร/กล้อง/บริการรายเดือน',
     itemLabel: 'รายการ',
     placeholder: 'เช่น กล้อง Sony A7, เครื่องจักร CNC-01',
@@ -58,17 +61,30 @@ export const CYCLE_LABELS = {
 // (คอลัมน์ cust_name ของข้อมูลเดิมไม่เคยเป็น null จึงไม่เปลี่ยนธรรมเนียมนี้)
 export const VACANT_CUST_NAME = 'ว่าง'
 
-// แปลง biz_type จากทุกฟอร์แมต (ค่าใหม่ property/vehicle/other หรือค่าไทยเดิมสมัยแรก) ให้เป็นค่ามาตรฐาน
+// แปลง biz_type จากทุกฟอร์แมตให้เป็นค่ามาตรฐาน property/vehicle/other
+// ค่าเดิมในฐานข้อมูลมีทั้ง building/truck/wrench (ชื่อไอคอนสมัยแรก) และค่าไทยเดิม
 export function normalizeBizType(value) {
   const raw = String(value ?? '').trim().toLowerCase()
-  if (raw === 'vehicle' || raw.includes('ยานพาหนะ')) return 'vehicle'
-  if (raw === 'other' || raw.includes('อุปกรณ์')) return 'other'
+  if (raw === 'vehicle' || raw === 'truck' || raw.includes('ยานพาหนะ')) return 'vehicle'
+  if (raw === 'other' || raw === 'wrench' || raw.includes('อุปกรณ์')) return 'other'
   return 'property'
 }
 
 export function bizTypeMeta(value) {
   const key = normalizeBizType(value)
   return BIZ_TYPES.find((t) => t.value === key) || BIZ_TYPES[0]
+}
+
+// emoji ประจำประเภท — ใช้แทนการดึง .icon ตรง ๆ
+// (.icon เป็นชื่อ SVG ถ้า render เป็นข้อความจะได้ "building"/"truck"/"wrench" กำลังเป็นอยู่)
+export function bizTypeEmoji(value) {
+  return bizTypeMeta(value).emoji
+}
+
+// ป้ายประเภทพร้อม emoji เช่น "🏠 อสังหาริมทรัพย์" — สำหรับจุดที่โชว์ชื่อประเภทเต็ม
+export function bizTypeLabel(value) {
+  const meta = bizTypeMeta(value)
+  return `${meta.emoji} ${meta.label}`
 }
 
 export function generateBindingCode() {
@@ -116,7 +132,7 @@ export const ASSET_FORM_EMPTY = {
   last_elec_meter: '',
 }
 
-// ── โหมด 2: ฟอร์ม "เพิ่มผู้เช่า" — เฉพาะข้อมูลคน ไม่มีฟิลด์ของห้องเลย ──
+// ── โหมด 2: ฟอร์ม "เพิ่มผู้เช่า" — ข้อมูลคน + รอบบิลของห้องนี้ ──
 export const TENANT_FORM_EMPTY = {
   cust_name: '',
   tenant_phone: '',
@@ -125,6 +141,8 @@ export const TENANT_FORM_EMPTY = {
   move_in_date: '',
   lease_end_date: '',
   deposit_amount: '',
+  bill_day: '',
+  penalty_day: '',
 }
 
 const num = (v) => Number(v) || 0
@@ -188,6 +206,10 @@ export function buildTenantUpdate(form) {
     deposit_amount: num(form.deposit_amount),
     group_id: null,
     binding_code: generateBindingCode(),
+    // รอบบิล — ฟอร์ม prefill จากค่าเดิมของห้องแล้ว เจ้าของปรับได้ตอนเพิ่มผู้เช่า
+    // (ส่งเฉพาะกรณีกรอก — ไม่ยิงค่าว่างทับค่าที่มีอยู่)
+    ...(form.bill_day !== '' ? { bill_day: Math.min(31, Math.max(1, num(form.bill_day) || 1)) } : {}),
+    ...(form.penalty_day !== '' ? { penalty_day: Math.min(31, Math.max(1, num(form.penalty_day) || 1)) } : {}),
   }
 }
 
@@ -213,7 +235,7 @@ export function buildMoveOutPatch() {
 // ห้องนี้เคยมีใครเช่า ช่วงไหน คืนเงินประกันเท่าไร
 export function buildMoveOutNote(rental, { repairCost = 0, refund = 0, assetName = '' } = {}) {
   const fmtDate = (v) => (v ? new Date(v).toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' }) : '—')
-  const fmtBaht = (v) => `${(Number(v) || 0).toLocaleString('th-TH')} บาท`
+  const fmtBaht = (v) => `฿${(Number(v) || 0).toLocaleString('th-TH')}`
   const lines = [
     `ผู้เช่า: ${rental?.cust_name || '—'}`,
     `เบอร์โทร: ${rental?.tenant_phone || '—'}`,

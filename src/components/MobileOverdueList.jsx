@@ -1,9 +1,27 @@
 import { Icon } from './ui'
-import { formatCurrency } from '../utils/format'
+import { formatCurrency, isBillOpen } from '../utils/format'
 import { displayAssetName } from '../utils/assetName'
+import { billDueDate } from '../utils/period'
+
+// คำนวณจำนวนวันที่ค้าง — วันครบกำหนดมาจาก งวด + วันส่งบิลของห้อง (billDueDate)
+// transactions ไม่มี due_date ถ้าคำนวณไม่ได้จะ fallback เป็น created_at ของบิล
+function calculateDaysOverdue(rental) {
+  const txs = rental.transactions || []
+  const unpaid = txs.filter((tx) => isBillOpen(tx))
+  if (unpaid.length === 0) return 0
+
+  const oldestDue = unpaid
+    .map((tx) => billDueDate(tx.period, rental.bill_day ?? rental.due_date) ?? (tx.created_at ? new Date(tx.created_at).getTime() : 0))
+    .filter((t) => t > 0)
+    .sort((a, b) => a - b)[0]
+
+  if (!oldestDue) return 0
+  const diff = Date.now() - oldestDue
+  return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)))
+}
 
 // Mobile-optimized Overdue List
-export function MobileOverdueList({ rentals, onBack, onContactTenant }) {
+export function MobileOverdueList({ rentals, onBack, onContactTenant, onMarkCash }) {
   if (!rentals || rentals.length === 0) {
     return (
       <div className="flex min-h-screen flex-col bg-gray-50 dark:bg-gray-950 lg:hidden">
@@ -28,9 +46,18 @@ export function MobileOverdueList({ rentals, onBack, onContactTenant }) {
     )
   }
 
-  const totalOverdue = rentals.reduce((sum, r) => {
-    const amount = Number(r.outstanding_amount || r.total_amount || 0)
-    return sum + amount
+  // คำนวณวันค้างของแต่ละ rental แล้วเรียงจากมากไปน้อย
+  const rentalsWithDays = rentals.map((r) => ({
+    ...r,
+    daysOverdue: calculateDaysOverdue(r),
+  })).sort((a, b) => b.daysOverdue - a.daysOverdue)
+
+  const totalOverdue = rentalsWithDays.reduce((sum, r) => {
+    const txs = r.transactions || []
+    const unpaidAmount = txs
+      .filter((tx) => isBillOpen(tx))
+      .reduce((s, tx) => s + Number(tx.total_amount || 0), 0)
+    return sum + unpaidAmount
   }, 0)
 
   return (
@@ -59,13 +86,15 @@ export function MobileOverdueList({ rentals, onBack, onContactTenant }) {
       {/* List */}
       <div className="flex-1 overflow-y-auto p-4">
         <div className="space-y-3">
-          {rentals.map((rental, index) => {
+          {rentalsWithDays.map((rental, index) => {
             const assetName = displayAssetName({
               sub_label: rental.sub_label,
               item_details: rental.item_details,
             })
-            const amount = Number(rental.outstanding_amount || rental.total_amount || 0)
-            const daysOverdue = rental.days_overdue || 0
+            const txs = rental.transactions || []
+            const unpaidTxs = txs.filter((tx) => isBillOpen(tx))
+            const amount = unpaidTxs.reduce((s, tx) => s + Number(tx.total_amount || 0), 0)
+            const daysOverdue = rental.daysOverdue || 0
 
             return (
               <div
@@ -80,7 +109,11 @@ export function MobileOverdueList({ rentals, onBack, onContactTenant }) {
                       </p>
                       <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">{assetName}</p>
                       {daysOverdue > 0 && (
-                        <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-red-100 dark:bg-red-900/40 px-2.5 py-1 text-xs font-semibold text-red-700 dark:text-red-300">
+                        <div className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                          daysOverdue > 3
+                            ? 'bg-red-600 dark:bg-red-700 text-white'
+                            : 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300'
+                        }`}>
                           <Icon name="warning" className="h-3.5 w-3.5" />
                           เกิน {daysOverdue} วัน
                         </div>
@@ -94,16 +127,25 @@ export function MobileOverdueList({ rentals, onBack, onContactTenant }) {
                   </div>
                 </div>
 
-                {/* Contact Button */}
+                {/* Action Buttons */}
                 <div className="border-t border-gray-100 dark:border-gray-800 p-3">
-                  <button
-                    type="button"
-                    onClick={() => onContactTenant(rental)}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 px-4 py-2.5 text-sm font-semibold text-blue-600 dark:text-blue-400 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/50"
-                  >
-                    <Icon name="message" className="h-4 w-4" />
-                    ติดต่อผู้เช่า
-                  </button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onContactTenant(rental)}
+                      className="flex items-center justify-center gap-2 rounded-lg bg-blue-50 dark:bg-blue-950/30 px-3 py-2.5 text-sm font-semibold text-blue-600 dark:text-blue-400 transition-colors hover:bg-blue-100 dark:hover:bg-blue-900/50"
+                    >
+                      <Icon name="message" className="h-4 w-4" />
+                      ติดต่อ
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onMarkCash && onMarkCash(rental)}
+                      className="flex items-center justify-center gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2.5 text-sm font-semibold text-emerald-600 dark:text-emerald-400 transition-colors hover:bg-emerald-100 dark:hover:bg-emerald-900/50"
+                    >
+                      💵 จ่ายสด
+                    </button>
+                  </div>
                 </div>
               </div>
             )

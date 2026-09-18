@@ -587,7 +587,12 @@ async function autoVerifyTenantSlip(
   // ยอดตรง → ปิดบิลเลย
   const { error: updateError } = await supabase
     .from('transactions')
-    .update({ status: 'paid', paid_amount: expectedAmount })
+    .update({
+      status: 'paid',
+      paid_amount: expectedAmount,
+      slip_verified: true,
+      verified_at: new Date().toISOString()
+    })
     .eq('id', transactionId)
 
   if (updateError) {
@@ -595,33 +600,29 @@ async function autoVerifyTenantSlip(
     return { approved: false, reason: 'update_error' }
   }
 
-  // ส่งใบเสร็จเข้ากลุ่ม (send_receipt_to_line ต้องการ public URL)
-  // สร้างใบเสร็จ PNG แล้วอัปโหลด bucket receipts ก่อน
-  const receiptUrl = await generateAndUploadReceipt(transactionId)
-  if (receiptUrl) {
+  // ส่งใบเสร็จเข้ากลุ่ม LINE ทันที
+  try {
     const { error: receiptError } = await supabase.rpc('send_receipt_to_line', {
       p_tx_id: transactionId,
-      p_public_url: receiptUrl,
     })
     if (receiptError) {
       console.error('send_receipt_to_line error:', receiptError)
     }
+  } catch (err) {
+    console.error('send receipt error:', err)
   }
 
   // ข้อความตอบกลับในกลุ่ม
   await pushLine(
     groupId,
-    `รับการชำระเงินแล้ว ✅ ยอด ฿${formatBaht(expectedAmount)}\n${receiptUrl ? 'ใบเสร็จส่งให้แล้วครับ 🙏' : 'กำลังสร้างใบเสร็จ...'}`,
+    `ชำระ ฿${formatBaht(expectedAmount)} เรียบร้อย 🧾`,
   )
 
   return { approved: true, amount: slipAmount, bank, txnRef }
 }
 
-// สร้างใบเสร็จ PNG + อัปโหลด bucket receipts (public) → คืน public URL
-// (ยังไม่ได้ทำ receipt generator จริง → ใช้ placeholder)
+// (ไม่ใช้แล้ว — ใช้ send_receipt_to_line ตรง RPC แทน)
 async function generateAndUploadReceipt(transactionId: string): Promise<string | null> {
-  // TODO: เรียก RPC/Edge Function สร้างรูปใบเสร็จจริง
-  // ตอนนี้ return null ไปก่อน (ไม่ส่งรูปใบเสร็จ)
   return null
 }
 

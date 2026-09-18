@@ -34,6 +34,10 @@ export function MobileSlipReview({ items, onApprove, onReject, onMarkCash, onBac
   }
 
   const item = items[currentIndex]
+  // pendingReviews select '*, rentals(cust_name, ...)' — join กลับมาเป็น object (หรือ array ถ้าเก็บเป็น many)
+  const rentalInfo = Array.isArray(item.rentals) ? item.rentals[0] : item.rentals
+  const custName = rentalInfo?.cust_name || item.cust_name || '—'
+  const amount = Number(item.total_amount ?? item.base_amount ?? 0)
 
   const handleApprove = async () => {
     setProcessing(true)
@@ -101,29 +105,23 @@ export function MobileSlipReview({ items, onApprove, onReject, onMarkCash, onBac
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400">ผู้เช่า</p>
               <p className="mt-0.5 text-base font-semibold text-gray-900 dark:text-gray-100">
-                {item.tenant_name || '—'}
+                {custName}
               </p>
             </div>
             <div className="text-right">
               <p className="text-sm text-gray-500 dark:text-gray-400">ยอดเงิน</p>
               <p className="mt-0.5 text-xl font-bold text-emerald-600 dark:text-emerald-400">
-                {formatCurrency(item.amount)}
+                {formatCurrency(amount)}
               </p>
             </div>
           </div>
-
-          {item.note && (
-            <div className="mt-3 rounded-lg bg-amber-50 dark:bg-amber-900/30 px-3 py-2">
-              <p className="text-sm text-amber-800 dark:text-amber-200">{item.note}</p>
-            </div>
-          )}
         </div>
 
         {/* รูปสลิป */}
-        {item.slip_url ? (
+        {item.slip_image_url ? (
           <div className="mt-4">
             <img
-              src={item.slip_url}
+              src={item.slip_image_url}
               alt="สลิปโอนเงิน"
               className="w-full rounded-xl shadow-lg"
               style={{ maxHeight: '60vh', objectFit: 'contain' }}

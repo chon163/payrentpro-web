@@ -1,38 +1,46 @@
-// ฟอร์แมตเงิน/วันที่ที่ใช้ร่วมกันทั้งแอป
-// แยกออกมาจาก App.jsx เพื่อให้หน้าใหม่ใน src/pages/ ใช้ตัวเดียวกันได้
-// — ไม่ให้เกิดสองสำนักที่แสดงเลขคนละแบบ
-
+// ฟอร์แมตสกุลเงิน — ใช้ ฿ แทน "บาท" ทั้งโปรเจกต์
 export function formatCurrency(value) {
   const n = Number(value)
   if (value === undefined || value === null || value === '' || Number.isNaN(n)) return '—'
   return `฿${n.toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
 }
 
+// ฟอร์แมตตัวเลขใหญ่ — truncate ถ้า >6 หลักเป็น 1.23M / 456K
+export function formatLargeNumber(value) {
+  const n = Number(value)
+  if (value === undefined || value === null || value === '' || Number.isNaN(n)) return '—'
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`
+  if (n >= 100_000) return `${Math.round(n / 1_000)}K`
+  return n.toLocaleString('th-TH')
+}
+
+// ฟอร์แมตวันที่แบบไทย
 export function formatDate(value) {
-  if (!value) return '—'
   const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return String(value)
-  return new Intl.DateTimeFormat('th-TH', { day: '2-digit', month: 'short', year: 'numeric' }).format(d)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-export const THAI_MONTH_NAMES = [
-  'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
-  'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม',
-]
-
-// 'YYYY-MM' → 'กันยายน 2569' (พ.ศ. ตามที่คนไทยอ่าน — เว็บทั้งเว็บใช้ locale th-TH อยู่แล้ว)
-export function formatPeriodLabel(period) {
-  if (!period) return '—'
-  const [y, m] = String(period).split('-').map(Number)
-  if (!y || !m || m < 1 || m > 12) return String(period)
-  return `${THAI_MONTH_NAMES[m - 1]} ${y + 543}`
-}
-
-// วันแรก/วันสุดท้ายของเดือนในรูป 'YYYY-MM-DD' สำหรับส่งเข้า Supabase filter
+// คำนวณช่วงเดือน — return { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD' }
 export function monthRange(year, month) {
+  if (!year || !month || month < 1 || month > 12) {
+    return { from: undefined, to: undefined }
+  }
   const pad = (n) => String(n).padStart(2, '0')
   const from = `${year}-${pad(month)}-01`
-  const nextY = month === 12 ? year + 1 : year
-  const nextM = month === 12 ? 1 : month + 1
-  return { from, to: `${nextY}-${pad(nextM)}-01` }
+  const nextMonth = month === 12 ? 1 : month + 1
+  const nextYear = month === 12 ? year + 1 : year
+  const to = `${nextYear}-${pad(nextMonth)}-01`
+  return { from, to }
+}
+
+// Emoji/ป้ายประเภทสินทรัพย์ย้ายไป utils/asset.js แล้ว (bizTypeEmoji / bizTypeLabel)
+// — ศูนย์เดียวกับ BIZ_TYPES + normalizeBizType กันสองสำนักคลายกัน
+
+// บิล "ค้างชำระ" จริง = ออกไปแล้วแต่ยังไม่ได้จ่าย (unpaid / pending_review)
+// draft = ร่างบิลที่ยังไม่ออกให้ผู้เช่า → ห้ามนับเป็นค้างชำระ/ทวงหนี้/ยอดรวมค้าง
+// (ใช้แทน `tx.status !== 'paid'` ตรง ๆ ซึ่งจะจับ draft ไปด้วย)
+export function isBillOpen(tx) {
+  const status = String(tx?.status ?? '').toLowerCase()
+  return status !== 'paid' && status !== 'draft'
 }

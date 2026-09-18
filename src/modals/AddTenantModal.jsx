@@ -74,6 +74,9 @@ export function AddTenantModal({ open, rentals, onClose, onAssigned, onToast }) 
       deposit_amount: String(asset.deposit_amount || asset.amount || ''),
       move_in_date: toLocal(today),
       lease_end_date: toLocal(oneYearLater),
+      // รอบบิลเริ่มต้นจากค่าเดิมของห้อง (bill_day/penalty_day หรือ due_date ตอนสร้างห้อง)
+      bill_day: String(asset.bill_day ?? asset.due_date ?? 5),
+      penalty_day: String(asset.penalty_day ?? asset.due_date ?? 5),
     })
     setError(null)
     setStep(2)
@@ -175,7 +178,7 @@ export function AddTenantModal({ open, rentals, onClose, onAssigned, onToast }) 
                       bizFilter === t.value ? 'bg-emerald-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
                     }`}
                   >
-                    {t.icon} {t.tab}
+                    {t.emoji} {t.tab}
                   </button>
                 ))}
               </div>
@@ -204,7 +207,7 @@ export function AddTenantModal({ open, rentals, onClose, onAssigned, onToast }) 
                         className="flex flex-col gap-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 text-left shadow-sm transition-colors hover:border-emerald-400 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/30"
                       >
                         <div className="flex items-start gap-2">
-                          <span className="text-xl leading-none">{meta.icon}</span>
+                          <span className="text-xl leading-none">{meta.emoji}</span>
                           <div className="min-w-0 flex-1">
                             {asset.sub_label && (
                               <p className="truncate text-xs text-gray-500 dark:text-gray-400">{asset.sub_label}</p>
@@ -286,6 +289,19 @@ export function AddTenantModal({ open, rentals, onClose, onAssigned, onToast }) 
                 <label htmlFor="deposit_amount" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">เงินมัดจำ (บาท)</label>
                 <input id="deposit_amount" type="number" min="0" step="0.01" value={form.deposit_amount} onChange={updateField('deposit_amount')} placeholder="0.00" className={MODAL_INPUT_CLS} />
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">เติมค่าประกันของห้องไว้แล้ว — แก้เป็นยอดที่เก็บจริงได้</p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="bill_day" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">วันส่งบิล (1-31)</label>
+                  <input id="bill_day" type="number" min="1" max="31" value={form.bill_day} onChange={updateField('bill_day')} className={MODAL_INPUT_CLS} />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">วันที่ส่งบิลเข้าไลน์ทุกเดือน</p>
+                </div>
+                <div>
+                  <label htmlFor="penalty_day" className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">วันเริ่มคิดค่าปรับ (1-31)</label>
+                  <input id="penalty_day" type="number" min="1" max="31" value={form.penalty_day} onChange={updateField('penalty_day')} className={MODAL_INPUT_CLS} />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">เกินวันนี้เริ่มนับค่าปรับล่าช้า</p>
+                </div>
               </div>
             </div>
 

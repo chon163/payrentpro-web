@@ -21,3 +21,18 @@ export function formatPeriod(value) {
   }
   return String(value)
 }
+
+// วันครบกำหนดชำระของงวด (timestamp ms) — มิเรอร์ bill_due_date(period, bill_day) ใน DB
+// transactions ไม่มีคอลัมน์ due_date ฝั่งเว็บจึงต้องคำนวณเองจากงวด + วันส่งบิลของห้อง
+// เดือนสั้น (ค.พ. 30 วัน ฯลฯ) จำกัดให้ไม่เกินวันสุดท้ายของเดือน คืน null ถ้างวดอ่านไม่ได้
+export function billDueDate(period, billDay) {
+  const m = String(period ?? '').trim().match(/^(\d{4})-(\d{2})$/)
+  if (!m) return null
+  const year = Number(m[1])
+  const month = Number(m[2])
+  if (month < 1 || month > 12) return null
+  const day = Math.min(Math.max(Number(billDay) || 1, 1), 31)
+  const lastDay = new Date(year, month, 0).getDate()
+  const d = new Date(year, month - 1, Math.min(day, lastDay))
+  return Number.isNaN(d.getTime()) ? null : d.getTime()
+}

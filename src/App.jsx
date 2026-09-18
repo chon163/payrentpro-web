@@ -7,7 +7,7 @@ import { BANKS, bankName } from './payment'
 import AuthPage from './AuthPage'
 import { createPromptpayQR } from './utils/promptpay'
 import { createReceiptPdf, createReceiptPng, receiptItemsFromTx } from './utils/receipt'
-import { THAI_MONTHS, currentPeriod, formatPeriod } from './utils/period'
+import { THAI_MONTHS, currentPeriod, formatPeriod, billDueDate as billDueDateFromPeriod } from './utils/period'
 import { displayAssetName } from './utils/assetName'
 import { DEMO_ACCOUNT_EMAIL } from './utils/demoAccount'
 import { useTheme, useChartTheme } from './theme'
@@ -17,7 +17,7 @@ import FinancePage from './pages/FinancePage'
 import AnnouncementsPage from './pages/AnnouncementsPage'
 import NotesPage from './pages/NotesPage'
 import DocumentsPage from './pages/DocumentsPage'
-import { BIZ_TYPES, CYCLE_LABELS, normalizeBizType, bizTypeMeta, countByStatus, isVacant, buildMoveOutPatch, buildMoveOutNote } from './utils/asset'
+import { BIZ_TYPES, CYCLE_LABELS, normalizeBizType, bizTypeMeta, bizTypeEmoji, countByStatus, isVacant, buildMoveOutPatch, buildMoveOutNote } from './utils/asset'
 import { AddAssetModal } from './modals/AddAssetModal'
 import { AddTenantModal } from './modals/AddTenantModal'
 import { UtilityBillModal } from './modals/UtilityBillModal'
@@ -26,14 +26,18 @@ import { MobileDashboard } from './components/MobileDashboard'
 import { MobileSlipReview } from './components/MobileSlipReview'
 import { MobileUtilityInput } from './components/MobileUtilityInput'
 import { MobileOverdueList } from './components/MobileOverdueList'
+import { ErrorBoundary } from './components/ErrorBoundary'
+import { formatCurrency as formatCurrencyUtil, isBillOpen } from './utils/format'
 
 
 const STATUS_LABELS = {
   paid: 'ชำระแล้ว',
+  pending_review: 'รอตรวจสลิป',
   pending: 'รอชำระ',
   overdue: 'เกินกำหนด',
   late: 'เกินกำหนด',
   unpaid: 'ยังไม่ชำระ',
+  draft: 'ร่างบิล',
   active: 'ใช้งานอยู่',
   inactive: 'ไม่ใช้งาน',
   cancelled: 'ยกเลิก',
@@ -55,9 +59,7 @@ function getValue(row, keys) {
 }
 
 function formatCurrency(value) {
-  const n = Number(value)
-  if (value === undefined || value === null || value === '' || Number.isNaN(n)) return '—'
-  return `฿${n.toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+  return formatCurrencyUtil(value)
 }
 
 function formatDate(value) {
@@ -115,8 +117,13 @@ function generateSecureToken() {
 
 function normalizeStatus(value) {
   const raw = String(value ?? '').trim().toLowerCase()
+  // เช็ค exact ก่อน substring — ไม่งั้น 'unpaid'.includes('paid') ทำให้บิลค้างชำระ
+  // กลายเป็น "ชำระแล้ว" เพราะชนกับ key 'paid' ก่อนเสมอ
+  if (Object.prototype.hasOwnProperty.call(STATUS_LABELS, raw)) {
+    return { key: raw, label: STATUS_LABELS[raw] }
+  }
   for (const [key, label] of Object.entries(STATUS_LABELS)) {
-    if (raw === key || raw.includes(key)) return { key, label }
+    if (raw.includes(key)) return { key, label }
   }
   return { key: raw || 'unknown', label: raw ? String(value) : 'ไม่ระบุ' }
 }
@@ -197,17 +204,15 @@ function txMonthKey(tx) {
 }
 
 // วันครบกำหนดชำระของบิล — ไม่มีคอลัมน์ bill_due_date ใน DB จึงประกอบจากงวด (period)
-// + วันที่กำหนดชำระของสัญญา (rentals.due_date เป็นเลขวันที่ 1-31 ของเดือน)
-function billDueDate(tx) {
-  const rental = Array.isArray(tx?.rentals) ? tx.rentals[0] : tx?.rentals
+// + วันส่งบิลของห้อง (bill_day ก่อน ตาม DB coalesce(r.bill_day, r.due_date, 1))
+// fallbackRental = ใช้เมื่อ tx ไม่ได้ embed rentals มา (เช่น tx จาก r.transactions ในหน้ามือถือ)
+function billDueDate(tx, fallbackRental) {
+  const rental = (Array.isArray(tx?.rentals) ? tx.rentals[0] : tx?.rentals) || fallbackRental
   const mk = txMonthKey(tx)
   if (!mk) return tx?.created_at ? new Date(tx.created_at) : null
-  const [year, month] = mk.split('-').map(Number)
-  const day = Number(rental?.due_date)
-  if (Number.isFinite(day) && day >= 1 && day <= 31) return new Date(year, month - 1, day)
-  const d = rental?.due_date ? new Date(rental.due_date) : null
-  if (d && !Number.isNaN(d.getTime())) return d
-  return new Date(year, month, 0)
+  const dueMs = billDueDateFromPeriod(mk, rental?.bill_day ?? rental?.due_date)
+  if (dueMs) return new Date(dueMs)
+  return tx?.created_at ? new Date(tx.created_at) : null
 }
 
 function computeStats(rows) {
@@ -689,9 +694,9 @@ function RevenueBar({ monthly }) {
             <YAxis stroke={chart.axisLine} tick={{ fontSize: 12, fill: chart.tick }} tickFormatter={(v) => `฿${Number(v).toLocaleString('th-TH')}`} />
             <Tooltip formatter={(v) => formatCurrency(v)} contentStyle={chart.tooltip} labelStyle={{ color: chart.tooltipLabel, fontWeight: 600 }} itemStyle={{ color: chart.tooltip.color }} cursor={{ fill: chart.cursor }} />
             <Legend wrapperStyle={{ fontSize: '0.75rem', color: chart.legend }} />
-            <Bar dataKey="property" name="อสังหาริมทรัพย์" stackId="rev" fill="#10b981" />
-            <Bar dataKey="vehicle" name="ยานพาหนะ" stackId="rev" fill="#14b8a6" />
-            <Bar dataKey="other" name="อุปกรณ์/อื่นๆ" stackId="rev" fill="#f59e0b" radius={[6, 6, 0, 0]} />
+            <Bar dataKey="property" name="🏠 อสังหาริมทรัพย์" stackId="rev" fill="#10b981" />
+            <Bar dataKey="vehicle" name="🚗 ยานพาหนะ" stackId="rev" fill="#14b8a6" />
+            <Bar dataKey="other" name="🔧 อุปกรณ์/อื่นๆ" stackId="rev" fill="#f59e0b" radius={[6, 6, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -762,7 +767,7 @@ function ExpiredLeasesSection({ rentals, onViewDetails, onRenew, onMoveOut }) {
               </div>
 
               {onRenew || onMoveOut ? (
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                   {onRenew ? (
                     <button
                       type="button"
@@ -859,7 +864,7 @@ function ExpiringSoonLeasesSection({ rentals, onViewDetails, onRenew, onMoveOut 
               </div>
 
               {onRenew || onMoveOut ? (
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                   {onRenew ? (
                     <button
                       type="button"
@@ -1950,7 +1955,7 @@ function FirstColumnCell({ row, fallback = 'ไม่ระบุ', bold = false
   const mainCls = `block truncate leading-5 ${bold ? 'text-base font-bold text-gray-900 dark:text-gray-100' : ''}`
   return (
     <div className="flex items-start gap-1.5">
-      <span className="mt-0.5 shrink-0 leading-5"><Icon name={bizTypeMeta(row?.biz_type).icon} className="h-4 w-4 text-gray-400 dark:text-gray-500" /></span>
+      <span className="mt-0.5 shrink-0 leading-5 text-lg">{bizTypeEmoji(row?.biz_type)}</span>
       {sub ? (
         <span className="min-w-0">
           <span className="block truncate text-xs font-normal leading-4 text-gray-500 dark:text-gray-400">{sub}</span>
@@ -2056,7 +2061,7 @@ function AssetsView({ rentals, loading, error, search, onRetry, onBillRequest, o
                 bizTab === t.value ? 'bg-emerald-600 text-white shadow-sm' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
               }`}
             >
-              <Icon name={t.icon} className="h-4 w-4" />
+              <span className="text-base leading-none">{t.emoji}</span>
               {t.tab} {counts[t.value]}
             </button>
           ))}
@@ -4380,6 +4385,23 @@ function AllPaymentsSection({ items, loading, error, onRetry }) {
 
 function LineBindingModal({ code, custName, onClose }) {
   const [copied, setCopied] = useState(false)
+  const [botUrl, setBotUrl] = useState('')
+
+  useEffect(() => {
+    if (!code) return
+    // โหลด bot_add_url จาก app_settings
+    async function fetchBotUrl() {
+      const { data } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'bot_add_url')
+        .single()
+      if (data?.value) {
+        setBotUrl(data.value)
+      }
+    }
+    fetchBotUrl()
+  }, [code])
 
   if (!code) return null
 
@@ -4394,8 +4416,8 @@ function LineBindingModal({ code, custName, onClose }) {
   }
 
   const steps = [
-    { title: 'สร้างกลุ่มไลน์ระหว่างคุณกับผู้เช่า', desc: 'เปิดแอป LINE แล้วสร้างกลุ่มใหม่ร่วมกับผู้เช่าของคุณ' },
-    { title: 'เชิญบอท "เลขาทวงเงิน PayRentPro" เข้ากลุ่ม', desc: 'เพิ่มบอทเข้าเป็นสมาชิกในกลุ่มที่เพิ่งสร้าง' },
+    { title: 'เพิ่มเพื่อนบอท PayRentPro ใน LINE', desc: botUrl ? 'คลิกปุ่มด้านล่างเพื่อเพิ่มเพื่อน' : 'เพิ่มเพื่อนบอทใน LINE' },
+    { title: 'เชิญบอทเข้ากลุ่มแชทกับผู้เช่า', desc: 'สร้างกลุ่มใหม่หรือใช้กลุ่มเดิม แล้วเชิญบอทเข้า' },
     { title: 'พิมพ์รหัส 9 หลักลงในกลุ่มไลน์', desc: `พิมพ์รหัส ${code} ในกลุ่ม แล้วระบบจะผูกกลุ่มกับบิลนี้ให้อัตโนมัติ` },
   ]
 
@@ -4440,9 +4462,20 @@ function LineBindingModal({ code, custName, onClose }) {
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold text-white shadow-sm shadow-emerald-600/30">
                   {i + 1}
                 </span>
-                <div>
+                <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{step.title}</p>
                   <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">{step.desc}</p>
+                  {i === 0 && botUrl && (
+                    <a
+                      href={botUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-500"
+                    >
+                      <Icon name="external-link" className="h-3.5 w-3.5" />
+                      เพิ่มเพื่อนบอท
+                    </a>
+                  )}
                 </div>
               </li>
             ))}
@@ -4671,7 +4704,7 @@ function MeterBillModal({ rental, onClose, onConfirm, onResendBill, onResendRece
                 <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">ค่าน้ำ</p>
                 <div className="mt-2 grid grid-cols-2 gap-3 text-xs text-gray-600 dark:text-gray-400">
                   <div className="rounded-lg bg-white dark:bg-gray-900 p-2.5">มิเตอร์เดือนก่อน: <span className="font-semibold text-gray-900 dark:text-gray-100">{lastWater}</span></div>
-                  <div className="rounded-lg bg-white dark:bg-gray-900 p-2.5">อัตรา: <span className="font-semibold text-gray-900 dark:text-gray-100">{waterRate} บาท/หน่วย</span></div>
+                  <div className="rounded-lg bg-white dark:bg-gray-900 p-2.5">อัตรา: <span className="font-semibold text-gray-900 dark:text-gray-100">{waterRate} ฿/หน่วย</span></div>
                 </div>
                 <label htmlFor="water_current" className="mt-3 block text-sm font-medium text-gray-700 dark:text-gray-300">เลขมิเตอร์น้ำปัจจุบัน</label>
                 <input id="water_current" type="number" min="0" step="1" value={waterCurrent} onChange={(e) => setWaterCurrent(e.target.value)} placeholder="เช่น 150" className={inputClass} />
@@ -4682,7 +4715,7 @@ function MeterBillModal({ rental, onClose, onConfirm, onResendBill, onResendRece
                 <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">ค่าไฟ</p>
                 <div className="mt-2 grid grid-cols-2 gap-3 text-xs text-gray-600 dark:text-gray-400">
                   <div className="rounded-lg bg-white dark:bg-gray-900 p-2.5">มิเตอร์เดือนก่อน: <span className="font-semibold text-gray-900 dark:text-gray-100">{lastElec}</span></div>
-                  <div className="rounded-lg bg-white dark:bg-gray-900 p-2.5">อัตรา: <span className="font-semibold text-gray-900 dark:text-gray-100">{elecRate} บาท/หน่วย</span></div>
+                  <div className="rounded-lg bg-white dark:bg-gray-900 p-2.5">อัตรา: <span className="font-semibold text-gray-900 dark:text-gray-100">{elecRate} ฿/หน่วย</span></div>
                 </div>
                 <label htmlFor="elec_current" className="mt-3 block text-sm font-medium text-gray-700 dark:text-gray-300">เลขมิเตอร์ไฟปัจจุบัน</label>
                 <input id="elec_current" type="number" min="0" step="1" value={elecCurrent} onChange={(e) => setElecCurrent(e.target.value)} placeholder="เช่น 2500" className={inputClass} />
@@ -4893,9 +4926,10 @@ function AssetDetailModal({ rental, onClose, onToast }) {
 
   const handleSaveEdit = async (patch) => {
     try {
+      const { applyAll, ...changes } = patch
       const { error } = await supabase
         .from('rentals')
-        .update(patch)
+        .update(changes)
         .eq('id', rental.id)
 
       if (error) throw error
@@ -4903,17 +4937,29 @@ function AssetDetailModal({ rental, onClose, onToast }) {
       // Audit log
       const auditFields = ['bill_day', 'penalty_day', 'min_water_charge', 'min_elec_charge']
       for (const field of auditFields) {
-        if (patch[field] !== undefined && patch[field] !== rental[field]) {
+        if (changes[field] !== undefined && changes[field] !== rental[field]) {
           await supabase.from('rental_audit_log').insert({
             rental_id: rental.id,
             field_name: field,
             old_value: String(rental[field] ?? ''),
-            new_value: String(patch[field] ?? ''),
+            new_value: String(changes[field] ?? ''),
           })
         }
       }
 
-      onToast?.({ type: 'success', message: 'บันทึกแล้ว' })
+      // "ใช้กับทุกห้อง" — เอาค่าเดียวกันไปใส่ทุกสินทรัพย์ของเจ้าของรายนี้
+      // (ห้องปัจจุบันอัปเดตไปแล้วจึง neq ออก; RLS กันไม่ให้แตะของคนอื่นอยู่แล้ว)
+      if (applyAll) {
+        const { count, error: bulkError } = await supabase
+          .from('rentals')
+          .update(changes, { count: 'exact' })
+          .eq('landlord_id', rental.landlord_id)
+          .neq('id', rental.id)
+        if (bulkError) throw bulkError
+        onToast?.({ type: 'success', message: `บันทึกแล้ว — ใช้กับอีก ${count ?? 0} รายการ` })
+      } else {
+        onToast?.({ type: 'success', message: 'บันทึกแล้ว' })
+      }
       onClose()
     } catch (err) {
       console.error('Save rental edit:', err)
@@ -5080,12 +5126,13 @@ function EditRentalModal({ rental, onClose, onSave }) {
     min_water_charge: rental.min_water_charge ?? 0,
     min_elec_charge: rental.min_elec_charge ?? 0,
   })
+  const [applyAll, setApplyAll] = useState(false)
   const [saving, setSaving] = useState(false)
 
   const handleSubmit = async () => {
     setSaving(true)
     try {
-      await onSave(form)
+      await onSave({ ...form, applyAll })
     } finally {
       setSaving(false)
     }
@@ -5163,6 +5210,21 @@ function EditRentalModal({ rental, onClose, onSave }) {
               className={inputClass}
             />
           </div>
+
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-800/60 px-4 py-3">
+            <input
+              type="checkbox"
+              checked={applyAll}
+              onChange={(e) => setApplyAll(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+            />
+            <span className="text-sm">
+              <span className="font-semibold text-gray-900 dark:text-gray-100">ใช้ค่านี้กับทุกห้อง/สินทรัพย์</span>
+              <span className="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">
+                อัปเดตวันส่งบิล วันเริ่มค่าปรับ และค่าขั้นต่ำน้ำไฟให้ทุกรายการของคุณเหมือนกันหมด
+              </span>
+            </span>
+          </label>
         </div>
 
         <div className="border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-950 px-6 py-4">
@@ -5176,7 +5238,7 @@ function EditRentalModal({ rental, onClose, onSave }) {
               disabled={saving}
               className={`${BTN.primary} flex-1`}
             >
-              {saving ? 'กำลังบันทึก...' : 'บันทึก'}
+              {saving ? 'กำลังบันทึก...' : applyAll ? 'บันทึก + ใช้กับทุกห้อง' : 'บันทึก'}
             </button>
           </div>
         </div>
@@ -6110,7 +6172,11 @@ function App() {
     return <AuthPage />
   }
 
-  return <Dashboard userEmail={session.user?.email ?? ''} />
+  return (
+    <ErrorBoundary>
+      <Dashboard userEmail={session.user?.email ?? ''} />
+    </ErrorBoundary>
+  )
 }
 
 function Dashboard({ userEmail = '' }) {
@@ -6141,7 +6207,7 @@ function Dashboard({ userEmail = '' }) {
   const [pendingUtilityBills, setPendingUtilityBills] = useState([])
   const [utilityModal, setUtilityModal] = useState(null)
   const [utilityListModal, setUtilityListModal] = useState(false)
-  const [mobileView, setMobileView] = useState(null) // 'slips' | 'overdue' | 'utility' | 'more' | null
+  const [mobileView, setMobileView] = useState(null) // 'slips' | 'overdue' | 'urgent' | 'utility' | 'more' | null
   const [repairTickets, setRepairTickets] = useState([])
   const [repairLoading, setRepairLoading] = useState(true)
   const [repairError, setRepairError] = useState(null)
@@ -6171,7 +6237,12 @@ function Dashboard({ userEmail = '' }) {
     if (!silent) setLoading(true)
     setError(null)
     try {
-      const { data, error: supabaseError } = await supabase.from('rentals').select('*')
+      // embed บิลของแต่ละห้องมาด้วย — หน้ามือถือ (ค้างชำระ/การ์ดแดง/จ่ายสด)
+      // อ่าน r.transactions ถ้าไม่ embed รายการค้างชำระจะว่างตลอด
+      // (transactions ไม่มี due_date — วันครบกำหนดคำนวณจาก period+bill_day ด้วย billDueDate)
+      const { data, error: supabaseError } = await supabase
+        .from('rentals')
+        .select('*, transactions(id, period, status, total_amount, paid_amount, base_amount, water_cost, elec_cost, water_units, elec_units, extra_charges, penalty_amount, penalty_days, created_at)')
       if (supabaseError) throw supabaseError
       setRentals(Array.isArray(data) ? data : [])
       setLastUpdated(new Date())
@@ -6467,7 +6538,8 @@ function Dashboard({ userEmail = '' }) {
       // กรองเฉพาะห้องที่บิลล่าสุดไม่มีน้ำไฟ
       const pending = []
       for (const rental of utilityRentals) {
-        const lastTx = (txData || []).find((t) => t.rental_id === rental.id)
+        // ข้ามร่างบิล — draft ยังไม่ได้ออกจริง ต้องไม่ถูกนับเป็น "บิลล่าสุด" ของห้อง
+        const lastTx = (txData || []).find((t) => t.rental_id === rental.id && String(t.status ?? '').toLowerCase() !== 'draft')
         if (lastTx && Number(lastTx.water_units || 0) === 0 && Number(lastTx.elec_units || 0) === 0) {
           pending.push({ ...rental, lastPeriod: lastTx.period })
         }
@@ -6586,7 +6658,7 @@ function Dashboard({ userEmail = '' }) {
 
       // PDF เป็นของแถมสำหรับเก็บ/พิมพ์ — พังก็ไม่ควรขวางการส่งรูปเข้าไลน์
       try {
-        const pdfBlob = createReceiptPdf(receiptData)
+        const pdfBlob = await createReceiptPdf(receiptData)
         await supabase.storage
           .from('receipts')
           .upload(`${txId}.pdf`, pdfBlob, { contentType: 'application/pdf', upsert: true })
@@ -6901,21 +6973,84 @@ function Dashboard({ userEmail = '' }) {
     await handleReviewTransaction(item.id, 'rejected')
   }
 
-  const handleMobileMarkCash = async (item, amount) => {
-    if (!item?.id) return
-    const ok = await handleReviewTransaction(item.id, 'paid')
-    if (!ok) return
-    const rental = Array.isArray(item.rentals) ? item.rentals[0] : item.rentals
-    await issueReceiptAndSend({
-      txId: item.id,
-      custName: rental?.cust_name || item.cust_name || 'ไม่ระบุ',
-      itemDetails: displayAssetName(rental || item),
-      period: item.period ? formatPeriod(item.period) : '—',
-      total: amount,
-      base: amount,
-      txDate: new Date().toISOString(),
-      groupId: rental?.group_id || '',
-    })
+  // จ่ายสด — รับได้ 2 แบบ:
+  //  · rental จากหน้า "ค้างชำระ" (fetchRentals embed .transactions) → ปิดบิลค้างรายแรก
+  //  · transaction จากหน้า "รอตรวจสลิป" (pending_review, join rentals) → ปิดบิลนั้นตรง ๆ
+  // cashAmount มาจากช่องกรอกในหน้าสลิป — ไม่ได้กรอก = ใช้ยอดบิลเต็ม
+  const handleMobileMarkCash = async (source, cashAmount) => {
+    let tx = null
+    let rental = null
+    if (Array.isArray(source?.transactions)) {
+      rental = source
+      tx = rental.transactions.filter((t) => isBillOpen(t))[0]
+    } else if (source?.id) {
+      tx = source
+      rental = Array.isArray(source.rentals) ? source.rentals[0] : source.rentals
+    }
+
+    if (!tx) {
+      setToast({ type: 'warning', message: 'ไม่มีบิลค้างชำระ' })
+      return
+    }
+
+    const amount = Number(cashAmount) > 0 ? Number(cashAmount) : Number(tx.total_amount || 0)
+    const custName = rental?.cust_name || tx.cust_name || '—'
+
+    // หน้าสลิปกรอกยอดไปแล้ว — ยืนยันซ้ำเฉพาะ flow หน้าค้างชำระ (กดปุ่มแล้วไม่ได้กรอกยอด)
+    if (!(Number(cashAmount) > 0) && !window.confirm(`รับเงินสดจาก ${custName} จำนวน ${formatCurrency(amount)} ใช่หรือไม่?`)) {
+      return
+    }
+
+    try {
+      // อัปเดตสถานะเป็น paid
+      const { error } = await supabase
+        .from('transactions')
+        .update({
+          status: 'paid',
+          paid_amount: amount,
+          remaining_balance: 0,
+          slip_verified: true,
+          verified_at: new Date().toISOString(),
+          payment_method: 'cash'
+        })
+        .eq('id', tx.id)
+
+      if (error) throw error
+
+      // บันทึก audit log (คอลัมน์ตาม schema จริง: transaction_id/old_amount/new_amount/reason)
+      // พังก็ไม่ขวาง — บิลปิดไปแล้ว
+      try {
+        await supabase.from('audit_logs').insert([{
+          transaction_id: tx.id,
+          old_amount: Number(tx.total_amount || 0),
+          new_amount: amount,
+          reason: 'จ่ายเงินสด',
+        }])
+      } catch (auditErr) {
+        console.warn('Cash payment audit log failed:', auditErr)
+      }
+
+      // ออกใบเสร็จ + ส่งเข้ากลุ่ม LINE
+      await issueReceiptAndSend({
+        txId: tx.id,
+        custName,
+        itemDetails: displayAssetName(rental || tx),
+        period: tx.period ? formatPeriod(tx.period) : '—',
+        totalAmount: amount,
+        paidAmount: amount,
+        paidAt: new Date().toISOString(),
+        items: receiptItemsFromTx(tx),
+        failPrefix: 'บันทึกชำระเงินสดแล้ว แต่ส่งใบเสร็จไม่ได้',
+      })
+
+      setToast({ type: 'success', message: 'บันทึกชำระเงินสดเรียบร้อย' })
+      fetchRentals()
+      fetchSummary()
+      setMobileView(null)
+    } catch (err) {
+      console.error('Mark cash payment failed:', err)
+      setToast({ type: 'error', message: err?.message || 'บันทึกชำระเงินสดไม่สำเร็จ' })
+    }
   }
 
   const handleMobileUtilitySubmit = async (rental, waterCurrent, elecCurrent) => {
@@ -7370,44 +7505,45 @@ function Dashboard({ userEmail = '' }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
-      <Sidebar businessName={paymentInfo.business_name} membership={membership} taskCounts={taskCounts} email={userEmail} />
+    <ErrorBoundary>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
+        <Sidebar businessName={paymentInfo.business_name} membership={membership} taskCounts={taskCounts} email={userEmail} />
 
-      <div className="lg:pl-64">
-        <header className="sticky top-0 z-30 border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 backdrop-blur">
-          <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 py-3 sm:gap-4 sm:px-6 sm:py-4 lg:px-8">
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 lg:hidden">
-                <Icon name="building" className="h-6 w-6" />
+        <div className="lg:pl-64">
+          <header className="sticky top-0 z-30 border-b border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/80 backdrop-blur">
+            <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-4 py-3 sm:gap-4 sm:px-6 sm:py-4 lg:px-8">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 lg:hidden">
+                  <Icon name="building" className="h-6 w-6" />
+                </div>
+                <div className="min-w-0">
+                  {/* มือถือ/แท็บเล็ต: โชว์ชื่อธุรกิจ — เดสก์ท็อปคงหัวข้อหน้าเดิมไว้ */}
+                  <h1 className="truncate text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100 sm:text-2xl lg:hidden">
+                    {paymentInfo.business_name || 'PayRentPro'}
+                  </h1>
+                  <h1 className="hidden text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100 sm:text-2xl lg:block">
+                    {PAGE_TITLES[location.pathname]?.[0] ?? (isAudit ? 'ประวัติแก้ไข' : isActivity ? 'ประวัติเข้าใช้งาน' : isSettings ? 'ตั้งค่าบัญชี' : isAssets ? 'รายการสินทรัพย์' : isProfit ? 'กำไรสุทธิ' : isDocsAnnouncements ? 'ประกาศและเอกสาร' : isMembership ? 'สมาชิกของฉัน' : isAdmin ? 'ผู้ดูแลระบบ' : 'แดชบอร์ด')}
+                  </h1>
+                  <p className="hidden text-sm text-gray-500 dark:text-gray-400 lg:block">
+                    {PAGE_TITLES[location.pathname]?.[1] ?? (isAudit ? 'บันทึกการแก้ไขยอดและเหตุผล' : isActivity ? 'ใครเข้า-ออกระบบ เมื่อไหร่ จาก IP ไหน' : isSettings ? 'ตั้งค่าเลขพร้อมเพย์ / บัญชีธนาคารสำหรับรับเงิน' : isAssets ? 'จัดการสัญญาเช่าและสินทรัพย์ทั้งหมด' : isProfit ? 'รายรับ รายจ่าย และกำไรสุทธิของแต่ละเดือน' : isDocsAnnouncements ? 'แจ้งข่าวผู้เช่า จดบันทึก และเก็บไฟล์เอกสาร' : isMembership ? 'แพ็กเกจ การใช้งาน และการต่ออายุ' : isAdmin ? 'จัดการสมาชิกและค่าสมาชิกรอตรวจทั้งหมด' : 'ภาพรวมการเก็บค่าเช่าและการติดตามหนี้')}
+                  </p>
+                </div>
               </div>
-              <div className="min-w-0">
-                {/* มือถือ/แท็บเล็ต: โชว์ชื่อธุรกิจ — เดสก์ท็อปคงหัวข้อหน้าเดิมไว้ */}
-                <h1 className="truncate text-lg font-bold tracking-tight text-gray-900 dark:text-gray-100 sm:text-2xl lg:hidden">
-                  {paymentInfo.business_name || 'PayRentPro'}
-                </h1>
-                <h1 className="hidden text-xl font-bold tracking-tight text-gray-900 dark:text-gray-100 sm:text-2xl lg:block">
-                  {PAGE_TITLES[location.pathname]?.[0] ?? (isAudit ? 'ประวัติแก้ไข' : isActivity ? 'ประวัติเข้าใช้งาน' : isSettings ? 'ตั้งค่าบัญชี' : isAssets ? 'รายการสินทรัพย์' : isProfit ? 'กำไรสุทธิ' : isDocsAnnouncements ? 'ประกาศและเอกสาร' : isMembership ? 'สมาชิกของฉัน' : isAdmin ? 'ผู้ดูแลระบบ' : 'แดชบอร์ด')}
-                </h1>
-                <p className="hidden text-sm text-gray-500 dark:text-gray-400 lg:block">
-                  {PAGE_TITLES[location.pathname]?.[1] ?? (isAudit ? 'บันทึกการแก้ไขยอดและเหตุผล' : isActivity ? 'ใครเข้า-ออกระบบ เมื่อไหร่ จาก IP ไหน' : isSettings ? 'ตั้งค่าเลขพร้อมเพย์ / บัญชีธนาคารสำหรับรับเงิน' : isAssets ? 'จัดการสัญญาเช่าและสินทรัพย์ทั้งหมด' : isProfit ? 'รายรับ รายจ่าย และกำไรสุทธิของแต่ละเดือน' : isDocsAnnouncements ? 'แจ้งข่าวผู้เช่า จดบันทึก และเก็บไฟล์เอกสาร' : isMembership ? 'แพ็กเกจ การใช้งาน และการต่ออายุ' : isAdmin ? 'จัดการสมาชิกและค่าสมาชิกรอตรวจทั้งหมด' : 'ภาพรวมการเก็บค่าเช่าและการติดตามหนี้')}
-                </p>
-              </div>
-            </div>
 
-            {/* whitespace-nowrap กันข้อความปุ่มตัดบรรทัด (ทำให้ header สูงขึ้น)
-                แต่ไม่ใส่ shrink-0 เพื่อให้ช่องค้นหาหน้า Assets ย่อได้ ไม่ดันจนล้นที่ 1280 */}
-            <div className="flex min-w-0 items-center gap-2 whitespace-nowrap sm:gap-3">
-              <NotificationsBell pendingReviews={pendingReviews} expiringLeases={expiringLeases} />
+              {/* whitespace-nowrap กันข้อความปุ่มตัดบรรทัด (ทำให้ header สูงขึ้น)
+                  แต่ไม่ใส่ shrink-0 เพื่อให้ช่องค้นหาหน้า Assets ย่อได้ ไม่ดันจนล้นที่ 1280 */}
+              <div className="flex min-w-0 items-center gap-2 whitespace-nowrap sm:gap-3">
+                <NotificationsBell pendingReviews={pendingReviews} expiringLeases={expiringLeases} />
 
-              {/* มือถือ/แท็บเล็ต: ปุ่มรองทั้งหมดยุบเข้าเมนู ⋯ (เหลือ ชื่อ + กระดิ่ง + โปรไฟล์ + ⋯) */}
-              <HeaderOverflowMenu
-                onExportCsv={!isAssets && !isSettings && !isAudit && !isActivity && !isMembership && !isAdmin && !isProfit && !isDocsAnnouncements && !isTaskPage ? handleExportCsv : null}
-                onRefresh={() => { fetchRentals(); fetchSummary(); fetchPendingReviews(); fetchTxInsights(); fetchRepairTickets() }}
-                loading={loading}
-                lastUpdated={lastUpdated}
-                largeText={largeText}
-                onToggleLargeText={toggleLargeText}
-                theme={theme}
+                {/* มือถือ/แท็บเล็ต: ปุ่มรองทั้งหมดยุบเข้าเมนู ⋯ (เหลือ ชื่อ + กระดิ่ง + โปรไฟล์ + ⋯) */}
+                <HeaderOverflowMenu
+                  onExportCsv={!isAssets && !isSettings && !isAudit && !isActivity && !isMembership && !isAdmin && !isProfit && !isDocsAnnouncements && !isTaskPage ? handleExportCsv : null}
+                  onRefresh={() => { fetchRentals(); fetchSummary(); fetchPendingReviews(); fetchTxInsights(); fetchRepairTickets() }}
+                  loading={loading}
+                  lastUpdated={lastUpdated}
+                  largeText={largeText}
+                  onToggleLargeText={toggleLargeText}
+                  theme={theme}
                 onToggleTheme={toggleTheme}
               />
 
@@ -7544,7 +7680,9 @@ function Dashboard({ userEmail = '' }) {
           ) : isSettings ? (
             <SettingsPage onSaved={fetchPaymentInfo} membership={membership} />
           ) : isMembership ? (
-            <MembershipPage membership={membership} onToast={setToast} onRefreshMembership={fetchMembership} />
+            <ErrorBoundary>
+              <MembershipPage membership={membership} onToast={setToast} onRefreshMembership={fetchMembership} />
+            </ErrorBoundary>
           ) : isAdmin ? (
             <AdminPage onToast={setToast} />
           ) : isProfit ? (
@@ -7633,36 +7771,38 @@ function Dashboard({ userEmail = '' }) {
               ) : null}
             </>
           ) : isAssets ? (
-            <>
-              <div className="relative lg:hidden">
-                <svg className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-                </svg>
-                <input
-                  type="text"
-                  value={assetSearch}
-                  onChange={(e) => setAssetSearch(e.target.value)}
-                  placeholder="ค้นหาชื่อผู้เช่า / ห้อง"
-                  className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 py-3 pl-11 pr-4 text-base text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+            <ErrorBoundary>
+              <>
+                <div className="relative lg:hidden">
+                  <svg className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                  </svg>
+                  <input
+                    type="text"
+                    value={assetSearch}
+                    onChange={(e) => setAssetSearch(e.target.value)}
+                    placeholder="ค้นหาชื่อผู้เช่า / ห้อง"
+                    className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 py-3 pl-11 pr-4 text-base text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 shadow-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                  />
+                </div>
+
+                {/* "สัญญาใกล้หมดอายุ" ย้ายไปหน้า /leases แล้ว (เดิมซ้ำอยู่ที่นี่ด้วย กรอบ 30 วัน
+                    ส่วนแดชบอร์ดใช้ 90 วัน — คนละเกณฑ์ คนละโค้ด) หน้านั้นครอบของเดิมทั้งหมด */}
+
+                <AssetsView
+                  rentals={rentals}
+                  loading={loading}
+                  error={error}
+                  search={assetSearch}
+                  onRetry={fetchRentals}
+                  onBillRequest={setBillRental}
+                  onViewDetails={setDetailRental}
+                  onRenew={setRenewRental}
+                  onMoveOut={(rental) => setConfirmAction({ type: 'moveout', rental })}
+                  onDelete={(rental) => setConfirmAction({ type: 'delete', rental })}
                 />
-              </div>
-
-              {/* "สัญญาใกล้หมดอายุ" ย้ายไปหน้า /leases แล้ว (เดิมซ้ำอยู่ที่นี่ด้วย กรอบ 30 วัน
-                  ส่วนแดชบอร์ดใช้ 90 วัน — คนละเกณฑ์ คนละโค้ด) หน้านั้นครอบของเดิมทั้งหมด */}
-
-              <AssetsView
-                rentals={rentals}
-                loading={loading}
-                error={error}
-                search={assetSearch}
-                onRetry={fetchRentals}
-                onBillRequest={setBillRental}
-                onViewDetails={setDetailRental}
-                onRenew={setRenewRental}
-                onMoveOut={(rental) => setConfirmAction({ type: 'moveout', rental })}
-                onDelete={(rental) => setConfirmAction({ type: 'delete', rental })}
-              />
-            </>
+              </>
+            </ErrorBoundary>
           ) : (
             <>
               {/* Mobile Dashboard: 4 ฟังก์ชันหลัก */}
@@ -7674,14 +7814,27 @@ function Dashboard({ userEmail = '' }) {
                   onMarkCash={handleMobileMarkCash}
                   onBack={() => setMobileView(null)}
                 />
-              ) : mobileView === 'overdue' ? (
+              ) : mobileView === 'overdue' || mobileView === 'urgent' ? (
                 <MobileOverdueList
                   rentals={rentals.filter((r) => {
                     const txs = r.transactions || []
-                    return txs.some((tx) => tx.status !== 'paid')
+                    const hasUnpaid = txs.some((tx) => isBillOpen(tx))
+                    if (!hasUnpaid) return false
+                    if (mobileView === 'urgent') {
+                      const oldestDue = txs
+                        .filter((tx) => isBillOpen(tx))
+                        .map((tx) => { const d = billDueDate(tx, r); return d && !Number.isNaN(d.getTime()) ? d.getTime() : 0 })
+                        .filter((t) => t > 0)
+                        .sort((a, b) => a - b)[0]
+                      if (!oldestDue) return false
+                      const daysOverdue = Math.floor((Date.now() - oldestDue) / (1000 * 60 * 60 * 24))
+                      return daysOverdue > 3
+                    }
+                    return true
                   })}
                   onBack={() => setMobileView(null)}
                   onContactTenant={handleMobileContactTenant}
+                  onMarkCash={handleMobileMarkCash}
                 />
               ) : mobileView === 'utility' ? (
                 <MobileUtilityInput
@@ -7696,12 +7849,25 @@ function Dashboard({ userEmail = '' }) {
                     pendingReviews={pendingReviews}
                     overdueRentals={rentals.filter((r) => {
                       const txs = r.transactions || []
-                      return txs.some((tx) => tx.status !== 'paid')
+                      return txs.some((tx) => isBillOpen(tx))
+                    })}
+                    urgentOverdueRentals={rentals.filter((r) => {
+                      const txs = r.transactions || []
+                      const unpaid = txs.filter((tx) => isBillOpen(tx))
+                      if (unpaid.length === 0) return false
+                      const oldestDue = unpaid
+                        .map((tx) => { const d = billDueDate(tx, r); return d && !Number.isNaN(d.getTime()) ? d.getTime() : 0 })
+                        .filter((t) => t > 0)
+                        .sort((a, b) => a - b)[0]
+                      if (!oldestDue) return false
+                      const daysOverdue = Math.floor((Date.now() - oldestDue) / (1000 * 60 * 60 * 24))
+                      return daysOverdue > 3
                     })}
                     pendingUtilityBills={pendingUtilityBills}
                     onViewSummary={() => setShowMonthly(true)}
                     onViewPendingReviews={() => setMobileView('slips')}
                     onViewOverdue={() => setMobileView('overdue')}
+                    onViewUrgentOverdue={() => setMobileView('urgent')}
                     onViewUtilityBills={() => setMobileView('utility')}
                     onShowMoreMenu={() => {}}
                   />
@@ -7741,11 +7907,13 @@ function Dashboard({ userEmail = '' }) {
                 <QuickSummaryCard items={quickItems} />
               </div>
 
-              {/* 4. กราฟรองสองคอลัมน์ */}
-              <div className="mt-4 hidden grid-cols-1 gap-4 lg:grid lg:grid-cols-2">
-                <AgingBarChart buckets={agingBuckets} />
-                <OccupancyDonut occupied={stats.occupied} vacant={stats.vacant} />
-              </div>
+              {/* 4. กราฟรองสองคอลัมน์ — ซ่อนไว้ชั่วคราว (feature flag คืนหลังเสาร์) */}
+              {false && (
+                <div className="mt-4 hidden grid-cols-1 gap-4 lg:grid lg:grid-cols-2">
+                  <AgingBarChart buckets={agingBuckets} />
+                  <OccupancyDonut occupied={stats.occupied} vacant={stats.vacant} />
+                </div>
+              )}
 
               {/* งานค้างทั้ง 4 เรื่อง (รอตรวจสลิป / ทวงหนี้ / แจ้งซ่อม / สัญญา) ย้ายไปหน้าของตัวเองแล้ว
                   — เข้าถึงผ่านการ์ด "สรุปด่วน" ด้านบน หรือเมนู "งานค้าง" */}
@@ -7888,6 +8056,7 @@ function Dashboard({ userEmail = '' }) {
 
       <Toast toast={toast} onClose={closeToast} />
     </div>
+    </ErrorBoundary>
   )
 }
 

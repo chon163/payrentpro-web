@@ -86,7 +86,7 @@ export function UtilityBillModal({ rental, onClose, onConfirm, onToast }) {
                 มิเตอร์เดือนก่อน: <span className="font-semibold text-gray-900 dark:text-gray-100">{lastWater}</span>
               </div>
               <div className="rounded-lg bg-white dark:bg-gray-900 p-2.5">
-                อัตรา: <span className="font-semibold text-gray-900 dark:text-gray-100">{waterRate} บาท/หน่วย</span>
+                อัตรา: <span className="font-semibold text-gray-900 dark:text-gray-100">{waterRate} ฿/หน่วย</span>
               </div>
             </div>
             {minWater > 0 && (
@@ -118,7 +118,7 @@ export function UtilityBillModal({ rental, onClose, onConfirm, onToast }) {
                 มิเตอร์เดือนก่อน: <span className="font-semibold text-gray-900 dark:text-gray-100">{lastElec}</span>
               </div>
               <div className="rounded-lg bg-white dark:bg-gray-900 p-2.5">
-                อัตรา: <span className="font-semibold text-gray-900 dark:text-gray-100">{elecRate} บาท/หน่วย</span>
+                อัตรา: <span className="font-semibold text-gray-900 dark:text-gray-100">{elecRate} ฿/หน่วย</span>
               </div>
             </div>
             {minElec > 0 && (

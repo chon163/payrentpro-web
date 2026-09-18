@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
-import { Icon } from '../components/ui'
+import { CloseButton, Icon } from '../components/ui'
 import { MODAL_INPUT_CLS } from '../components/styles'
 import { CollapsibleSection, Toggle } from '../components/formControls'
 import { BIZ_TYPES, CYCLE_LABELS, ASSET_FORM_EMPTY, normalizeBizType, bizTypeMeta, buildAssetInsert } from '../utils/asset'
@@ -116,7 +116,7 @@ export function AddAssetModal({ open, onClose, onCreated, onToast }) {
                     onClick={() => selectBizType(t.value)}
                     className="flex w-full items-center gap-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-5 py-4 text-left shadow-sm transition-colors hover:border-emerald-400 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/30"
                   >
-                    <span className="text-emerald-600 dark:text-emerald-400"><Icon name={t.icon} className="h-7 w-7" /></span>
+                    <span className="text-2xl leading-none">{t.emoji}</span>
                     <span className="min-w-0">
                       <span className="block text-base font-bold text-gray-900 dark:text-gray-100">{t.label}</span>
                       <span className="mt-0.5 block truncate text-sm text-gray-500 dark:text-gray-400">{t.examples}</span>
@@ -129,7 +129,7 @@ export function AddAssetModal({ open, onClose, onCreated, onToast }) {
                 <CollapsibleSection title="ข้อมูลสินทรัพย์" subtitle="ประเภท ห้อง/ทะเบียน และค่าเช่า" icon="document" defaultOpen>
                   <div className="space-y-4">
                     <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-100 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3">
-                      <p className="flex items-center gap-1.5 text-sm font-bold text-emerald-900 dark:text-emerald-200"><Icon name={typeMeta.icon} className="h-4 w-4" />{typeMeta.label}</p>
+                      <p className="flex items-center gap-1.5 text-sm font-bold text-emerald-900 dark:text-emerald-200"><span className="text-base leading-none">{typeMeta.emoji}</span>{typeMeta.label}</p>
                       <button
                         type="button"
                         onClick={() => setField('biz_type', '')}
