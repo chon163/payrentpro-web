@@ -694,7 +694,7 @@ function RevenueBar({ monthly }) {
           <BarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chart.grid} />
             <XAxis dataKey="label" stroke={chart.axisLine} tick={{ fontSize: 12, fill: chart.tick }} />
-            <YAxis stroke={chart.axisLine} tick={{ fontSize: 12, fill: chart.tick }} tickFormatter={(v) => `฿${Number(v).toLocaleString('th-TH')}`} />
+            <YAxis stroke={chart.axisLine} tick={{ fontSize: 12, fill: chart.tick }} tickFormatter={(v) => formatCurrency(v)} />
             <Tooltip formatter={(v) => formatCurrency(v)} contentStyle={chart.tooltip} labelStyle={{ color: chart.tooltipLabel, fontWeight: 600 }} itemStyle={{ color: chart.tooltip.color }} cursor={{ fill: chart.cursor }} />
             <Legend wrapperStyle={{ fontSize: '0.75rem', color: chart.legend }} />
             <Bar dataKey="property" name="🏠 อสังหาริมทรัพย์" stackId="rev" fill="#10b981" />
@@ -912,7 +912,7 @@ function AgingBarChart({ buckets }) {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={buckets} layout="vertical" margin={{ top: 5, right: 30, left: 10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={chart.grid} />
-                <XAxis type="number" stroke={chart.axisLine} tick={{ fontSize: 12, fill: chart.tick }} tickFormatter={(v) => `฿${Number(v).toLocaleString('th-TH')}`} />
+                <XAxis type="number" stroke={chart.axisLine} tick={{ fontSize: 12, fill: chart.tick }} tickFormatter={(v) => formatCurrency(v)} />
                 <YAxis type="category" dataKey="name" stroke={chart.axisLine} tick={{ fontSize: 12, fill: chart.tick }} width={90} />
                 <Tooltip formatter={(v, _name, item) => [`${formatCurrency(v)} · ${item?.payload?.count ?? 0} บิล`, 'ยอดค้างชำระ']} contentStyle={chart.tooltip} labelStyle={{ color: chart.tooltipLabel, fontWeight: 600 }} itemStyle={{ color: chart.tooltip.color }} cursor={{ fill: chart.cursor }} />
                 <Bar dataKey="total" name="ยอดค้างชำระ" radius={[0, 6, 6, 0]} barSize={26}>
