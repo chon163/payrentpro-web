@@ -37,6 +37,9 @@ const STATUS_LABELS = {
   overdue: 'เกินกำหนด',
   late: 'เกินกำหนด',
   unpaid: 'ยังไม่ชำระ',
+  // 'rejected' เป็นสถานะเก่าจากปุ่มปฏิเสธบนมือถือ (ปัจจุบันใช้ 'unpaid' ทั้งสองฝั่งแล้ว)
+  // เก็บ label ไว้กันข้อมูลเดิมใน DB แสดงเป็นภาษาอังกฤษดิบๆ
+  rejected: 'ปฏิเสธแล้ว',
   draft: 'ร่างบิล',
   active: 'ใช้งานอยู่',
   inactive: 'ไม่ใช้งาน',
@@ -5815,6 +5818,14 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine, 
                 <p className="mt-3 text-sm font-semibold text-gray-900 dark:text-gray-100">โอนเข้าบัญชีธนาคาร</p>
                 <p className="mt-2 text-sm leading-relaxed text-gray-700 dark:text-gray-300">{invoice.paymentText}</p>
               </div>
+            ) : !invoice.promptpayNumber ? (
+              <div className="w-full rounded-2xl border border-amber-200 bg-amber-50 p-5 text-center shadow-sm dark:border-amber-800/50 dark:bg-amber-950/30">
+                <Icon name="warning" className="mx-auto h-10 w-10 text-amber-500 dark:text-amber-400" />
+                <p className="mt-2 text-sm font-semibold text-amber-800 dark:text-amber-200">ยังไม่ได้ตั้งค่าพร้อมเพย์รับเงิน</p>
+                <p className="mt-1 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+                  บิลนี้ยังไม่มี QR ให้ผู้เช่าสแกนจ่าย — ไปตั้งค่าเบอร์พร้อมเพย์ได้ที่หน้า "ตั้งค่าบัญชี" (เมนูที่มุมขวาบน)
+                </p>
+              </div>
             ) : (
               <>
                 <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3 shadow-sm">
@@ -5837,7 +5848,7 @@ function InvoiceModal({ invoice, onClose, onMarkPaid, onCopyLink, onSendToLine, 
                 <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">
                   สแกนจ่ายผ่าน <span className="font-semibold text-gray-900 dark:text-gray-100">พร้อมเพย์</span>
                 </p>
-                <p className="font-mono text-sm text-gray-500 dark:text-gray-400">{invoice.promptpayNumber || '0812345678'}</p>
+                <p className="font-mono text-sm text-gray-500 dark:text-gray-400">{invoice.promptpayNumber}</p>
                 {invoice.promptpayName && (
                   <p className="mt-1 text-sm font-semibold text-gray-700 dark:text-gray-300">โอนเข้าบัญชี: {invoice.promptpayName}</p>
                 )}
@@ -6205,6 +6216,9 @@ function Dashboard({ userEmail = '' }) {
   const [showMonthly, setShowMonthly] = useState(false)
   const [overdueBills, setOverdueBills] = useState([])
   const [pendingUtilityBills, setPendingUtilityBills] = useState([])
+  // snapshot รายชื่อห้องตอนเปิดหน้ากรอกมิเตอร์ — list สดจะถูก refresh หลังบันทึกแต่ละห้อง
+  // ทำให้ index ใน wizard ชี้ข้ามห้อง จึงต้องแช่แข็งรายชื่อไว้ตอนเข้าหน้า
+  const [utilitySnapshot, setUtilitySnapshot] = useState([])
   const [utilityModal, setUtilityModal] = useState(null)
   const [utilityListModal, setUtilityListModal] = useState(false)
   const [mobileView, setMobileView] = useState(null) // 'slips' | 'overdue' | 'urgent' | 'utility' | 'more' | null
@@ -6517,7 +6531,7 @@ function Dashboard({ userEmail = '' }) {
       // ดึงห้องที่เปิด utility_enabled
       const { data: rentalsData, error: rentalsError } = await supabase
         .from('rentals')
-        .select('id, cust_name, item_details, sub_label, utility_enabled, biz_type')
+        .select('id, cust_name, item_details, sub_label, utility_enabled, biz_type, last_water_meter, last_elec_meter, water_rate, elec_rate, min_water_charge, min_elec_charge')
         .eq('utility_enabled', true)
       if (rentalsError) throw rentalsError
       const utilityRentals = (rentalsData || []).filter((r) => normalizeBizType(r.biz_type) === 'property')
@@ -6815,7 +6829,7 @@ function Dashboard({ userEmail = '' }) {
         period,
         paymentType: paymentInfo.payment_type || 'promptpay',
         promptpayName: accountName,
-        promptpayNumber: paymentInfo.promptpay || '0812345678',
+        promptpayNumber: paymentInfo.promptpay || '',
         bankCode,
         bankAccount,
         paymentText,
@@ -6891,7 +6905,7 @@ function Dashboard({ userEmail = '' }) {
 
       if (totalAmount === 0) {
         setToast({ type: 'warning', message: 'ยอดน้ำไฟเป็น 0 ไม่สามารถสร้างบิลได้' })
-        return
+        return false
       }
 
       // guard: กันสร้างบิลซ้ำงวดเดิม
@@ -6902,7 +6916,7 @@ function Dashboard({ userEmail = '' }) {
         .eq('rental_id', rental.id)
       if ((existingTxs || []).some((t) => t.period === period || t.period === periodLabel)) {
         setToast({ type: 'warning', message: `งวดนี้มีบิลอยู่แล้ว (${periodLabel}) — ไม่สามารถสร้างบิลซ้ำได้` })
-        return
+        return false
       }
 
       const { data: tx, error: insertError } = await supabase
@@ -6925,7 +6939,7 @@ function Dashboard({ userEmail = '' }) {
       if (insertError) {
         if (insertError.code === '23505' || /uniq_tx_rental_period/i.test(insertError.message || '')) {
           setToast({ type: 'warning', message: `งวดนี้มีบิลอยู่แล้ว (${periodLabel}) — ไม่สามารถสร้างบิลซ้ำได้` })
-          return
+          return false
         }
         throw insertError
       }
@@ -6958,8 +6972,10 @@ function Dashboard({ userEmail = '' }) {
       fetchPendingUtilityBills()
       setUtilityModal(null)
       setUtilityListModal(false)
+      return true
     } catch (err) {
       setToast({ type: 'error', message: err?.message || 'สร้างบิลน้ำไฟไม่สำเร็จ' })
+      return false
     }
   }
 
@@ -6970,7 +6986,7 @@ function Dashboard({ userEmail = '' }) {
 
   const handleMobileReject = async (item) => {
     if (!item?.id) return
-    await handleReviewTransaction(item.id, 'rejected')
+    await handleReviewTransaction(item.id, 'unpaid')
   }
 
   // จ่ายสด — รับได้ 2 แบบ:
@@ -7053,9 +7069,16 @@ function Dashboard({ userEmail = '' }) {
     }
   }
 
+  // บันทึกมิเตอร์จากหน้ามือถือ — ใช้ handler เดียวกับ desktop (สร้างบิลน้ำไฟแยก งวดปัจจุบัน)
+  // คืน true/false ให้ MobileUtilityInput ใช้ตัดสินว่าจะไปห้องถัดไปหรืออยู่ห้องเดิม
   const handleMobileUtilitySubmit = async (rental, waterCurrent, elecCurrent) => {
-    await handleSendUtilityBill(rental, waterCurrent, elecCurrent)
-    setMobileView(null)
+    try {
+      return await handleCreateUtilityBill({ rental, waterCurrent, elecCurrent, period: currentPeriod() })
+    } catch (err) {
+      console.error('Mobile utility submit failed:', err)
+      setToast({ type: 'error', message: 'บันทึกมิเตอร์น้ำไฟไม่สำเร็จ' })
+      return false
+    }
   }
 
   const handleMobileContactTenant = (rental) => {
@@ -7838,7 +7861,7 @@ function Dashboard({ userEmail = '' }) {
                 />
               ) : mobileView === 'utility' ? (
                 <MobileUtilityInput
-                  rentals={pendingUtilityBills}
+                  rentals={utilitySnapshot}
                   onSubmit={handleMobileUtilitySubmit}
                   onBack={() => setMobileView(null)}
                 />
@@ -7868,7 +7891,10 @@ function Dashboard({ userEmail = '' }) {
                     onViewPendingReviews={() => setMobileView('slips')}
                     onViewOverdue={() => setMobileView('overdue')}
                     onViewUrgentOverdue={() => setMobileView('urgent')}
-                    onViewUtilityBills={() => setMobileView('utility')}
+                    onViewUtilityBills={() => {
+                      setUtilitySnapshot(pendingUtilityBills)
+                      setMobileView('utility')
+                    }}
                     onShowMoreMenu={() => {}}
                   />
                 </>

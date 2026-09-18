@@ -77,8 +77,16 @@ export function MobileUtilityInput({ rentals, onSubmit, onBack }) {
   const handleSubmit = async () => {
     if (totalAmount === 0) return
     setSubmitting(true)
-    await onSubmit(rental, waterCurrent, elecCurrent)
+    // onSubmit คืน false เมื่อสร้างบิลไม่สำเร็จ (เช่น งวดนี้มีบิลอยู่แล้ว) — อยู่ห้องเดิม ค่าที่กรอกไว้
+    let ok = true
+    try {
+      ok = (await onSubmit(rental, waterCurrent, elecCurrent)) !== false
+    } catch (err) {
+      console.error('Utility submit error:', err)
+      ok = false
+    }
     setSubmitting(false)
+    if (!ok) return
     setWaterMeter('')
     setElecMeter('')
     setActiveInput('water')

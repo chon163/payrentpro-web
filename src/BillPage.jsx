@@ -209,11 +209,21 @@ function BillPage() {
     }
   }, [secure_token])
 
+  // กันลูป fetch ไม่รู้จบ: ห้องที่ยังไม่มีประวัติเลย history จะเป็น [] ตลอด
+  // เดิมเงื่อนไขดูจาก history.length === 0 จึงยิงซ้ำทุกรอบที่โหลดเสร็จ — เปลี่ยนเป็นกันซ้ำด้วย ref แทน
+  // (ปุ่ม "ลองอีกครั้ง" ใน HistoryPanel เรียก fetchHistory ตรงๆ ไม่ผ่าน effect นี้ จึงยัง retry ได้ปกติ)
+  const historyFetchedRef = useRef(false)
+
   useEffect(() => {
-    if (tab === 'history' && history.length === 0 && !historyLoading && !historyError) {
+    historyFetchedRef.current = false
+  }, [secure_token])
+
+  useEffect(() => {
+    if (tab === 'history' && !historyFetchedRef.current && !historyLoading && !historyError) {
+      historyFetchedRef.current = true
       fetchHistory()
     }
-  }, [tab, history.length, historyLoading, historyError, fetchHistory])
+  }, [tab, historyLoading, historyError, fetchHistory])
 
   // ให้ปุ่ม back/forward ของเบราว์เซอร์สลับแท็บตาม hash ได้
   useEffect(() => {

@@ -33,32 +33,36 @@ export function MobileSlipReview({ items, onApprove, onReject, onMarkCash, onBac
     )
   }
 
-  const item = items[currentIndex]
+  // กัน index ชี้เกิน list — parent refetch หลังอนุมัติ/ปฏิเสธแล้วรายการสั้นลงได้
+  // (เดิม setCurrentIndex(currentIndex+1) ใช้ items.length เก่าจาก closure → items[index] undefined → หน้าพัง)
+  const safeIndex = Math.min(currentIndex, items.length - 1)
+  const item = items[safeIndex]
   // pendingReviews select '*, rentals(cust_name, ...)' — join กลับมาเป็น object (หรือ array ถ้าเก็บเป็น many)
   const rentalInfo = Array.isArray(item.rentals) ? item.rentals[0] : item.rentals
   const custName = rentalInfo?.cust_name || item.cust_name || '—'
   const amount = Number(item.total_amount ?? item.base_amount ?? 0)
 
+  // รายการที่เพิ่งตัดสินถูก parent ลบออกจาก list แล้วหลัง refetch
+  // รายการถัดไปจึงเลื่อนมาอยู่ที่ index เดิม — ไม่ต้องเพิ่ม index แล้ว
+  // ออกจากหน้าเมื่อจัดการรายการสุดท้ายของ list ที่เห็นตอนกดปุ่ม
+  const advance = () => {
+    if (safeIndex >= items.length - 1) {
+      onBack()
+    }
+  }
+
   const handleApprove = async () => {
     setProcessing(true)
     await onApprove(item)
     setProcessing(false)
-    if (currentIndex < items.length - 1) {
-      setCurrentIndex(currentIndex + 1)
-    } else {
-      onBack()
-    }
+    advance()
   }
 
   const handleReject = async () => {
     setProcessing(true)
     await onReject(item)
     setProcessing(false)
-    if (currentIndex < items.length - 1) {
-      setCurrentIndex(currentIndex + 1)
-    } else {
-      onBack()
-    }
+    advance()
   }
 
   const handleCashSubmit = async () => {
@@ -69,11 +73,7 @@ export function MobileSlipReview({ items, onApprove, onReject, onMarkCash, onBac
     setProcessing(false)
     setShowCashInput(false)
     setCashAmount('')
-    if (currentIndex < items.length - 1) {
-      setCurrentIndex(currentIndex + 1)
-    } else {
-      onBack()
-    }
+    advance()
   }
 
   return (
@@ -91,7 +91,7 @@ export function MobileSlipReview({ items, onApprove, onReject, onMarkCash, onBac
           <div className="flex-1">
             <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">อนุมัติสลิป</h1>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              {currentIndex + 1} / {items.length}
+              {safeIndex + 1} / {items.length}
             </p>
           </div>
         </div>
