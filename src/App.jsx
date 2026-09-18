@@ -27,7 +27,7 @@ import { MobileSlipReview } from './components/MobileSlipReview'
 import { MobileUtilityInput } from './components/MobileUtilityInput'
 import { MobileOverdueList } from './components/MobileOverdueList'
 import { ErrorBoundary } from './components/ErrorBoundary'
-import { formatCurrency as formatCurrencyUtil, isBillOpen, setDemoMask } from './utils/format'
+import { formatCurrency as formatCurrencyUtil, isBillOpen } from './utils/format'
 
 
 const STATUS_LABELS = {
@@ -2392,7 +2392,7 @@ function membershipVerifyToast(verdict) {
 }
 
 // modal สั่งซื้อ: QR พร้อมเพย์ (เบอร์เจ้าของระบบ) + แนบรูปสลิปให้ทีมงานตรวจ
-function MembershipOrderModal({ open, plan, months, amount, systemPromptpay, onClose, onToast, onSubmitted }) {
+function MembershipOrderModal({ open, plan, months, amount, systemPromptpay, onClose, onToast, onSubmitted, isDemo = false }) {
   const [qrDataUrl, setQrDataUrl] = useState(null)
   const [qrFailed, setQrFailed] = useState(false)
   const [slipFile, setSlipFile] = useState(null)
@@ -2401,7 +2401,7 @@ function MembershipOrderModal({ open, plan, months, amount, systemPromptpay, onC
 
   // สร้าง QR ในเครื่องจากเบอร์พร้อมเพย์เจ้าของระบบ + ยอดของแพ็ก/ระยะเวลาที่เลือก
   useEffect(() => {
-    if (!open || !systemPromptpay) return undefined
+    if (!open || !systemPromptpay || isDemo) return undefined
     let active = true
     createPromptpayQR(systemPromptpay, amount)
       .then((dataUrl) => {
@@ -2415,7 +2415,7 @@ function MembershipOrderModal({ open, plan, months, amount, systemPromptpay, onC
         setQrFailed(true)
       })
     return () => { active = false }
-  }, [open, systemPromptpay, amount])
+  }, [open, systemPromptpay, amount, isDemo])
 
   // กด Escape ปิด (เฉพาะตอนที่ไม่ได้กำลังส่งสลิป)
   useEffect(() => {
@@ -2509,7 +2509,7 @@ function MembershipOrderModal({ open, plan, months, amount, systemPromptpay, onC
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">สั่งซื้อแพ็กเกจ</h2>
             <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">{plan.label} · {months} เดือน</p>
           </div>
-          <p className="text-2xl font-bold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400">{formatCurrency(amount)}</p>
+          <p className="text-2xl font-bold tabular-nums tracking-tight text-emerald-600 dark:text-emerald-400">{money(amount)}</p>
         </div>
 
         <div className="mt-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-950 p-4 text-center">
@@ -2575,7 +2575,7 @@ function MembershipOrderModal({ open, plan, months, amount, systemPromptpay, onC
   )
 }
 
-function MembershipPage({ membership, onToast, onRefreshMembership }) {
+function MembershipPage({ membership, onToast, onRefreshMembership, isDemo = false }) {
   const [selectedPlan, setSelectedPlan] = useState('starter')
   const [selectedMonths, setSelectedMonths] = useState(1)
   const [systemPromptpay, setSystemPromptpay] = useState(null)
@@ -2584,6 +2584,9 @@ function MembershipPage({ membership, onToast, onRefreshMembership }) {
   const [historyLoading, setHistoryLoading] = useState(true)
   const [historyError, setHistoryError] = useState(null)
   const [previewSlip, setPreviewSlip] = useState(null)
+
+  // เดโม่: ซ่อนเฉพาะราคาสมาชิก (ยังไม่ตกลงราคาจริง ไม่อยากให้ผู้ชมเห็น)
+  const money = (v) => (isDemo ? '•••' : formatCurrency(v))
 
   const expired = String(membership?.status ?? '').toLowerCase() === 'expired'
   const planKey = membershipPlan(membership)
@@ -2727,7 +2730,7 @@ function MembershipPage({ membership, onToast, onRefreshMembership }) {
                   )}
                 </div>
                 <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight text-gray-900 dark:text-gray-100">
-                  ฿{pkg.monthly.toLocaleString('th-TH')}
+                  {money(pkg.monthly)}
                   <span className="text-sm font-medium text-gray-500 dark:text-gray-400">/เดือน</span>
                 </p>
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">จำนวนห้องสูงสุด {pkg.roomLimit} ห้อง</p>
@@ -2752,7 +2755,7 @@ function MembershipPage({ membership, onToast, onRefreshMembership }) {
                 >
                   <p className={`text-sm font-semibold ${active ? 'text-emerald-700 dark:text-emerald-300' : 'text-gray-700 dark:text-gray-300'}`}>{m} เดือน</p>
                   <p className={`mt-0.5 text-sm font-bold tabular-nums ${active ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                    {formatCurrency(membershipPrice(selectedPlan, m))}
+                    {money(membershipPrice(selectedPlan, m))}
                   </p>
                 </button>
               )
@@ -2764,7 +2767,7 @@ function MembershipPage({ membership, onToast, onRefreshMembership }) {
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
                 ยอดรวม {selectedPkg.label} · {selectedMonths} เดือน
               </p>
-              <p className="text-2xl font-bold tabular-nums tracking-tight text-gray-900 dark:text-gray-100">{formatCurrency(price)}</p>
+              <p className="text-2xl font-bold tabular-nums tracking-tight text-gray-900 dark:text-gray-100">{money(price)}</p>
             </div>
             <button
               type="button"
@@ -2820,7 +2823,7 @@ function MembershipPage({ membership, onToast, onRefreshMembership }) {
                       <td className="whitespace-nowrap px-6 py-3.5 text-gray-600 dark:text-gray-400">{formatDate(row.created_at)}</td>
                       <td className="whitespace-nowrap px-6 py-3.5 font-semibold text-gray-900 dark:text-gray-100">{pkgMeta?.label || row.plan_type || '—'}</td>
                       <td className="whitespace-nowrap px-6 py-3.5 text-gray-600 dark:text-gray-400">{row.duration_months} เดือน</td>
-                      <td className="whitespace-nowrap px-6 py-3.5 font-bold tabular-nums text-gray-900 dark:text-gray-100">{formatCurrency(row.amount)}</td>
+                      <td className="whitespace-nowrap px-6 py-3.5 font-bold tabular-nums text-gray-900 dark:text-gray-100">{money(row.amount)}</td>
                       <td className="whitespace-nowrap px-6 py-3.5">
                         <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${statusMeta.cls}`}>
                           <span className={`h-1.5 w-1.5 rounded-full ${statusMeta.dot}`} />
@@ -2860,7 +2863,7 @@ function MembershipPage({ membership, onToast, onRefreshMembership }) {
                     <p className="text-base font-semibold text-gray-900 dark:text-gray-100">
                       {pkgMeta?.label || row.plan_type || '—'} · {row.duration_months} เดือน
                     </p>
-                    <p className="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100">{formatCurrency(row.amount)}</p>
+                    <p className="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100">{money(row.amount)}</p>
                     <div className="flex flex-wrap items-center gap-2">
                       <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${statusMeta.cls}`}>
                         <span className={`h-1.5 w-1.5 rounded-full ${statusMeta.dot}`} />
@@ -2896,6 +2899,7 @@ function MembershipPage({ membership, onToast, onRefreshMembership }) {
         onClose={() => setOrderOpen(false)}
         onToast={onToast}
         onSubmitted={handleSubmitted}
+        isDemo={isDemo}
       />
 
       {previewSlip && (
@@ -6254,8 +6258,6 @@ function App() {
 
   useEffect(() => {
     const user = session?.user
-    // โหมดเดโม่ซ่อนราคา — เปิด/ปิดตามบัญชีที่ล็อกอิน (ดู src/utils/format.js)
-    setDemoMask(Boolean(user && String(user.email ?? '').toLowerCase() === DEMO_ACCOUNT_EMAIL))
     if (!user) return
     // ต้องใช้ .is() ไม่ใช่ .eq() กับ null — .eq('user_id', null) ส่งไปเป็น
     // user_id=eq.null แล้ว Postgres cast สตริง "null" เป็น uuid ไม่ได้
@@ -7806,7 +7808,8 @@ function Dashboard({ userEmail = '' }) {
             <SettingsPage onSaved={fetchPaymentInfo} membership={membership} />
           ) : isMembership ? (
             <ErrorBoundary>
-              <MembershipPage membership={membership} onToast={setToast} onRefreshMembership={fetchMembership} />
+              <MembershipPage membership={membership} onToast={setToast} onRefreshMembership={fetchMembership}
+                isDemo={String(userEmail).toLowerCase() === DEMO_ACCOUNT_EMAIL} />
             </ErrorBoundary>
           ) : isAdmin ? (
             <AdminPage onToast={setToast} />

@@ -1,18 +1,5 @@
 // ฟอร์แมตสกุลเงิน — ใช้ ฿ แทน "บาท" ทั้งโปรเจกต์
-//
-// โหมดเดโม่ (demo@payrentpro.app): ซ่อนตัวเลขเงินทั้งหมด → แสดง ••• แทน
-// เพื่อไม่ให้ผู้ชมเห็นราคาจริง/ยอดบิลตอนพรีเซนต์ — เปิดโดย setDemoMask จาก App
-// (ผูกกับบัญชีที่ล็อกอิน ณ รันไทม์ ไม่ใช่ค่าเวลาคอมไพล์)
-let demoMask = false
-export function setDemoMask(value) {
-  demoMask = Boolean(value)
-}
-export function isDemoMask() {
-  return demoMask
-}
-
 export function formatCurrency(value) {
-  if (demoMask) return '•••'
   const n = Number(value)
   if (value === undefined || value === null || value === '' || Number.isNaN(n)) return '—'
   return `฿${n.toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
