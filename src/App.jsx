@@ -27,7 +27,7 @@ import { MobileSlipReview } from './components/MobileSlipReview'
 import { MobileUtilityInput } from './components/MobileUtilityInput'
 import { MobileOverdueList } from './components/MobileOverdueList'
 import { ErrorBoundary } from './components/ErrorBoundary'
-import { formatCurrency as formatCurrencyUtil, isBillOpen } from './utils/format'
+import { formatCurrency as formatCurrencyUtil, isBillOpen, setDemoMask } from './utils/format'
 
 
 const STATUS_LABELS = {
@@ -4950,12 +4950,16 @@ function AssetDetailModal({ rental, onClose, onToast }) {
         }
       }
 
-      // "ใช้กับทุกห้อง" — เอาค่าเดียวกันไปใส่ทุกสินทรัพย์ของเจ้าของรายนี้
-      // (ห้องปัจจุบันอัปเดตไปแล้วจึง neq ออก; RLS กันไม่ให้แตะของคนอื่นอยู่แล้ว)
+      // "ใช้กับทุกห้อง" — เฉพาะค่าที่ใช้ร่วมกันได้จริง (รอบบิล/ค่าปรับ/ค่าน้ำไฟขั้นต่ำ)
+      // ข้อมูลผู้เช่า/ค่าเช่า/สัญญา/มิเตอร์ เป็นของแต่ละห้อง ห้ามทับ
       if (applyAll) {
+        const bulk = {}
+        for (const f of ['bill_day', 'penalty_day', 'min_water_charge', 'min_elec_charge']) {
+          if (changes[f] !== undefined) bulk[f] = changes[f]
+        }
         const { count, error: bulkError } = await supabase
           .from('rentals')
-          .update(changes, { count: 'exact' })
+          .update(bulk, { count: 'exact' })
           .eq('landlord_id', rental.landlord_id)
           .neq('id', rental.id)
         if (bulkError) throw bulkError
@@ -5122,15 +5126,60 @@ function AssetDetailModal({ rental, onClose, onToast }) {
   )
 }
 
+function EditToggleRow({ label, checked, onChange }) {
+  return (
+    <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-800/60 px-4 py-3">
+      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={onChange}
+        className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${checked ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+      >
+        <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+      </button>
+    </label>
+  )
+}
+
 function EditRentalModal({ rental, onClose, onSave }) {
   const [form, setForm] = useState({
+    // รอบบิล & ค่าปรับ
     bill_day: rental.bill_day ?? rental.due_date ?? 1,
     penalty_day: rental.penalty_day ?? rental.due_date ?? 1,
     min_water_charge: rental.min_water_charge ?? 0,
     min_elec_charge: rental.min_elec_charge ?? 0,
+    // ข้อมูลผู้เช่า
+    cust_name: rental.cust_name ?? '',
+    tenant_phone: rental.tenant_phone ?? '',
+    tenant_id_card: rental.tenant_id_card ?? '',
+    emergency_contact: rental.emergency_contact ?? '',
+    room_status: rental.room_status ?? 'occupied',
+    // ค่าเช่า/สัญญา
+    amount: rental.amount ?? 0,
+    deposit_amount: rental.deposit_amount ?? 0,
+    move_in_date: rental.move_in_date ? String(rental.move_in_date).slice(0, 10) : '',
+    lease_end_date: rental.lease_end_date ? String(rental.lease_end_date).slice(0, 10) : '',
+    penalty_per_day: rental.penalty_per_day ?? 50,
+    penalty_enabled: Boolean(rental.penalty_enabled),
+    chase_frequency: rental.chase_frequency ?? 3,
+    stop_chase: rental.stop_chase ? 1 : 0,
+    // น้ำไฟ (อสังหาริมทรัพย์)
+    last_water_meter: rental.last_water_meter ?? '',
+    water_rate: rental.water_rate ?? 0,
+    last_elec_meter: rental.last_elec_meter ?? '',
+    elec_rate: rental.elec_rate ?? 0,
+    utility_enabled: Boolean(rental.utility_enabled),
   })
   const [applyAll, setApplyAll] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  const isProperty = normalizeBizType(rental.biz_type) === 'property'
+
+  const toggle = (key) => setForm((f) => ({ ...f, [key]: !f[key] }))
+  const num = (key) => (e) => setForm((f) => ({ ...f, [key]: Number(e.target.value) }))
+  const txt = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
 
   const handleSubmit = async () => {
     setSaving(true)
@@ -5151,7 +5200,65 @@ function EditRentalModal({ rental, onClose, onSave }) {
           <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">{rental.cust_name} · {displayAssetName(rental)}</p>
         </div>
 
-        <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
+        <div className="flex-1 space-y-6 overflow-y-auto px-6 py-5">
+          {/* ── ข้อมูลผู้เช่า ─────────────────────────────── */}
+          <div className="rounded-xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/30 px-4 py-3">
+            <p className="text-sm font-bold text-sky-800 dark:text-sky-200">ข้อมูลผู้เช่า</p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="ชื่อผู้เช่า">
+              <input type="text" value={form.cust_name} onChange={txt('cust_name')} className={inputClass} />
+            </Field>
+            <Field label="เบอร์โทรผู้เช่า">
+              <input type="tel" value={form.tenant_phone} onChange={txt('tenant_phone')} className={inputClass} />
+            </Field>
+            <Field label="เลขบัตรประชาชน">
+              <input type="text" value={form.tenant_id_card} onChange={txt('tenant_id_card')} className={inputClass} />
+            </Field>
+            <Field label="เบอร์ติดต่อฉุกเฉิน">
+              <input type="tel" value={form.emergency_contact} onChange={txt('emergency_contact')} className={inputClass} />
+            </Field>
+            <Field label="สถานะห้อง/สินทรัพย์">
+              <select value={form.room_status} onChange={txt('room_status')} className={inputClass}>
+                <option value="occupied">มีผู้เช่า (occupied)</option>
+                <option value="vacant">ว่าง (vacant)</option>
+                <option value="maintenance">ปรับปรุง (maintenance)</option>
+              </select>
+            </Field>
+          </div>
+
+          {/* ── ค่าเช่า/สัญญา ─────────────────────────────── */}
+          <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3">
+            <p className="text-sm font-bold text-emerald-800 dark:text-emerald-200">ค่าเช่า/คำสัญญา</p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="ค่าเช่าต่องวด (บาท)">
+              <input type="number" min="0" step="0.01" value={form.amount} onChange={num('amount')} className={inputClass} />
+            </Field>
+            <Field label="เงินประกัน (บาท)">
+              <input type="number" min="0" step="0.01" value={form.deposit_amount} onChange={num('deposit_amount')} className={inputClass} />
+            </Field>
+            <Field label="วันที่ย้ายเข้า">
+              <input type="date" value={form.move_in_date} onChange={txt('move_in_date')} className={inputClass} />
+            </Field>
+            <Field label="วันสิ้นสุดสัญญา">
+              <input type="date" value={form.lease_end_date} onChange={txt('lease_end_date')} className={inputClass} />
+            </Field>
+            <Field label="ค่าปรับต่อวัน (บาท)">
+              <input type="number" min="0" step="0.01" value={form.penalty_per_day} onChange={num('penalty_per_day')} className={inputClass} />
+            </Field>
+            <Field label="ความถี่ทวงหนี้ (วัน)">
+              <input type="number" min="0" value={form.chase_frequency} onChange={num('chase_frequency')} className={inputClass} />
+            </Field>
+            <div className="flex flex-col gap-3 sm:col-span-2">
+              <EditToggleRow label="เปิดใช้ค่าปรับชำระล่าช้า" checked={form.penalty_enabled} onChange={() => toggle('penalty_enabled')} />
+              <EditToggleRow label="หยุดทวงหนี้ห้องนี้" checked={Boolean(form.stop_chase)} onChange={() => setForm((f) => ({ ...f, stop_chase: f.stop_chase ? 0 : 1 }))} />
+            </div>
+          </div>
+
+          {/* ── รอบบิล & ค่าปรับ ──────────────────────────── */}
           <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-4 py-3">
             <p className="text-sm font-bold text-amber-800 dark:text-amber-200">รอบบิล & ค่าปรับ</p>
             <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
@@ -5159,60 +5266,49 @@ function EditRentalModal({ rental, onClose, onSave }) {
             </p>
           </div>
 
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">วันส่งบิล (1-31)</label>
-            <input
-              type="number"
-              min="1"
-              max="31"
-              value={form.bill_day}
-              onChange={(e) => setForm({ ...form, bill_day: Number(e.target.value) })}
-              className={inputClass}
-            />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="วันส่งบิล (1-31)">
+              <input type="number" min="1" max="31" value={form.bill_day} onChange={num('bill_day')} className={inputClass} />
+            </Field>
+            <Field label="วันเริ่มคิดค่าปรับ (1-31)">
+              <input type="number" min="1" max="31" value={form.penalty_day} onChange={num('penalty_day')} className={inputClass} />
+            </Field>
+            <Field label="ค่าน้ำขั้นต่ำ (฿)">
+              <input type="number" step="0.01" min="0" value={form.min_water_charge} onChange={num('min_water_charge')} className={inputClass} />
+            </Field>
+            <Field label="ค่าไฟขั้นต่ำ (฿)">
+              <input type="number" step="0.01" min="0" value={form.min_elec_charge} onChange={num('min_elec_charge')} className={inputClass} />
+            </Field>
           </div>
 
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">วันเริ่มคิดค่าปรับ (1-31)</label>
-            <input
-              type="number"
-              min="1"
-              max="31"
-              value={form.penalty_day}
-              onChange={(e) => setForm({ ...form, penalty_day: Number(e.target.value) })}
-              className={inputClass}
-            />
-          </div>
-
-          <div className="rounded-xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/30 px-4 py-3">
-            <p className="text-sm font-bold text-sky-800 dark:text-sky-200">ค่าขั้นต่ำน้ำไฟ</p>
-            <p className="mt-1 text-xs text-sky-700 dark:text-sky-300">
-              ถ้าคำนวณแล้วยอดต่ำกว่าขั้นต่ำ = ใช้ยอดขั้นต่ำ (ใช้ได้ทั้งบิลรวมและบิลแยก)
-            </p>
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">ค่าน้ำขั้นต่ำ (฿)</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.min_water_charge}
-              onChange={(e) => setForm({ ...form, min_water_charge: Number(e.target.value) })}
-              className={inputClass}
-            />
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">ค่าไฟขั้นต่ำ (฿)</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              value={form.min_elec_charge}
-              onChange={(e) => setForm({ ...form, min_elec_charge: Number(e.target.value) })}
-              className={inputClass}
-            />
-          </div>
+          {/* ── น้ำไฟ (เฉพาะอสังหาริมทรัพย์) ──────────────── */}
+          {isProperty && (
+            <>
+              <div className="rounded-xl border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 px-4 py-3">
+                <p className="text-sm font-bold text-violet-800 dark:text-violet-200">ค่าน้ำไฟ (อสังหาริมทรัพย์)</p>
+                <p className="mt-1 text-xs text-violet-700 dark:text-violet-300">
+                  ถ้าปิด "คิดค่าน้ำไฟ" ห้องนี้จะเรียกเก็บเฉพาะค่าเช่าอย่างเดียว
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field label="เลขมิเตอร์น้ำล่าสุด">
+                  <input type="number" value={form.last_water_meter} onChange={num('last_water_meter')} className={inputClass} />
+                </Field>
+                <Field label="ค่าน้ำ/หน่วย (฿)">
+                  <input type="number" step="0.01" min="0" value={form.water_rate} onChange={num('water_rate')} className={inputClass} />
+                </Field>
+                <Field label="เลขมิเตอร์ไฟล่าสุด">
+                  <input type="number" value={form.last_elec_meter} onChange={num('last_elec_meter')} className={inputClass} />
+                </Field>
+                <Field label="ค่าไฟ/หน่วย (฿)">
+                  <input type="number" step="0.01" min="0" value={form.elec_rate} onChange={num('elec_rate')} className={inputClass} />
+                </Field>
+                <div className="sm:col-span-2">
+                  <EditToggleRow label="คิดค่าน้ำไฟ" checked={form.utility_enabled} onChange={() => toggle('utility_enabled')} />
+                </div>
+              </div>
+            </>
+          )}
 
           <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-800/60 px-4 py-3">
             <input
@@ -6158,6 +6254,8 @@ function App() {
 
   useEffect(() => {
     const user = session?.user
+    // โหมดเดโม่ซ่อนราคา — เปิด/ปิดตามบัญชีที่ล็อกอิน (ดู src/utils/format.js)
+    setDemoMask(Boolean(user && String(user.email ?? '').toLowerCase() === DEMO_ACCOUNT_EMAIL))
     if (!user) return
     // ต้องใช้ .is() ไม่ใช่ .eq() กับ null — .eq('user_id', null) ส่งไปเป็น
     // user_id=eq.null แล้ว Postgres cast สตริง "null" เป็น uuid ไม่ได้
@@ -6846,7 +6944,11 @@ function Dashboard({ userEmail = '' }) {
           if (rpcData?.ok === false && rpcData?.error === 'no_group') {
             setToast({ type: 'warning', message: 'สร้างบิลแล้ว แต่ห้องนี้ยังไม่ได้ผูกกลุ่ม LINE — ส่งไม่ได้' })
           } else if (rpcData?.ok === false) {
-            setToast({ type: 'error', message: 'ส่งบิลเข้าไลน์ไม่สำเร็จ' })
+            // แสดงเหตุผลจริงจาก RPC (เช่น ยังไม่ได้ใส่ line_token) ให้แก้ได้ถูกจุด
+            const reason = rpcData?.error === 'ยังไม่ได้ใส่ line_token'
+              ? 'ยังไม่ได้ตั้งค่า LINE token ในระบบ'
+              : (rpcData?.error || 'ไม่ทราบสาเหตุ')
+            setToast({ type: 'error', message: `ส่งบิลเข้าไลน์ไม่สำเร็จ — ${reason}` })
           } else {
             invoiceObj.sent = true
             setToast({ type: 'success', message: 'ส่งบิลเข้า LINE แล้ว' })
