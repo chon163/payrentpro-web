@@ -5133,7 +5133,7 @@ function AssetDetailModal({ rental, onClose, onToast }) {
 function EditToggleRow({ label, checked, onChange }) {
   return (
     <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-800/60 px-4 py-3">
-      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{label}</span>
+      <span className="min-w-0 flex-1 text-sm font-medium leading-snug text-gray-700 dark:text-gray-300">{label}</span>
       <button
         type="button"
         role="switch"
